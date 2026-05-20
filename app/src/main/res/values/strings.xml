@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">HiBox</string>
+    <string name="accessibility_service_description">Provides custom launcher capabilities and home button override for this application.</string>
+</resources>

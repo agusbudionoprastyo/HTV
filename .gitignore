@@ -1,0 +1,29 @@
+# Gradle files
+.gradle/
+build/
+app/build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log Files
+*.log
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+
+# Mac OS X
+.DS_Store
+
+# Kotlin
+.kotlin/
+
+# Keystore files
+/app/keystore/
+*.jks
+*.keystore
+keystore.properties

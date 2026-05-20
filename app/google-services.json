@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "883998310070",
+    "firebase_url": "https://hospitality-tv-52234-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "hospitality-tv-52234",
+    "storage_bucket": "hospitality-tv-52234.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:883998310070:android:f97391f105f17ca6653017",
+        "android_client_info": {
+          "package_name": "com.dafamsemarang.dhtv"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlZ1fPEOKMmywDHbZNvmCTEXvPPTCsVTo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
