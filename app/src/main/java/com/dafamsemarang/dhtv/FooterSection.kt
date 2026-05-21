@@ -132,7 +132,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.core.content.edit
 import androidx.compose.ui.text.input.ImeAction
-import io.ktor.client.request.header
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.rememberLottieComposition
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
 
 //// Function to set system volume
 //fun setSystemVolume(context: Context, isMuted: Boolean) {
@@ -2361,7 +2365,13 @@ fun SmallServiceButton(
                     }
                 }
                 .background(
-                    color = if (isFocused) Color(0xFFCFDFED) else if (isActive) Color.White.copy(alpha = 0.15f) else Color.Transparent,
+                    color = if (isFocused) {
+                        Color(0xFFCFDFED)
+                    } else if (isActive) {
+                        Color.White.copy(alpha = 0.15f)
+                    } else {
+                        Color.Transparent
+                    },
                     shape = CircleShape
                 )
                 .clickable(

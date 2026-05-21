@@ -106,6 +106,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.Key
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.ui.input.key.key
@@ -333,7 +334,8 @@ fun VideoAndSlideshowSection(
     guestInfo: GuestInfo?,
     roomId: String?,
     roomTypeText: String,
-    currentTime: String
+    currentTime: String,
+    onImageIndexChanged: (Int) -> Unit = {}
 ) {
     // Use shared MediaPlayer if provided, otherwise create local one
     var localMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -747,32 +749,140 @@ fun VideoAndSlideshowSection(
 
     // Slideshow Images with shimmer (Widescreen landscape banner on the left)
     if (isLoadingSlideshow || imageList.isNotEmpty()) {
+        var isBannerFocused by remember { mutableStateOf(false) }
+        val bannerFocusPulseAlpha = remember { Animatable(0.4f) }
+        LaunchedEffect(isBannerFocused) {
+            if (isBannerFocused) {
+                bannerFocusPulseAlpha.animateTo(
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    )
+                )
+            } else {
+                bannerFocusPulseAlpha.snapTo(0.4f)
+            }
+        }
+
         Box(
             modifier = Modifier
-                .width(448.dp)
-                .height(160.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .requiredWidth(456.dp)
+                .requiredHeight(168.dp)
+                .offset(x = (-4).dp, y = 0.dp)
+                .onFocusChanged { isBannerFocused = it.isFocused }
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown) {
+                        when (keyEvent.key) {
+                            Key.DirectionRight -> {
+                                if (imageList.isNotEmpty()) {
+                                    val nextIndex = (currentImageIndex + 1) % imageList.size
+                                    onImageIndexChanged(nextIndex)
+                                    true
+                                } else false
+                            }
+                            Key.DirectionLeft -> {
+                                if (imageList.isNotEmpty()) {
+                                    val prevIndex = (currentImageIndex - 1 + imageList.size) % imageList.size
+                                    onImageIndexChanged(prevIndex)
+                                    true
+                                } else false
+                            }
+                            Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                true // Intercept OK click doing nothing
+                            }
+                            else -> false
+                        }
+                    } else false
+                }
+                .focusable(),
+            contentAlignment = Alignment.Center
         ) {
-            if (isLoadingSlideshow) {
-                // Show shimmer while loading
-                SlideshowShimmer(
+            // Pulsing Outer Focus Border (drawn outside the card with a 4.dp gap)
+            if (isBannerFocused) {
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .border(
+                            width = 2.dp,
+                            color = Color.White.copy(alpha = bannerFocusPulseAlpha.value),
+                            shape = RoundedCornerShape(24.dp) // Concentric shape: 20.dp (card corner) + 4.dp (gap) = 24.dp
+                        )
                 )
-            } else if (imageList.isNotEmpty()) {
-                AnimatedContent(
-                    targetState = imageList[currentImageIndex],
-                    transitionSpec = {
-                        slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }) togetherWith
-                                slideOutHorizontally(targetOffsetX = { fullWidth -> -fullWidth })
-                    }, label = ""
-                ) { targetImageUrl ->
-                    Image(
-                        painter = rememberCachedPainter(targetImageUrl),
-                        contentDescription = "Slideshow Image",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+            }
+
+            // Card Body (Always exactly 448.dp x 160.dp)
+            Box(
+                modifier = Modifier
+                    .width(448.dp)
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(20.dp))
+            ) {
+                if (isLoadingSlideshow) {
+                    // Show shimmer while loading
+                    SlideshowShimmer(
+                        modifier = Modifier
+                            .fillMaxSize()
                     )
+                } else if (imageList.isNotEmpty()) {
+                    AnimatedContent(
+                        targetState = currentImageIndex,
+                        transitionSpec = {
+                            val isForward = if (initialState == imageList.size - 1 && targetState == 0) {
+                                true
+                            } else if (initialState == 0 && targetState == imageList.size - 1) {
+                                false
+                            } else {
+                                targetState > initialState
+                            }
+                            
+                            if (isForward) {
+                                slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }) togetherWith
+                                        slideOutHorizontally(targetOffsetX = { fullWidth -> -fullWidth })
+                            } else {
+                                slideInHorizontally(initialOffsetX = { fullWidth -> -fullWidth }) togetherWith
+                                        slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth })
+                            }
+                        }, label = ""
+                    ) { targetIndex ->
+                        val imageUrl = imageList.getOrNull(targetIndex) ?: ""
+                        Image(
+                            painter = rememberCachedPainter(imageUrl),
+                            contentDescription = "Slideshow Image",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+
+                    // Dynamic dot carousel indicators at the bottom
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        imageList.forEachIndexed { idx, _ ->
+                            val isActive = idx == currentImageIndex
+                            val widthCoeff by animateDpAsState(
+                                targetValue = if (isActive) 14.dp else 6.dp,
+                                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                                label = "dot_width"
+                            )
+                            val alphaCoeff by animateFloatAsState(
+                                targetValue = if (isActive) 1.0f else 0.4f,
+                                animationSpec = tween(durationMillis = 300),
+                                label = "dot_alpha"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(width = widthCoeff, height = 6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Color.White.copy(alpha = alphaCoeff))
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1114,24 +1224,21 @@ fun HomeScreen(navController: NavHostController) {
         }
     }
 
-    // Timer for changing image based on slide duration
-    LaunchedEffect(isSlideshowActive, imageList, slideDurations) {
+    // Timer for changing image based on slide duration (restarts on manual D-pad changes for jank-free transition timing)
+    LaunchedEffect(isSlideshowActive, imageList, slideDurations, currentImageIndex) {
         if (isSlideshowActive && imageList.isNotEmpty() && slideDurations.isNotEmpty()) {
             try {
-                while (isSlideshowActive && imageList.isNotEmpty()) {
-                    val duration = slideDurations.getOrNull(currentImageIndex) ?: 5
-                    delay(duration * 1000L)
-                    if (isSlideshowActive && imageList.isNotEmpty()) {
-                        currentImageIndex = (currentImageIndex + 1) % imageList.size
-                    } else {
-                        break
-                    }
+                val duration = slideDurations.getOrNull(currentImageIndex) ?: 5
+                delay(duration * 1000L)
+                if (isSlideshowActive && imageList.isNotEmpty()) {
+                    currentImageIndex = (currentImageIndex + 1) % imageList.size
                 }
             } catch (e: Exception) {
                 Log.e("HomeScreen", "Error in slideshow timer: ${e.message}")
             }
         }
     }
+
 
 
     Box(
@@ -1203,7 +1310,8 @@ fun HomeScreen(navController: NavHostController) {
                         guestInfo = guestInfo,
                         roomId = roomId,
                         roomTypeText = roomTypeText,
-                        currentTime = currentTime
+                        currentTime = currentTime,
+                        onImageIndexChanged = { currentImageIndex = it }
                     )
 
                     // Large white 20% opacity DND Active Indicator (Icon Only)

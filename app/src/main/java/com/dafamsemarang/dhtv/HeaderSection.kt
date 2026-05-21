@@ -81,7 +81,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 @Composable
-fun HeaderSection() {
+fun HeaderSection(currentRoute: String? = "home") {
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     val branchId = sharedPreferences.getString("branchId", null)
@@ -270,7 +270,7 @@ fun HeaderSection() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 58.dp, top = 24.dp, end = 58.dp, bottom = 16.dp), 
+                .padding(top = 24.dp, end = 58.dp, bottom = 16.dp), 
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -290,11 +290,34 @@ fun HeaderSection() {
                 }
             }
 
-            // Left-aligned Interactive Weather Widget (448.dp wide, matches banner)
-            if (weatherData != null && weatherData?.liveWeather != null) {
+            val mainScreenOrder = listOf("home", "cantingfood", "contact", "hotel_guide")
+            val getSlideDirection = { from: String?, to: String? ->
+                val fromIndex = mainScreenOrder.indexOf(from ?: "home")
+                val toIndex = mainScreenOrder.indexOf(to ?: "home")
+                if (toIndex >= fromIndex) 1 else -1
+            }
+
+            AnimatedContent(
+                targetState = currentRoute ?: "home",
+                transitionSpec = {
+                    val dir = getSlideDirection(initialState, targetState)
+                    if (dir > 0) {
+                        (slideInHorizontally(animationSpec = tween(500)) { it } + fadeIn(animationSpec = tween(500)))
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(500)) { -it } + fadeOut(animationSpec = tween(500)))
+                    } else {
+                        (slideInHorizontally(animationSpec = tween(500)) { -it } + fadeIn(animationSpec = tween(500)))
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(500)) { it } + fadeOut(animationSpec = tween(500)))
+                    }
+                },
+                label = "left_header_transition"
+            ) { targetRoute ->
+                if (targetRoute == "home") {
+                    // Left-aligned Interactive Weather Widget (448.dp wide, matches banner)
+                if (weatherData != null && weatherData?.liveWeather != null) {
                 val live = weatherData!!.liveWeather!!                // Outer container: handles focus state and click
                 Box(
                     modifier = Modifier
+                        .padding(start = 58.dp)
                         .width(456.dp)
                         .height(88.dp)
                         .offset(x = (-4).dp, y = (-4).dp)
@@ -834,6 +857,7 @@ fun HeaderSection() {
                 // Sleek loading shimmer/placeholder matching widget size
                 Box(
                     modifier = Modifier
+                        .padding(start = 58.dp)
                         .width(456.dp)
                         .height(88.dp)
                         .offset(x = (-4).dp, y = (-4).dp)
@@ -955,9 +979,78 @@ fun HeaderSection() {
                                 )
                             }
                         }
+                }
+            }
+        }
+    } else {
+            // Replacement container for non-home screens
+            val headerReplacement = when (targetRoute) {
+                    "cantingfood" -> Pair(R.drawable.room_service_3_svgrepo_com, "Room Service")
+                    "contact" -> Pair(R.drawable.service_request_svgrepo_com, "Request Service")
+                    "hotel_guide" -> Pair(R.drawable.info_circle_svgrepo_com, "Hotel Info")
+                    else -> Pair(R.drawable.info_circle_svgrepo_com, "Hotel Info")
+                }
+                val (iconRes, headerText) = headerReplacement
+
+                Box(
+                    modifier = Modifier
+                        .padding(start = 58.dp)
+                        .width(448.dp)
+                        .height(80.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = 0.dp, end = 20.dp, top = 10.dp, bottom = 10.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            Icon(
+                                painter = painterResource(id = iconRes),
+                                contentDescription = headerText,
+                                modifier = Modifier.size(36.dp),
+                                tint = Color.White.copy(alpha = 0.3f)
+                            )
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            Column(
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "GUEST COMPANION",
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.5f),
+                                letterSpacing = 1.5.sp,
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    )
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = headerText,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFE3F2FD),
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(
+                                        includeFontPadding = false
+                                    )
+                                )
+                            )
+                        }
+                    }
                     }
                 }
             }
+        }
 
             // 2. Company Logo on the right side of the header
             if (iconUrl != null && iconUrl!!.isNotEmpty()) {

@@ -272,7 +272,7 @@ fun AppNavigation() {
             exit = fadeOut(animationSpec = tween(durationMillis = 500))
         ) {
              Box(modifier = Modifier.zIndex(1f).fillMaxSize()) {
-                 HeaderSection()
+                 HeaderSection(currentRoute)
                  FooterSection(navController)
              }
         }
