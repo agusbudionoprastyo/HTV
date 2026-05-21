@@ -57,13 +57,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import WeatherResponse
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.font.Font
-import retrofit2.HttpException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -337,8 +333,7 @@ fun VideoAndSlideshowSection(
     guestInfo: GuestInfo?,
     roomId: String?,
     roomTypeText: String,
-    currentTime: String,
-    fetchedWeatherData: WeatherResponse?
+    currentTime: String
 ) {
     // Use shared MediaPlayer if provided, otherwise create local one
     var localMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -898,9 +893,6 @@ fun HomeScreen(navController: NavHostController) {
     var guestInfo by remember { mutableStateOf<GuestInfo?>(null) }
     val roomTypeText = "${guestInfo?.roomtype ?: "Unavailable"}  "
     var currentTime by remember { mutableStateOf(getCurrentTime()) }
-    var fetchedWeatherData by remember { mutableStateOf<WeatherResponse?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    val apiKey = "0a655bc76d9b2bd5c9e6422c5cc58455"
 
     // Set up Firebase listener for guest info
     DisposableEffect(roomId, branchId) {
@@ -980,45 +972,11 @@ fun HomeScreen(navController: NavHostController) {
         }
     }
 
-    // Set up weather updates
-    LaunchedEffect(branchId) {
-        if (branchId != null) {
-            coroutineScope {
-                launch {
-                    while (isActive) {
-                        try {
-                            val cityRef = database.child("BRANCHES")
-                                .child(branchId)
-                                .child("SETTING")
-                                .child("WEATHER")
-                                .child("CITY")
-                            
-                            val cityName = cityRef.get().await().getValue(String::class.java)
-                            
-                            if (cityName != null) {
-                                val response = RetrofitInstance.api.getWeather(cityName, apiKey)
-                                fetchedWeatherData = response
-                                errorMessage = null
-                            } else {
-                                errorMessage = "City name not found in the database."
-                            }
-                        } catch (e: HttpException) {
-                            errorMessage = "Failed to get weather data: ${e.message()}"
-                        } catch (e: IOException) {
-                            errorMessage = "Network error: ${e.localizedMessage}"
-                        } catch (e: Exception) {
-                            errorMessage = "Error fetching city: ${e.localizedMessage}"
-                        }
-                        delay(60000)
-                    }
-                }
-                launch {
-                    while (isActive) {
-                        currentTime = getCurrentTime()
-                        delay(60000)
-                    }
-                }
-            }
+    // Set up clock updates
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            currentTime = getCurrentTime()
+            delay(60000)
         }
     }
     
@@ -1191,7 +1149,7 @@ fun HomeScreen(navController: NavHostController) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 110.dp)
+                .padding(top = 125.dp)
                 .padding(start = 58.dp, end = 58.dp), // Unified TV safety margins
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.Start
@@ -1245,14 +1203,13 @@ fun HomeScreen(navController: NavHostController) {
                         guestInfo = guestInfo,
                         roomId = roomId,
                         roomTypeText = roomTypeText,
-                        currentTime = currentTime,
-                        fetchedWeatherData = fetchedWeatherData
+                        currentTime = currentTime
                     )
 
                     // Large white 20% opacity DND Active Indicator (Icon Only)
                     AnimatedVisibility(
                         visible = isDndActive,
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier
                     ) {
                         Icon(
                             painter = rememberAsyncImagePainter(R.drawable.do_not_disturb_svgrepo_com),
@@ -1370,107 +1327,103 @@ fun HomeScreen(navController: NavHostController) {
 
                     // Guest Greeting & Room Details Column (Bottom-aligned with the shortcut container)
                     Column(
-                        horizontalAlignment = Alignment.End,
-                        modifier = Modifier
+                        modifier = Modifier.width(320.dp),
+                        horizontalAlignment = Alignment.Start
                     ) {
-                        // Enlarged Guest Name (Size 36.sp, Bold)
+                        // Enlarged Guest Name (Size 36.sp, Bold, left aligned)
                         Text(
                             text = formatName(guestInfo?.fname ?: "Guest Name"),
                             style = MaterialTheme.typography.headlineLarge.copy(fontSize = 36.sp),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier.padding(bottom = 6.dp)
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp)
                         )
                         
-                        // Inner Column for welcome message & room details, so they are perfectly aligned on the left & right!
-                        Column(
-                            modifier = Modifier.width(320.dp),
-                            horizontalAlignment = Alignment.End
+                        Text(
+                            text = "Its our pleasure to welcome you to our hotel. We will do everything in our power to make your stay most convenient and enjoyable.",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 14.sp,
+                                lineHeight = 19.sp
+                            ),
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontWeight = FontWeight.Normal,
+                            textAlign = TextAlign.Justify,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp)
+                        )
+
+                        // Room Number, Type, Non-Smoking Group (Distributed evenly across the same 320.dp width)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
                         ) {
-                            Text(
-                                text = "Its our pleasure to welcome you to our hotel. We will do everything in our power to make your stay most convenient and enjoyable.",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 14.sp,
-                                    lineHeight = 19.sp
-                                ),
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontWeight = FontWeight.Normal,
-                                textAlign = TextAlign.Justify,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 10.dp)
-                            )
-
-                            // Room Number, Type, Non-Smoking Group (Distributed evenly across the same 320.dp width)
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp)
-                            ) {
-                                // Room Number Group (Door icon + Number)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.nest_doorbell_visitor_24dp_e8eaed_fill0_wght400_grad0_opsz24),
-                                        contentDescription = "Room Icon",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = Color.White
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = roomId ?: "-",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-
-                                Text(
-                                    text = "|",
-                                    color = Color.White.copy(alpha = 0.4f),
-                                    style = MaterialTheme.typography.bodyLarge
+                            // Room Number Group (Door icon + Number)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.nest_doorbell_visitor_24dp_e8eaed_fill0_wght400_grad0_opsz24),
+                                    contentDescription = "Room Icon",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color.White
                                 )
-                                
-                                // Room Type Group (Just roomtype label)
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = roomTypeText.trim(),
+                                    text = roomId ?: "-",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = Color.White,
                                     fontWeight = FontWeight.Medium
                                 )
-                                
-                                Text(
-                                    text = "|",
-                                    color = Color.White.copy(alpha = 0.4f),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                                
-                                // Smoking Preference Group
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    val isSmoking = guestInfo?.isSmoking ?: false
-                                    val smokeIconRes = if (isSmoking) {
-                                        R.drawable.cigarette_with_smoke_svgrepo_com
-                                    } else {
-                                        R.drawable.i_no_smoking_svgrepo_com
-                                    }
-                                    val smokeLabel = if (isSmoking) "Smoking" else "Non-Smoking"
+                            }
 
-                                    Icon(
-                                        painter = painterResource(id = smokeIconRes),
-                                        contentDescription = "Smoking Preference",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = Color.White
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = smokeLabel,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                            Text(
+                                text = "|",
+                                color = Color.White.copy(alpha = 0.4f),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            
+                            // Room Type Group (Just roomtype label)
+                            Text(
+                                text = roomTypeText.trim(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                            
+                            Text(
+                                text = "|",
+                                color = Color.White.copy(alpha = 0.4f),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            
+                            // Smoking Preference Group
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val isSmoking = guestInfo?.isSmoking ?: false
+                                val smokeIconRes = if (isSmoking) {
+                                    R.drawable.cigarette_with_smoke_svgrepo_com
+                                } else {
+                                    R.drawable.i_no_smoking_svgrepo_com
                                 }
+                                val smokeLabel = if (isSmoking) "Smoking" else "Non-Smoking"
+
+                                Icon(
+                                    painter = painterResource(id = smokeIconRes),
+                                    contentDescription = "Smoking Preference",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = smokeLabel,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Medium
+                                )
                             }
                         }
                     }

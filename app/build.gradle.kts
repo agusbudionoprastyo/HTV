@@ -85,6 +85,7 @@ dependencies {
     implementation (libs.retrofit)
     implementation (libs.converter.gson)
     implementation (libs.coil.compose)
+    implementation ("io.coil-kt:coil-svg:2.7.0")
     implementation (libs.androidx.lifecycle.runtime.compose)
     implementation (libs.androidx.navigation.compose)
     implementation (libs.androidx.animation)
