@@ -322,10 +322,13 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
             val itemBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
                 object : BringIntoViewSpec {
                     override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
-                        get() = androidx.compose.animation.core.tween(
-                            durationMillis = 150, // 150ms for items
-                            easing = androidx.compose.animation.core.FastOutSlowInEasing
-                        )
+                        get() {
+                            val duration = if (android.os.Build.VERSION.SDK_INT < 31) 90 else 150
+                            return androidx.compose.animation.core.tween(
+                                durationMillis = duration,
+                                easing = androidx.compose.animation.core.FastOutSlowInEasing
+                            )
+                        }
 
                     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
                         return offset - startPaddingPx
