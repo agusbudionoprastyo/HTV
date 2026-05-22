@@ -297,24 +297,19 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
             val categorySlideDistance = (screenWidthPx * 0.15f).toInt()
             val defaultSpec = LocalBringIntoViewSpec.current
 
-            LaunchedEffect(focusedCategoryIndex) {
-                delay(60) // Tiny delay to let focus jump visually first
-                categoryListState.animateScrollToItem(
-                    index = focusedCategoryIndex,
-                    scrollOffset = 0
-                )
-            }
-
-            val categoryBringIntoViewSpec = remember(defaultSpec) {
+            val categoryBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
                 object : BringIntoViewSpec {
                     override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
-                        get() = androidx.compose.animation.core.tween(
-                            durationMillis = 250,
-                            easing = androidx.compose.animation.core.FastOutSlowInEasing
-                        )
+                        get() {
+                            val duration = if (android.os.Build.VERSION.SDK_INT < 31) 90 else 150
+                            return androidx.compose.animation.core.tween(
+                                durationMillis = duration,
+                                easing = androidx.compose.animation.core.FastOutSlowInEasing
+                            )
+                        }
 
                     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-                        return 0f // Let LaunchedEffect with delay handle the smooth flowing scroll!
+                        return offset - startPaddingPx
                     }
                 }
             }
