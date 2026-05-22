@@ -445,14 +445,14 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
                                     cornerRadius = CornerRadius(16.dp.toPx()),
                                     style = Stroke(width = 1.2.dp.toPx())
                                 )
-                            }
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         AnimatedContent(
                             targetState = viewMode,
                             transitionSpec = {
-                                if (targetState > initialState) {
+                                val isSlidingRight = targetState == (initialState + 1) % 3
+                                if (isSlidingRight) {
                                     (slideInHorizontally { width -> width } + fadeIn(animationSpec = tween(300)))
                                         .togetherWith(slideOutHorizontally { width -> -width } + fadeOut(animationSpec = tween(300)))
                                 } else {
@@ -464,7 +464,7 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
                         ) { mode ->
                             if (mode == 0) {
                                 Row(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
@@ -638,7 +638,7 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
                                 }
 
                                 Row(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 6.dp),
                                     horizontalArrangement = Arrangement.SpaceEvenly,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -761,7 +761,7 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
                                 // 7-Day Forecast Layout (7 cards)
                                 val dailyList = forecastData?.daily ?: emptyList()
                                 Row(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 6.dp),
                                     horizontalArrangement = Arrangement.SpaceEvenly,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {

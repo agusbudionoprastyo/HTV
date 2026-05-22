@@ -292,6 +292,9 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
         ) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val startPaddingPx = with(density) { 58.dp.toPx() }
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val screenWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+            val categorySlideDistance = (screenWidthPx * 0.15f).toInt()
             val defaultSpec = LocalBringIntoViewSpec.current
 
             LaunchedEffect(focusedCategoryIndex) {
@@ -551,9 +554,27 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                         AnimatedContent(
                             targetState = Triple(currentCategoryIndex, isFilteringCategory, filteredMenuItems),
                             transitionSpec = {
-                                (fadeIn(animationSpec = tween(400, easing = FastOutSlowInEasing)) togetherWith
-                                fadeOut(animationSpec = tween(400, easing = FastOutSlowInEasing)))
-                                    .using(androidx.compose.animation.SizeTransform { _, _ -> tween(0) })
+                                val GoogleTvEasing = CubicBezierEasing(0.18f, 0.85f, 0.18f, 1.00f)
+                                val SLIDE_DURATION = 800
+                                
+                                val isForward = targetState.first >= initialState.first
+                                if (isForward) {
+                                    (slideInHorizontally(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)) { categorySlideDistance } +
+                                            fadeIn(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)))
+                                        .togetherWith(
+                                            slideOutHorizontally(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)) { -categorySlideDistance } +
+                                                    fadeOut(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+                                        )
+                                        .using(androidx.compose.animation.SizeTransform { _, _ -> tween(0) })
+                                } else {
+                                    (slideInHorizontally(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)) { -categorySlideDistance } +
+                                            fadeIn(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)))
+                                        .togetherWith(
+                                            slideOutHorizontally(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)) { categorySlideDistance } +
+                                                    fadeOut(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+                                        )
+                                        .using(androidx.compose.animation.SizeTransform { _, _ -> tween(0) })
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
