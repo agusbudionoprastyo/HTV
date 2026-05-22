@@ -49,6 +49,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
+import com.dafamsemarang.dhtv.DataRepository
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,13 +81,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.google.firebase.Firebase
+
+import com.google.firebase.database.DatabaseReference
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ktx.database
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.Query
-import com.google.firebase.database.ValueEventListener
-import com.google.firebase.database.database
+
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
@@ -119,131 +122,73 @@ import androidx.compose.ui.input.key.*
 @Composable
 fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null) {
    var isVisible by remember { mutableStateOf(false) }
-   var guestRequests by remember { mutableStateOf<List<GuestRequest>>(emptyList()) }
-   var categories by remember { mutableStateOf<List<String>>(emptyList()) }
+   val requestItems by DataRepository.requestItems
+   val categories by remember(requestItems) { derivedStateOf { requestItems.map { it.category }.distinct() } }
    var selectedCategory by remember { mutableStateOf<String?>(null) }
    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-   val context = LocalContext.current
-   val sharedPreferences = remember(context) { 
-       context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) 
-   }
-   val deviceID = remember { sharedPreferences.getString("deviceID", null) }
-   val branchId = remember { sharedPreferences.getString("branchId", null) }
-   var guestInfo by remember { mutableStateOf<GuestInfo?>(null) }
-   var folioId by remember { mutableStateOf<Int?>(null) }
+    val context = LocalContext.current
+    val sharedPreferences = remember(context) { 
+        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) 
+    }
+    val deviceID = remember { sharedPreferences.getString("deviceID", null) }
+    val branchId = remember { sharedPreferences.getString("branchId", null) }
+    val roomId = remember { sharedPreferences.getString("room", null) }
+    var guestInfo by remember { mutableStateOf<GuestInfo?>(null) }
+    var folioId by remember { mutableStateOf<Int?>(null) }
 
-   val database: DatabaseReference = remember { Firebase.database.reference }
+    val database: DatabaseReference = remember { Firebase.database.reference }
 
-   // Fetch data from Firebase with proper cleanup using DisposableEffect
-   DisposableEffect(key1 = branchId, key2 = deviceID) {
-       // Store listeners for cleanup
-       var categoryListener: ValueEventListener? = null
-       var requestsListener: ValueEventListener? = null
-       var categoryRef: DatabaseReference? = null
-       var requestsRef: DatabaseReference? = null
-       var activeGuestRef: com.google.firebase.database.DatabaseReference? = null
-       var activeGuestListener: com.google.firebase.database.ValueEventListener? = null
-       
-       if (branchId != null) {
-           Log.d("DHTV_CONTACT", "Branch ID: $branchId")
-           
-            // Setup guest info listener with careful lifecycle management
+    // 🚀 CRITICAL FIX: Fetch guestInfo and folioId in real-time so users can submit requests!
+    DisposableEffect(roomId, branchId) {
+        var guestRef: DatabaseReference? = null
+        var guestListener: ValueEventListener? = null
 
-            deviceID?.let { dId ->
-                val deviceRef = database.child("DEVICES").child(dId)
-                deviceRef.addListenerForSingleValueEvent(object : com.google.firebase.database.ValueEventListener {
-                    override fun onDataChange(devSnap: DataSnapshot) {
-                        if (devSnap.exists()) {
-                            val rNum = devSnap.child("room").getValue(String::class.java)
-                            val bId = devSnap.child("branchId").getValue(String::class.java)
-                            if (rNum != null && bId != null) {
-                                activeGuestRef = database.child("BRANCHES").child(bId).child("FOGUEST").child(rNum)
-                                val gList = object : com.google.firebase.database.ValueEventListener {
-                                    override fun onDataChange(gSnap: DataSnapshot) {
-                                        if (gSnap.exists()) {
-                                            val info = gSnap.getValue(GuestInfo::class.java)
-                                            guestInfo = info
-                                            folioId = info?.folio
-                                        }
-                                    }
-                                    override fun onCancelled(err: DatabaseError) {}
-                                }
-                                activeGuestListener = gList
-                                activeGuestRef?.addValueEventListener(gList)
-                            }
-                        }
+        if (roomId != null && branchId != null) {
+            val path = "BRANCHES/$branchId/FOGUEST/$roomId"
+            Log.d("ContactUsScreen", "Setting up active guest info listener for: $path")
+            guestRef = database.child(path)
+            
+            val listener = object : ValueEventListener {
+                override fun onDataChange(dataSnapshot: DataSnapshot) {
+                    if (dataSnapshot.exists()) {
+                        val info = dataSnapshot.getValue(GuestInfo::class.java)
+                        guestInfo = info
+                        folioId = info?.folio
+                        Log.d("ContactUsScreen", "Active guest info retrieved successfully: folioId = $folioId")
+                    } else {
+                        guestInfo = null
+                        folioId = null
+                        Log.w("ContactUsScreen", "Guest info data path does not exist!")
                     }
-                    override fun onCancelled(err: DatabaseError) {}
-                })
+                }
+
+                override fun onCancelled(databaseError: DatabaseError) {
+                    Log.e("ContactUsScreen", "Firebase error: ${databaseError.message}")
+                    guestInfo = null
+                    folioId = null
+                }
             }
+            guestListener = listener
+            guestRef.addValueEventListener(listener)
+        } else {
+            Log.w("ContactUsScreen", "Unable to load guest info: roomId=$roomId, branchId=$branchId")
+        }
 
-           // Fetch categories
-           categoryRef = database.child("BRANCHES").child(branchId).child("GUEST_REQUEST").child("category")
-           categoryListener = object : ValueEventListener {
-               override fun onDataChange(snapshot: DataSnapshot) {
-                   Log.d("DHTV_CONTACT", "Categories data: ${snapshot.value}")
-                   val categoriesSet = mutableSetOf<String>()
-                   for (data in snapshot.children) {
-                       val categoryName = data.child("caName").getValue(String::class.java)
-                       if (categoryName != null) {
-                           categoriesSet.add(categoryName)
-                       }
-                   }
-                   categories = categoriesSet.toList()
-               }
-
-               override fun onCancelled(error: DatabaseError) {
-                   Log.e("DHTV_CONTACT", "Error loading categories: ${error.message}")
-                   errorMessage = "Failed to load categories: ${error.message}"
-               }
-           }
-           categoryRef.addValueEventListener(categoryListener)
-
-           // Fetch requests
-           requestsRef = database.child("BRANCHES").child(branchId).child("GUEST_REQUEST").child("requests")
-           requestsListener = object : ValueEventListener {
-               override fun onDataChange(snapshot: DataSnapshot) {
-                   Log.d("DHTV_CONTACT", "Requests data: ${snapshot.value}")
-                   val requests = snapshot.children.mapNotNull { data ->
-                       data.getValue(GuestRequest::class.java)
-                   }
-                   guestRequests = requests
-                   isVisible = true
-               }
-
-               override fun onCancelled(error: DatabaseError) {
-                   Log.e("DHTV_CONTACT", "Error loading requests: ${error.message}")
-                   errorMessage = "Failed to load requests: ${error.message}"
-               }
-           }
-           requestsRef.addValueEventListener(requestsListener)
-       } else {
-           Log.e("DHTV_CONTACT", "Branch ID is null")
-           errorMessage = "Branch ID not found"
-       }
-
-       // Cleanup function - always called on dispose
-       onDispose {
-           Log.d("DHTV_CONTACT", "Cleaning up Firebase listeners")
-           categoryListener?.let { listener ->
-               categoryRef?.removeEventListener(listener)
-           }
-           requestsListener?.let { listener ->
-               requestsRef?.removeEventListener(listener)
-           }
-           activeGuestListener?.let { listener ->
-               activeGuestRef?.removeEventListener(listener)
-           }
-       }
-   }
+        onDispose {
+            if (guestRef != null && guestListener != null) {
+                guestRef.removeEventListener(guestListener)
+                Log.d("ContactUsScreen", "Guest info listener successfully released")
+            }
+        }
+    }
 
    // Use derivedStateOf for filtering - more performant, only recomputes when inputs change
-   val displayRequests = remember(guestRequests, selectedCategory) {
+   val displayRequests = remember(requestItems, selectedCategory) {
        if (selectedCategory.isNullOrEmpty()) {
-           guestRequests
+           requestItems
        } else {
-           guestRequests.filter { it.category == selectedCategory }
+           requestItems.filter { it.category == selectedCategory }
        }
    }
    
@@ -261,12 +206,13 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
        }
    }
    
-   // Update loading state when data is loaded
-   LaunchedEffect(guestRequests) {
-       if (guestRequests.isNotEmpty() && isLoadingRequests) {
-           isLoadingRequests = false
-       }
-   }
+    val isRequestLoaded by com.dafamsemarang.dhtv.DataRepository.isRequestLoaded
+    // Update loading state when request items are loaded or finished loading
+    LaunchedEffect(isRequestLoaded) {
+        if (isRequestLoaded) {
+            isLoadingRequests = false
+        }
+    }
    
     val currentCategoryIndex = remember(selectedCategory, categories) {
         val cats = listOf(null) + categories
@@ -312,16 +258,16 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
         }
     }
 
-    val categoryBringIntoViewSpec = remember(defaultSpec, startPaddingPx, isNavigatingHorizontally) {
+    val categoryBringIntoViewSpec = remember(defaultSpec) {
         object : BringIntoViewSpec {
             override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
                 get() = androidx.compose.animation.core.tween(
-                    durationMillis = 150,
+                    durationMillis = 300,
                     easing = androidx.compose.animation.core.FastOutSlowInEasing
                 )
 
             override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-                return if (isNavigatingHorizontally) offset - startPaddingPx else 0f
+                return 0f // Let programmatic LaunchedEffect handle all horizontal scrolls smoothly!
             }
         }
     }
@@ -367,58 +313,6 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
                }
            } else {
                var sidebarVisible by remember { mutableStateOf(false) }
-               var requests by remember { mutableStateOf<List<Request>>(emptyList()) }
-
-               // Query requests for current folioId with proper cleanup
-               DisposableEffect(key1 = folioId, key2 = branchId) {
-                   var myRequestsListener: ValueEventListener? = null
-                   var query: Query? = null
-                   
-                   // Store values in local variables for smart cast
-                   val currentFolioId = folioId
-                   val currentBranchId = branchId
-                   
-                   if (currentFolioId != null && currentBranchId != null) {
-                       Log.d("DHTV_CONTACT", "Starting request query with folioId: $currentFolioId")
-                       val requestRef = database.child("BRANCHES").child(currentBranchId).child("REQUEST")
-                       Log.d("DHTV_CONTACT", "Querying requests for folioId: $currentFolioId")
-                       
-                       query = requestRef.orderByChild("folioId").equalTo(currentFolioId.toDouble())
-                       myRequestsListener = object : ValueEventListener {
-                           override fun onDataChange(snapshot: DataSnapshot) {
-                               Log.d("DHTV_CONTACT", "Request data snapshot exists: ${snapshot.exists()}")
-                               Log.d("DHTV_CONTACT", "Request data snapshot children count: ${snapshot.childrenCount}")
-                               
-                               val list = mutableListOf<Request>()
-                               for (dataSnapshot in snapshot.children) {
-                                   Log.d("DHTV_CONTACT", "Processing request: ${dataSnapshot.value}")
-                                   val request = dataSnapshot.getValue(Request::class.java)
-                                   if (request != null) {
-                                       list.add(request)
-                                   } else {
-                                       Log.e("DHTV_CONTACT", "Failed to parse request: ${dataSnapshot.value}")
-                                   }
-                               }
-                               Log.d("DHTV_CONTACT", "Total requests found: ${list.size}")
-                               requests = list
-                           }
-                           override fun onCancelled(error: DatabaseError) {
-                               Log.e("DHTV_CONTACT", "Request query cancelled: ${error.message}")
-                           }
-                       }
-                       query.addValueEventListener(myRequestsListener)
-                   } else {
-                       requests = emptyList()
-                   }
-
-                   // Cleanup function - always called on dispose
-                   onDispose {
-                       Log.d("DHTV_CONTACT", "Cleaning up my requests listener")
-                       myRequestsListener?.let { listener ->
-                           query?.removeEventListener(listener)
-                       }
-                   }
-               }
 
                val sidebarOffset by animateDpAsState(
                    targetValue = if (sidebarVisible) 0.dp else 268.dp,
@@ -463,7 +357,7 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
                              }
                          }
                          .padding(end = paddingOffset)
-                         .padding(top = 120.dp),
+                         .padding(top = 110.dp, bottom = 12.dp),
                      horizontalArrangement = Arrangement.spacedBy(16.dp),
                      verticalAlignment = Alignment.CenterVertically,
                      contentPadding = PaddingValues(start = 58.dp, end = 58.dp)
@@ -690,150 +584,105 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
 
                  // Content dengan shimmer loading dan animasi perpindahan halus
                  AnimatedContent(
-                     targetState = currentCategoryIndex to Triple(isLoadingRequests, isFiltering, displayRequests),
-                      transitionSpec = {
-                          val direction = if (targetState.first > initialState.first) 1 else -1
-                          if (direction > 0) {
-                              (slideInHorizontally(animationSpec = tween(500, easing = FastOutSlowInEasing)) { (it * 0.06f).toInt() } + fadeIn(animationSpec = tween(500))) togetherWith
-                              (slideOutHorizontally(animationSpec = tween(500, easing = FastOutSlowInEasing)) { -(it * 0.06f).toInt() } + fadeOut(animationSpec = tween(400)))
-                          } else {
-                              (slideInHorizontally(animationSpec = tween(500, easing = FastOutSlowInEasing)) { -(it * 0.06f).toInt() } + fadeIn(animationSpec = tween(500))) togetherWith
-                              (slideOutHorizontally(animationSpec = tween(500, easing = FastOutSlowInEasing)) { (it * 0.06f).toInt() } + fadeOut(animationSpec = tween(400)))
-                          }
-                      },
-                     label = "RequestContentTransition",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 200.dp)
-                ) { (_, data) ->
-                     val (isLoading, isFilteringItems, requests) = data
-                    if ((isLoading && shimmerVisible) || isFilteringItems) {
-                        // Show shimmer while loading or filtering
-                        CompositionLocalProvider(LocalBringIntoViewSpec provides itemBringIntoViewSpec) {
-                         LazyRow(
-                            state = itemListState,
-                            flingBehavior = itemSnapBehavior,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight(Alignment.CenterVertically)
-                                .focusProperties { 
-                                    enter = { itemRequesters.getOrNull(focusedItemIndex) ?: FocusRequester.Default }
-                                    if (false) enter = { direction ->
-                                         if (direction == FocusDirection.Up) {
-                                             itemRequesters[0]
-                                         } else {
-                                             if (categoryChanged) {
-                                                 categoryChanged = false
-                                                 itemRequesters[0]
-                                             } else {
-                                                 FocusRequester.Default
+                      targetState = Triple(currentCategoryIndex, isFiltering, displayRequests),
+                       transitionSpec = {
+                           (fadeIn(animationSpec = tween(400, easing = FastOutSlowInEasing)) togetherWith
+                           fadeOut(animationSpec = tween(400, easing = FastOutSlowInEasing)))
+                               .using(androidx.compose.animation.SizeTransform { _, _ -> tween(0) })
+                       },
+                      label = "RequestContentTransition",
+                     modifier = Modifier
+                         .fillMaxWidth()
+                         .padding(top = 162.dp)
+                 ) { (_, isFilteringItems, requests) ->
+                     val isShowingShimmer = (isLoadingRequests && shimmerVisible) || isFilteringItems
+                     
+                     if (isShowingShimmer || requests.isNotEmpty()) {
+                         CompositionLocalProvider(LocalBringIntoViewSpec provides itemBringIntoViewSpec) {
+                             LazyRow(
+                                 state = itemListState,
+                                 flingBehavior = itemSnapBehavior,
+                                 modifier = Modifier
+                                     .fillMaxWidth()
+                                     .onPreviewKeyEvent { keyEvent ->
+                                         if (keyEvent.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                             when (keyEvent.key) {
+                                                 androidx.compose.ui.input.key.Key.DirectionLeft,
+                                                 androidx.compose.ui.input.key.Key.DirectionRight -> {
+                                                     isNavigatingHorizontally = true
+                                                 }
+                                                 androidx.compose.ui.input.key.Key.DirectionUp,
+                                                 androidx.compose.ui.input.key.Key.DirectionDown -> {
+                                                     isNavigatingHorizontally = false
+                                                 }
                                              }
                                          }
+                                         false
                                      }
-                                },
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(start = 58.dp, end = 58.dp)
-                        ) {
-                            items(5) { // Show 5 shimmer items
-                                RequestItemShimmer()
-                            }
-                        }
-                        }
-                    } else if (requests.isNotEmpty()) {
-                        // Show items if data is available
-                        CompositionLocalProvider(LocalBringIntoViewSpec provides itemBringIntoViewSpec) {
-                         LazyRow(
-                            state = itemListState,
-                            flingBehavior = itemSnapBehavior,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                 .onPreviewKeyEvent { keyEvent ->
-                                     if (keyEvent.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
-                                         when (keyEvent.key) {
-                                             androidx.compose.ui.input.key.Key.DirectionLeft,
-                                             androidx.compose.ui.input.key.Key.DirectionRight -> {
-                                                 isNavigatingHorizontally = true
-                                             }
-                                             androidx.compose.ui.input.key.Key.DirectionUp,
-                                             androidx.compose.ui.input.key.Key.DirectionDown -> {
-                                                 isNavigatingHorizontally = false
-                                             }
+                                     .wrapContentHeight(Alignment.CenterVertically)
+                                     .focusProperties { 
+                                         enter = { itemRequesters.getOrNull(focusedItemIndex) ?: FocusRequester.Default }
+                                     },
+                                 horizontalArrangement = Arrangement.spacedBy(if (isShowingShimmer) 8.dp else 6.dp),
+                                 contentPadding = PaddingValues(start = 58.dp, end = 58.dp)
+                             ) {
+                                 if (isShowingShimmer) {
+                                     items(5) { // Show 5 shimmer items
+                                         RequestItemShimmer()
+                                     }
+                                 } else {
+                                     itemsIndexed(
+                                         items = requests,
+                                         key = { _, request -> 
+                                             "${request.request_title}_${request.category}_${request.imageUrl}"
+                                         }
+                                     ) { index, request: GuestRequest ->
+                                         var showDialog by remember { mutableStateOf(false) }
+                                         
+                                         RequestItem(
+                                             request = request,
+                                             guestInfo = guestInfo,
+                                             folioId = folioId,
+                                             guestRoom = guestInfo?.room,
+                                             guestName = guestInfo?.fname,
+                                             guestPhone = guestInfo?.phone,
+                                             modifier = Modifier
+                                                 .focusRequester(if (index < itemRequesters.size) itemRequesters[index] else FocusRequester.Default)
+                                                 .onFocusChanged {
+                                                 if (it.isFocused) {
+                                                     focusedItemIndex = index
+                                                     itemScrollTrigger++
+                                                 }
+                                             },
+                                             onItemClick = { showDialog = true }
+                                         )
+                                         
+                                         // Dialog moved outside RequestItem for better performance
+                                         if (showDialog) {
+                                             RequestDialog(
+                                                 request = request,
+                                                 guestInfo = guestInfo,
+                                                 folioId = folioId,
+                                                 guestRoom = guestInfo?.room,
+                                                 guestName = guestInfo?.fname,
+                                                 guestPhone = guestInfo?.phone,
+                                                 onDismiss = { showDialog = false }
+                                             )
                                          }
                                      }
-                                     false
                                  }
-                                .wrapContentHeight(Alignment.CenterVertically)
-                                .focusProperties { 
-                                    enter = { itemRequesters.getOrNull(focusedItemIndex) ?: FocusRequester.Default }
-                                    if (false) enter = { direction ->
-                                         if (direction == FocusDirection.Up) {
-                                             itemRequesters[0]
-                                         } else {
-                                             if (categoryChanged) {
-                                                 categoryChanged = false
-                                                 itemRequesters[0]
-                                             } else {
-                                                 FocusRequester.Default
-                                             }
-                                         }
-                                     }
-                                },
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            contentPadding = PaddingValues(start = 58.dp, end = 58.dp)
-                        ) {
-                            itemsIndexed(
-                                items = requests,
-                                key = { _, request -> 
-                                    "${request.request_title}_${request.category}_${request.imageUrl}"
-                                }
-                            ) { index, request: GuestRequest ->
-                                var showDialog by remember { mutableStateOf(false) }
-                                
-                                RequestItem(
-                                    request = request,
-                                    guestInfo = guestInfo,
-                                    folioId = folioId,
-                                    guestRoom = guestInfo?.room,
-                                    guestName = guestInfo?.fname,
-                                    guestPhone = guestInfo?.phone,
-                                    modifier = Modifier
-                                        .focusRequester(if (index < itemRequesters.size) itemRequesters[index] else FocusRequester.Default)
-                                        .onFocusChanged {
-                                        if (it.isFocused) {
-                                            focusedItemIndex = index
-                                            itemScrollTrigger++
-                                        }
-                                    },
-                                    onItemClick = { showDialog = true }
-                                )
-                                
-                                // Dialog moved outside RequestItem for better performance
-                                if (showDialog) {
-                                    RequestDialog(
-                                        request = request,
-                                        guestInfo = guestInfo,
-                                        folioId = folioId,
-                                        guestRoom = guestInfo?.room,
-                                        guestName = guestInfo?.fname,
-                                        guestPhone = guestInfo?.phone,
-                                        onDismiss = { showDialog = false }
-                                    )
-                                }
-                            }
-                        }
-                       }
-                    } else {
-                        // No data available
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("No requests available", style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-
-
+                             }
+                         }
+                     } else {
+                         // No data available
+                         Box(
+                             modifier = Modifier.fillMaxWidth(),
+                             contentAlignment = Alignment.Center
+                         ) {
+                             Text("No requests available", style = MaterialTheme.typography.bodyMedium)
+                         }
+                     }
+                 }
 
            }
        } // End of inner Content Box
@@ -1019,10 +868,7 @@ fun RequestItem(
     onItemClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Memoize image loading state with stable key - only state needed in RequestItem
-    val imageLoadingState = remember(request.imageUrl) { mutableStateOf(true) }
-
-// Track TV focus state
+    // Track TV focus state
     var isFocused by remember { mutableStateOf(false) }
 
     val borderAlpha = remember { androidx.compose.animation.core.Animatable(0.5f) }
@@ -1071,14 +917,14 @@ fun RequestItem(
         Modifier.border(
             width = 3.dp,
             color = Color.White.copy(alpha = pulseAlpha * focusFadeAlpha),
-            shape = RoundedCornerShape(28.dp)
+            shape = RoundedCornerShape(38.dp)
         )
     } else {
         Modifier // Perfectly clean & zero-overhead for non-focused items!
     }
 
     // Handle interaction when RequestItem is clicked
-Box(
+    Box(
         modifier = modifier
             .size(196.dp)
             .scale(scale)
@@ -1097,96 +943,79 @@ Box(
                         Modifier.border(
                             width = 3.dp,
                             color = Color.White.copy(alpha = borderAlpha.value),
-                            shape = RoundedCornerShape(30.dp)
+                            shape = RoundedCornerShape(38.dp)
                         )
                     } else {
                         Modifier
                     }
                 )
-                .padding(6.dp) // The Floating Air Gap (6.dp padding - 3.dp border width = 3.dp gap, equal to border size!)
-                .clip(RoundedCornerShape(24.dp))
+                .padding(6.dp)
+                .clip(RoundedCornerShape(32.dp))
                 .background(Color(207, 223, 237).copy(alpha = 0.25f)) // Footer background color!
         ) {
-            Column(
+            Box(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Image container with padding inside the card
+                // Compact Circular Image - Adjusted to 8.dp padding for a closer top-right corner placement
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(8.dp)
+                        .align(Alignment.TopEnd)
+                        .padding(top = 8.dp, end = 8.dp)
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.1f))
                 ) {
                     if (request.imageUrl.isNotEmpty()) {
-                        if (imageLoadingState.value) {
-                            ImageShimmer(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(16.dp))
-                            )
-                        }
-                        
                         CachedAsyncImage(
                             imageUrl = request.imageUrl,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(16.dp))
-                                .alpha(if (imageLoadingState.value) 0f else 1f),
+                            modifier = Modifier.fillMaxSize(),
                             placeholder = R.drawable.err,
                             error = R.drawable.err,
-                            cachePrefix = "guest_request",
-                            onImageLoaded = { imageLoadingState.value = false },
-                            onError = { imageLoadingState.value = false }
+                            cachePrefix = "guest_request"
                         )
                     } else {
-                        // Fallback placeholder
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.White.copy(alpha = 0.1f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.err),
-                                contentDescription = "Image not available",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                        Image(
+                            painter = painterResource(id = R.drawable.err),
+                            contentDescription = "Image not available",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
 
-                // Text details container
+                // Title and Description starting at a fixed top offset so all titles align perfectly
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                        .padding(top = 72.dp, start = 14.dp, end = 14.dp, bottom = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = request.request_title,
                         style = TextStyle(
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            fontSize = 14.sp
                         ),
                         textAlign = TextAlign.Start,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
                     )
+
                     Text(
                         text = request.description,
                         style = TextStyle(
                             color = Color.White.copy(alpha = 0.8f),
                             fontWeight = FontWeight.Normal,
-                            fontSize = 10.sp
+                            fontSize = 11.sp
                         ),
                         textAlign = TextAlign.Start,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -1220,30 +1049,15 @@ Box(
                         .padding(4.dp)
                         .clip(RoundedCornerShape(24.dp))
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Tampilkan shimmer saat image loading
-                        if (imageLoadingState.value) {
-                            ImageShimmer(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(24.dp))
-                            )
-                        }
-                        
-                        CachedAsyncImage(
-                            imageUrl = request.imageUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .alpha(if (imageLoadingState.value) 0f else 1f),
-                            placeholder = R.drawable.err,
-                            error = R.drawable.err,
-                            cachePrefix = "guest_request",
-                            onImageLoaded = { imageLoadingState.value = false },
-                            onError = { imageLoadingState.value = false }
-                        )
-                    }
+                    CachedAsyncImage(
+                        imageUrl = request.imageUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                        placeholder = R.drawable.err,
+                        error = R.drawable.err,
+                        cachePrefix = "guest_request"
+                    )
                     // Black gradient overlay to ensure absolute text readability
                     Box(
                         modifier = Modifier

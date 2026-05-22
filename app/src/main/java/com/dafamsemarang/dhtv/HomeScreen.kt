@@ -896,11 +896,11 @@ fun HomeScreen(navController: NavHostController) {
     val initStartTime = System.currentTimeMillis()
     Log.d("HomeScreen", "HomeScreen composition started")
     
-    var imageList by remember { mutableStateOf<List<String>>(emptyList()) }
+    val imageList by DataRepository.slideshowImages
     var currentImageIndex by remember { mutableIntStateOf(0) }
-    var videoUrlsState by remember { mutableStateOf<List<String>>(emptyList()) }
-    var slideDurations by remember { mutableStateOf<List<Int>>(emptyList()) }
-    var isSlideshowActive by remember { mutableStateOf(false) }
+    val videoUrlsState by DataRepository.videoUrls
+    val slideDurations by DataRepository.slideshowDurations
+    val isSlideshowActive by DataRepository.isSlideshowActive
     
     // Customizable Shortcuts State
     val shortcutsPrefs = remember { context.getSharedPreferences("app_shortcuts", Context.MODE_PRIVATE) }
@@ -918,7 +918,7 @@ fun HomeScreen(navController: NavHostController) {
     }
     var showDrawer by remember { mutableStateOf(false) }
     var selectedSlotIndex by remember { mutableIntStateOf(-1) }
-    var installedApps by remember { mutableStateOf<List<SupportedApp>>(emptyList()) }
+    var installedApps by remember { mutableStateOf<List<SupportedApp>>(ShortcutIconCache.getInstalledAppsList()) }
     
     // Reorder & Action Dialog State
     var isReorderMode by remember { mutableStateOf(false) }
@@ -952,13 +952,17 @@ fun HomeScreen(navController: NavHostController) {
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            installedApps = getInstalledApps(context)
+            val apps = getInstalledApps(context)
+            withContext(Dispatchers.Main) {
+                installedApps = apps
+                ShortcutIconCache.setInstalledAppsList(apps)
+            }
         }
     }
     
-    // Loading states for shimmer
-    var isLoadingVideos by remember { mutableStateOf(true) }
-    var isLoadingSlideshow by remember { mutableStateOf(true) }
+    // Loading states for shimmer read from global repository
+    val isLoadingVideos by DataRepository.isLoadingVideos
+    val isLoadingSlideshow by DataRepository.isLoadingSlideshow
     
     // Track if video was paused (persistent across navigation)
     // Sync with static GlobalMediaPlayerHolder
@@ -1145,84 +1149,7 @@ fun HomeScreen(navController: NavHostController) {
         }
     }
 
-    // Listen for changes in the imageUrl field for background image
-    DisposableEffect(key1 = branchId) {
-        var vRef: DatabaseReference? = null
-        var sRef: DatabaseReference? = null
-        var vListener: ValueEventListener? = null
-        var sListener: ValueEventListener? = null
-
-        if (branchId != null) {
-            Log.d("HomeScreen", "Setting up leak-proof Firebase listeners for branchId: $branchId")
-            vRef = database.child("BRANCHES").child(branchId).child("VIDEO").child("videoUrl")
-            sRef = database.child("BRANCHES").child(branchId).child("SLIDESHOW").child("imageUrls")
-
-            val vL = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    try {
-                        val videoUrls = snapshot.children.mapNotNull { videoSnapshot ->
-                            val status = videoSnapshot.child("status").getValue(String::class.java)
-                            val url = videoSnapshot.child("url").getValue(String::class.java)
-                            if (status == "active" && url != null) url else null
-                        }
-                        videoUrlsState = videoUrls
-                        if (isLoadingVideos) isLoadingVideos = false
-                    } catch (e: Exception) {
-                        isLoadingVideos = false
-                    }
-                }
-                override fun onCancelled(error: DatabaseError) {
-                    isLoadingVideos = false
-                }
-            }
-            vListener = vL
-            vRef.addValueEventListener(vL)
-
-            val sL = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    try {
-                        val activeSlides = snapshot.children.mapNotNull { slideSnapshot ->
-                            try {
-                                val url = slideSnapshot.child("url").getValue(String::class.java)
-                                val duration = slideSnapshot.child("duration").getValue(Int::class.java) ?: 5
-                                val status = slideSnapshot.child("status").getValue(String::class.java)
-                                val title = slideSnapshot.child("title").getValue(String::class.java)
-                                if (url != null && status == "active") SlideData(url, duration, title) else null
-                            } catch (e: Exception) { null }
-                        }
-                        if (activeSlides.isNotEmpty()) {
-                            isSlideshowActive = true
-                            imageList = activeSlides.map { it.url }
-                            slideDurations = activeSlides.map { it.duration }
-                            currentImageIndex = 0
-                        } else {
-                            isSlideshowActive = false
-                            imageList = emptyList()
-                            slideDurations = emptyList()
-                        }
-                        if (isLoadingSlideshow) isLoadingSlideshow = false
-                    } catch (e: Exception) {
-                        isLoadingSlideshow = false
-                    }
-                }
-                override fun onCancelled(error: DatabaseError) {
-                    isLoadingSlideshow = false
-                }
-            }
-            sListener = sL
-            sRef.addValueEventListener(sL)
-        }
-
-        onDispose {
-            Log.d("HomeScreen", "Disconnecting Firebase listeners to free CPU...")
-            if (vRef != null && vListener != null) {
-                vRef.removeEventListener(vListener)
-            }
-            if (sRef != null && sListener != null) {
-                sRef.removeEventListener(sListener)
-            }
-        }
-    }
+    // Firebase listeners are now handled globally in DataRepository during preload
 
     // Timer for changing image based on slide duration (restarts on manual D-pad changes for jank-free transition timing)
     LaunchedEffect(isSlideshowActive, imageList, slideDurations, currentImageIndex) {
@@ -1574,6 +1501,8 @@ fun HomeScreen(navController: NavHostController) {
                         // Restore Focus to the newly added shortcut (Wait for recomposition)
                         CoroutineScope(Dispatchers.Main).launch {
                              try {
+                                 // Preload new shortcut banner into cache in background
+                                 ShortcutIconCache.preloadSingle(context, app.packageName)
                                  delay(350) 
                                  shortcutFocusRequesters[selectedSlotIndex].requestFocus()
                              } catch (e: Exception) {
@@ -2232,7 +2161,7 @@ fun ServiceButtonWithPackageBanner(
     val interactionSource = remember { MutableInteractionSource() }
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    var bannerDrawable by remember { mutableStateOf<android.graphics.drawable.Drawable?>(null) }
+    var bannerDrawable by remember(packageName) { mutableStateOf<android.graphics.drawable.Drawable?>(ShortcutIconCache.get(packageName)) }
     
     val isEmptySlot = packageName == "EMPTY_SLOT"
 
@@ -2296,17 +2225,20 @@ fun ServiceButtonWithPackageBanner(
 
     LaunchedEffect(packageName) {
         if (!isEmptySlot) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val pm = context.packageManager
-                    val appInfo = pm.getApplicationInfo(packageName, 0)
-                    // Try to load banner
-                    val banner = appInfo.loadBanner(pm)
-                    if (banner != null) {
-                        bannerDrawable = banner
+            if (bannerDrawable == null) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val pm = context.packageManager
+                        val appInfo = pm.getApplicationInfo(packageName, 0)
+                        // Try to load banner
+                        val banner = appInfo.loadBanner(pm)
+                        if (banner != null) {
+                            bannerDrawable = banner
+                            ShortcutIconCache.put(packageName, banner)
+                        }
+                    } catch (e: Exception) {
+                        // e.printStackTrace()
                     }
-                } catch (e: Exception) {
-                    // e.printStackTrace()
                 }
             }
         } else {

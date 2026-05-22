@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.navigation.NavBackStackEntry
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -11,6 +14,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -23,7 +27,13 @@ import androidx.compose.ui.zIndex
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.core.content.edit
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
 
+
+import androidx.compose.ui.unit.dp
 
 // Ordered list of main screens — determines slide direction
 private val mainScreenOrder = listOf("home", "cantingfood", "contact", "hotel_guide")
@@ -35,12 +45,36 @@ private fun slideDirection(from: String?, to: String?): Int {
     return if (toIndex >= fromIndex) 1 else -1
 }
 
-private const val SLIDE_DURATION = 500
-private const val SLIDE_OFFSET_FRACTION = 0.06f  // 6% of screen width — dominant fade, subtle direction hint like Google TV
+private const val SLIDE_DURATION = 800
+private val GoogleTvEasing = CubicBezierEasing(0.18f, 0.85f, 0.18f, 1.00f)
+private const val SLIDE_OFFSET_PCT = 0.15f
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainEnterTransition(slideDistance: Int): EnterTransition {
+    val dir = slideDirection(initialState.destination.route, targetState.destination.route)
+    return if (dir >= 0) {
+        slideInHorizontally(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)) { slideDistance } +
+        fadeIn(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+    } else {
+        slideInHorizontally(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)) { -slideDistance } +
+        fadeIn(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+    }
+}
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainExitTransition(slideDistance: Int): ExitTransition {
+    val dir = slideDirection(initialState.destination.route, targetState.destination.route)
+    return if (dir >= 0) {
+        slideOutHorizontally(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)) { -slideDistance } +
+        fadeOut(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+    } else {
+        slideOutHorizontally(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing)) { slideDistance } +
+        fadeOut(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+    }
+}
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+    val hazeState = remember { HazeState() }
 
     // Akses SharedPreferences langsung menggunakan LocalContext
     val sharedPreferences = LocalContext.current.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
@@ -48,6 +82,15 @@ fun AppNavigation() {
     // Ambil nilai deviceID dan status preload dari SharedPreferences
     val savedDeviceId = sharedPreferences.getString("deviceID", null)
     val hasPreloaded = sharedPreferences.getBoolean("hasPreloaded", false)
+
+    // Start background preload on app launch if branchId exists
+    val context = LocalContext.current
+    val branchId = remember(sharedPreferences) { sharedPreferences.getString("branchId", null) }
+    LaunchedEffect(branchId) {
+        if (branchId != null) {
+            com.dafamsemarang.dhtv.DataRepository.startPreload(context, branchId)
+        }
+    }
 
     // Tentukan tampilan awal
     val startDestination = if (savedDeviceId == null) {
@@ -62,9 +105,14 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+    val slideDistance = (screenWidthPx * SLIDE_OFFSET_PCT).toInt()
+
     Box(modifier = Modifier.fillMaxSize()) {
         // ── Persistent wallpaper — sits behind everything, never animates ──
-        WallpaperSection()
+        WallpaperSection(hazeState)
 
         // Navigasi berdasarkan status savedDeviceId
         NavHost(
@@ -130,24 +178,12 @@ fun AppNavigation() {
             }
 
             // ── HOME ────────────────────────────────────────────────────────
-            // Fade-only on enter to prevent ExoPlayer SurfaceView glitches.
-            // Participates in directional slide on exit.
             composable(
                 "home",
-                enterTransition = {
-                    fadeIn(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                exitTransition = {
-                    val dir = slideDirection("home", targetState.destination.route)
-                    slideOutHorizontally(
-                        targetOffsetX = { w -> (-w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                popEnterTransition = { EnterTransition.None },
-                popExitTransition = {
-                    fadeOut(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                }
+                enterTransition = { mainEnterTransition(slideDistance) },
+                exitTransition = { mainExitTransition(slideDistance) },
+                popEnterTransition = { mainEnterTransition(slideDistance) },
+                popExitTransition = { mainExitTransition(slideDistance) }
             ) {
                 HomeScreen(navController)
                 CheckoutReminder()
@@ -156,34 +192,10 @@ fun AppNavigation() {
             // ── F&B ─────────────────────────────────────────────────────────
             composable(
                 "cantingfood",
-                enterTransition = {
-                    val dir = slideDirection(initialState.destination.route, "cantingfood")
-                    slideInHorizontally(
-                        initialOffsetX = { w -> (w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeIn(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                exitTransition = {
-                    val dir = slideDirection("cantingfood", targetState.destination.route)
-                    slideOutHorizontally(
-                        targetOffsetX = { w -> (-w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                popEnterTransition = {
-                    val dir = slideDirection(initialState.destination.route, "cantingfood")
-                    slideInHorizontally(
-                        initialOffsetX = { w -> (w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeIn(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                popExitTransition = {
-                    val dir = slideDirection("cantingfood", targetState.destination.route)
-                    slideOutHorizontally(
-                        targetOffsetX = { w -> (-w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                }
+                enterTransition = { mainEnterTransition(slideDistance) },
+                exitTransition = { mainExitTransition(slideDistance) },
+                popEnterTransition = { mainEnterTransition(slideDistance) },
+                popExitTransition = { mainExitTransition(slideDistance) }
             ) {
                 FoodBeverageScreen()
                 CheckoutReminder()
@@ -192,34 +204,10 @@ fun AppNavigation() {
             // ── REQUEST / CONTACT ────────────────────────────────────────────
             composable(
                 "contact",
-                enterTransition = {
-                    val dir = slideDirection(initialState.destination.route, "contact")
-                    slideInHorizontally(
-                        initialOffsetX = { w -> (w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeIn(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                exitTransition = {
-                    val dir = slideDirection("contact", targetState.destination.route)
-                    slideOutHorizontally(
-                        targetOffsetX = { w -> (-w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                popEnterTransition = {
-                    val dir = slideDirection(initialState.destination.route, "contact")
-                    slideInHorizontally(
-                        initialOffsetX = { w -> (w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeIn(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                popExitTransition = {
-                    val dir = slideDirection("contact", targetState.destination.route)
-                    slideOutHorizontally(
-                        targetOffsetX = { w -> (-w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                }
+                enterTransition = { mainEnterTransition(slideDistance) },
+                exitTransition = { mainExitTransition(slideDistance) },
+                popEnterTransition = { mainEnterTransition(slideDistance) },
+                popExitTransition = { mainExitTransition(slideDistance) }
             ) {
                 ContactUsScreen()
                 CheckoutReminder()
@@ -228,39 +216,15 @@ fun AppNavigation() {
             // ── HOTEL INFO ───────────────────────────────────────────────────
             composable(
                 "hotel_guide",
-                enterTransition = {
-                    val dir = slideDirection(initialState.destination.route, "hotel_guide")
-                    slideInHorizontally(
-                        initialOffsetX = { w -> (w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeIn(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                exitTransition = {
-                    val dir = slideDirection("hotel_guide", targetState.destination.route)
-                    slideOutHorizontally(
-                        targetOffsetX = { w -> (-w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                popEnterTransition = {
-                    val dir = slideDirection(initialState.destination.route, "hotel_guide")
-                    slideInHorizontally(
-                        initialOffsetX = { w -> (w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeIn(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                },
-                popExitTransition = {
-                    val dir = slideDirection("hotel_guide", targetState.destination.route)
-                    slideOutHorizontally(
-                        targetOffsetX = { w -> (-w * SLIDE_OFFSET_FRACTION * dir).toInt() },
-                        animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing)
-                    ) + fadeOut(animationSpec = tween(SLIDE_DURATION, easing = FastOutSlowInEasing))
-                }
+                enterTransition = { mainEnterTransition(slideDistance) },
+                exitTransition = { mainExitTransition(slideDistance) },
+                popEnterTransition = { mainEnterTransition(slideDistance) },
+                popExitTransition = { mainExitTransition(slideDistance) }
             ) {
                 HotelInfoScreen()
                 CheckoutReminder()
             }
-        }
+        } // end NavHost
 
         // Persistent Header and Footer (Hoisted)
         // Only show on main screens (Home, Hotel Info, Contact, F&B)
@@ -272,8 +236,8 @@ fun AppNavigation() {
             exit = fadeOut(animationSpec = tween(durationMillis = 500))
         ) {
              Box(modifier = Modifier.zIndex(1f).fillMaxSize()) {
-                 HeaderSection(currentRoute)
-                 FooterSection(navController)
+                 HeaderSection(currentRoute, hazeState)
+                 FooterSection(navController, hazeState)
              }
         }
     }

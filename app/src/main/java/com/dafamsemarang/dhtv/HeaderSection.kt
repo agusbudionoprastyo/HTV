@@ -79,9 +79,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
 
 @Composable
-fun HeaderSection(currentRoute: String? = "home") {
+fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) {
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     val branchId = sharedPreferences.getString("branchId", null)
@@ -106,6 +110,18 @@ fun HeaderSection(currentRoute: String? = "home") {
     var isFocused by remember { mutableStateOf(false) }
     var viewMode by remember { mutableStateOf(0) } // 0 = Current Weather, 1 = Hourly Forecast, 2 = 7 Days Forecast
     var currentTimeString by remember { mutableStateOf("") }
+
+    var redrawTrigger by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        delay(500)
+        redrawTrigger++
+        delay(1000)
+        redrawTrigger++
+        delay(2000)
+        redrawTrigger++
+        delay(4000)
+        redrawTrigger++
+    }
 
     LaunchedEffect(Unit) {
         val sdfDate = SimpleDateFormat("EEEE, d MMMM yyyy", Locale("id", "ID"))
@@ -270,6 +286,7 @@ fun HeaderSection(currentRoute: String? = "home") {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(128.dp)
                 .padding(top = 24.dp, end = 58.dp, bottom = 16.dp), 
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -297,16 +314,29 @@ fun HeaderSection(currentRoute: String? = "home") {
                 if (toIndex >= fromIndex) 1 else -1
             }
 
+            val headerSlideDuration = 800
+            val googleTvEasing = CubicBezierEasing(0.18f, 0.85f, 0.18f, 1.00f)
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val screenWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+            val slideDistance = (screenWidthPx * 0.15f).toInt()
+
             AnimatedContent(
                 targetState = currentRoute ?: "home",
                 transitionSpec = {
                     val dir = getSlideDirection(initialState, targetState)
                     if (dir > 0) {
-                        (slideInHorizontally(animationSpec = tween(500)) { it } + fadeIn(animationSpec = tween(500)))
-                            .togetherWith(slideOutHorizontally(animationSpec = tween(500)) { -it } + fadeOut(animationSpec = tween(500)))
+                        (slideInHorizontally(animationSpec = tween(headerSlideDuration, easing = googleTvEasing)) { slideDistance } + 
+                         fadeIn(animationSpec = tween(headerSlideDuration, easing = googleTvEasing)))
+                            .togetherWith(
+                         slideOutHorizontally(animationSpec = tween(headerSlideDuration, easing = googleTvEasing)) { -slideDistance } + 
+                         fadeOut(animationSpec = tween(headerSlideDuration, easing = googleTvEasing)))
                     } else {
-                        (slideInHorizontally(animationSpec = tween(500)) { -it } + fadeIn(animationSpec = tween(500)))
-                            .togetherWith(slideOutHorizontally(animationSpec = tween(500)) { it } + fadeOut(animationSpec = tween(500)))
+                        (slideInHorizontally(animationSpec = tween(headerSlideDuration, easing = googleTvEasing)) { -slideDistance } + 
+                         fadeIn(animationSpec = tween(headerSlideDuration, easing = googleTvEasing)))
+                            .togetherWith(
+                         slideOutHorizontally(animationSpec = tween(headerSlideDuration, easing = googleTvEasing)) { slideDistance } + 
+                         fadeOut(animationSpec = tween(headerSlideDuration, easing = googleTvEasing)))
                     }
                 },
                 label = "left_header_transition"
@@ -373,19 +403,34 @@ fun HeaderSection(currentRoute: String? = "home") {
                         )
                     }
 
+                    val baseAlpha = 0.40f
+
                     // Card Body (Always exactly 448.dp x 80.dp, no border)
                     Box(
                         modifier = Modifier
                             .width(448.dp)
                             .height(80.dp)
                             .clip(RoundedCornerShape(16.dp))
+                            .then(
+                                if (hazeState != null) {
+                                    val trigger = redrawTrigger
+                                    Modifier.hazeChild(
+                                        state = hazeState,
+                                        shape = RoundedCornerShape(16.dp),
+                                        style = HazeStyle(
+                                            tint = HazeTint(Color.Transparent),
+                                            blurRadius = 24.dp
+                                        )
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .background(
+                                color = Color(207, 223, 237).copy(alpha = baseAlpha),
+                                shape = RoundedCornerShape(16.dp)
+                            )
                             .drawBehind {
-                                // 1. Base Glass Color (Footer Color with matching opacity)
-                                drawRoundRect(
-                                    color = Color(207, 223, 237).copy(alpha = if (isFocused) 0.35f else 0.25f),
-                                    cornerRadius = CornerRadius(16.dp.toPx())
-                                )
-
                                 // 2. Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
                                 drawRoundRect(
                                     brush = Brush.linearGradient(
@@ -878,19 +923,34 @@ fun HeaderSection(currentRoute: String? = "home") {
                         )
                     }
 
+                    val baseAlpha = 0.40f
+
                     // Card Body (Always exactly 448.dp x 80.dp, no border)
                     Box(
                         modifier = Modifier
                             .width(448.dp)
                             .height(80.dp)
                             .clip(RoundedCornerShape(16.dp))
+                            .then(
+                                if (hazeState != null) {
+                                    val trigger = redrawTrigger
+                                    Modifier.hazeChild(
+                                        state = hazeState,
+                                        shape = RoundedCornerShape(16.dp),
+                                        style = HazeStyle(
+                                            tint = HazeTint(Color.Transparent),
+                                            blurRadius = 24.dp
+                                        )
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .background(
+                                color = Color(207, 223, 237).copy(alpha = baseAlpha),
+                                shape = RoundedCornerShape(16.dp)
+                            )
                             .drawBehind {
-                                // 1. Base Glass Color (Footer Color with matching opacity)
-                                drawRoundRect(
-                                    color = Color(207, 223, 237).copy(alpha = if (isFocused) 0.35f else 0.25f),
-                                    cornerRadius = CornerRadius(16.dp.toPx())
-                                )
-
                                 // 2. Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
                                 drawRoundRect(
                                     brush = Brush.linearGradient(
@@ -1052,27 +1112,44 @@ fun HeaderSection(currentRoute: String? = "home") {
             }
         }
 
-            // 2. Company Logo on the right side of the header
-            if (iconUrl != null && iconUrl!!.isNotEmpty()) {
-                AsyncImage(
-                    model = iconUrl,
-                    contentDescription = "Company Logo",
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .height(48.dp),
-                    contentScale = ContentScale.Fit,
-                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(HeaderIcon),
-                    error = painterResource(id = R.drawable.dafam)
-                )
-            } else {
-                Icon(
-                    painter = painterResource(id = R.drawable.dafam),
-                    contentDescription = "Logo",
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .height(48.dp),
-                    tint = HeaderIcon
-                )
+            // 2. Company Logo on the right side of the header in a beautiful square glassmorphic container
+            var isIconLoadError by remember(iconUrl) { mutableStateOf(false) }
+            val logoContext = LocalContext.current
+            val svgAwareImageLoader = remember(logoContext) {
+                ImageLoader.Builder(logoContext)
+                    .components { add(SvgDecoder.Factory()) }
+                    .build()
+            }
+            
+            val showPlaceholder = iconUrl.isNullOrEmpty() || isIconLoadError
+
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (showPlaceholder) {
+                    Text(
+                        text = "DAFAM",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                } else {
+                    AsyncImage(
+                        model = iconUrl,
+                        imageLoader = svgAwareImageLoader,
+                        contentDescription = "Company Logo",
+                        modifier = Modifier
+                            .fillMaxSize(),
+                        contentScale = ContentScale.Fit,
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(HeaderIcon),
+                        onError = { isIconLoadError = true }
+                    )
+                }
             }
         }
     }

@@ -78,9 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.dafamsemarang.dhtv.CachedAsyncImage
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.ValueEventListener
+
 import android.content.SharedPreferences
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -135,9 +133,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
-import com.google.firebase.Firebase
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.database
+
 import com.google.gson.Gson
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
@@ -166,6 +162,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.os.Bundle
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
+import com.google.firebase.database.DatabaseReference
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ktx.database
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.runtime.mutableFloatStateOf
 import io.ktor.client.request.header
@@ -199,7 +203,7 @@ class CartPreferences(context: Context) {
 @Composable
 fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = null) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var menuItems by remember { mutableStateOf<List<MenuItemData>>(emptyList()) }
+    val menuItems by com.dafamsemarang.dhtv.DataRepository.menuItems
     var showDialog by remember { mutableStateOf(false) }
     var selectedItemDetail by remember { mutableStateOf<MenuItemData?>(null) }
     val selectedItems = GlobalCartState.selectedItems
@@ -207,7 +211,7 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
 
     var selectedCategory by remember { mutableStateOf<String?>(null) }
 
-    val categories = remember { mutableStateOf<List<String>>(emptyList()) }
+    val categories = derivedStateOf { menuItems.map { it.category }.distinct() }
     
     // Loading state for shimmer
     var isLoadingMenuItems by remember { mutableStateOf(true) }
@@ -226,53 +230,19 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
     val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     val branchId = sharedPreferences.getString("branchId", null)
 
-    // Firebase Realtime Database listener
-    DisposableEffect(key1 = branchId) {
-        var activeRef: com.google.firebase.database.DatabaseReference? = null
-        var activeListener: com.google.firebase.database.ValueEventListener? = null
-
-        if (branchId != null) {
-            val database = com.google.firebase.database.FirebaseDatabase.getInstance().reference
-            activeRef = database.child("BRANCHES")
-                .child(branchId)
-                .child("FOOD_BEVERAGE")
-                .child("food")
-
-            val listener = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val items = snapshot.children.mapNotNull { childSnapshot ->
-                        val rawData = childSnapshot.value as? Map<*, *>
-                        val isActive = rawData?.get("isActive") as? Boolean == true
-                        if (!isActive) {
-                            null
-                        } else {
-                            childSnapshot.getValue(MenuItemData::class.java)?.copy(branchId = branchId)
-                        }
-                    }
-                    menuItems = items
-                    categories.value = items.map { it.category }.distinct()
-                    if (isLoadingMenuItems) isLoadingMenuItems = false
-                }
-                override fun onCancelled(error: DatabaseError) {
-                    isLoadingMenuItems = false
-                }
-            }
-            activeListener = listener
-            activeRef.addValueEventListener(listener)
-        }
-        
-        onDispose {
-            if (activeRef != null && activeListener != null) {
-                activeRef.removeEventListener(activeListener)
-            }
-        }
-    }
-
+    // Sync selected items with current branchId
     LaunchedEffect(branchId) {
         if (branchId != null) {
             selectedItems.clear()
             val cartItems = cartPreferences.getCart()
             selectedItems.addAll(cartItems.filter { it.item.branchId == branchId })
+        }
+    }
+    val isMenuLoaded by com.dafamsemarang.dhtv.DataRepository.isMenuLoaded
+    // Update loading state when menu items are loaded or finished loading
+    LaunchedEffect(isMenuLoaded) {
+        if (isMenuLoaded) {
+            isLoadingMenuItems = false
         }
     }
 
@@ -582,14 +552,9 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                         AnimatedContent(
                             targetState = Triple(currentCategoryIndex, isFilteringCategory, filteredMenuItems),
                             transitionSpec = {
-                                val direction = if (targetState.first > initialState.first) 1 else -1
-                                if (direction > 0) {
-                                    (slideInHorizontally(animationSpec = tween(550, easing = FastOutSlowInEasing)) { (it * 0.25f).toInt() } + fadeIn(animationSpec = tween(550))) togetherWith
-                                    (slideOutHorizontally(animationSpec = tween(450, easing = FastOutSlowInEasing)) { -(it * 0.25f).toInt() } + fadeOut(animationSpec = tween(450)))
-                                } else {
-                                    (slideInHorizontally(animationSpec = tween(550, easing = FastOutSlowInEasing)) { -(it * 0.25f).toInt() } + fadeIn(animationSpec = tween(550))) togetherWith
-                                    (slideOutHorizontally(animationSpec = tween(450, easing = FastOutSlowInEasing)) { (it * 0.25f).toInt() } + fadeOut(animationSpec = tween(450)))
-                                }.using(androidx.compose.animation.SizeTransform { _, _ -> tween(0) })
+                                (fadeIn(animationSpec = tween(400, easing = FastOutSlowInEasing)) togetherWith
+                                fadeOut(animationSpec = tween(400, easing = FastOutSlowInEasing)))
+                                    .using(androidx.compose.animation.SizeTransform { _, _ -> tween(0) })
                             },
                             modifier = Modifier
                                 .fillMaxWidth()

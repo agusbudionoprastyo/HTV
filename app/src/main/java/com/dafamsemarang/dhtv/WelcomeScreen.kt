@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -32,6 +34,8 @@ import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
+import coil.ImageLoader
+import coil.decode.SvgDecoder
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
@@ -607,24 +611,45 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 horizontalArrangement = Arrangement.Absolute.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val context = LocalContext.current
+                val svgAwareImageLoader = remember(context) {
+                    ImageLoader.Builder(context)
+                        .components { add(SvgDecoder.Factory()) }
+                        .build()
+                }
+                var isIconLoadError by remember(iconUrl) { mutableStateOf(false) }
                 if (iconUrl != null && iconUrl!!.isNotEmpty()) {
-                    AsyncImage(
-                        model = iconUrl,
-                        contentDescription = "Company Logo",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(24.dp),
-                        contentScale = ContentScale.Fit,
-                        error = painterResource(id = R.drawable.dafam) // Fallback to default icon
-                    )
+                    if (isIconLoadError) {
+                        Text(
+                            text = "Your Company Logo",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 14.sp,
+                            letterSpacing = 1.5.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        AsyncImage(
+                            model = iconUrl,
+                            imageLoader = svgAwareImageLoader,
+                            contentDescription = "Company Logo",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(24.dp),
+                            contentScale = ContentScale.Fit,
+                            onError = { isIconLoadError = true }
+                        )
+                    }
                 } else {
-                    Image(
-                        painter = painterResource(id = R.drawable.dafam),
-                        contentDescription = "Logo",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(24.dp),
-                        colorFilter = ColorFilter.tint(Color.White)
+                    Text(
+                        text = "Your Company Logo",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp,
+                        letterSpacing = 1.5.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }

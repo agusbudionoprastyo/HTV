@@ -8,6 +8,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import com.dafamsemarang.dhtv.DataRepository
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,6 +43,13 @@ fun PreloadScreen(onPreloadFinished: () -> Unit) {
             Log.e("PreloadScreen", "Branch ID is null, skipping preload")
             onPreloadFinished()
             return@LaunchedEffect
+        }
+        // Start preloading data for menu and requests
+        com.dafamsemarang.dhtv.DataRepository.startPreload(context, branchId)
+
+        // Start preloading shortcut icons concurrently in background
+        launch {
+            com.dafamsemarang.dhtv.ShortcutIconCache.preload(context)
         }
 
         withContext(Dispatchers.IO) {

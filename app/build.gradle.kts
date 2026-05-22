@@ -97,6 +97,7 @@ dependencies {
     implementation ("com.github.bumptech.glide:glide:4.15.0")
     implementation ("com.github.bumptech.glide:compose:1.0.0-alpha.2")
     implementation ("com.airbnb.android:lottie-compose:6.6.1")
+    implementation("dev.chrisbanes.haze:haze:1.1.1")
 
     implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.2")
     implementation("io.ktor:ktor-client-content-negotiation:3.0.2")

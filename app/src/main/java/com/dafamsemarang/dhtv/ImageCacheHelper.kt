@@ -131,25 +131,27 @@ fun CachedAsyncImage(
     showShimmer: Boolean = true
 ) {
     val context = LocalContext.current
-    var cachedImagePath by remember(imageUrl) { mutableStateOf<String?>(null) }
-    var isLoading by remember(imageUrl) { mutableStateOf(true) }
-    
     val cacheFileName = remember(imageUrl) {
         getImageCacheFileName(imageUrl, cachePrefix)
     }
+    val existingPath = remember(imageUrl) {
+        if (imageUrl.isEmpty()) null else getCachedImagePath(context, cacheFileName)
+    }
     
-    // Check for existing cache
+    var cachedImagePath by remember(imageUrl) { mutableStateOf<String?>(existingPath) }
+    var isLoading by remember(imageUrl) { mutableStateOf(existingPath == null && imageUrl.isNotEmpty()) }
+    
+    // Check/refresh cache in background
     LaunchedEffect(imageUrl) {
         if (imageUrl.isEmpty()) {
             isLoading = false
             return@LaunchedEffect
         }
         
-        val existingPath = getCachedImagePath(context, cacheFileName)
-        if (existingPath != null) {
-            cachedImagePath = existingPath
+        val latestPath = getCachedImagePath(context, cacheFileName)
+        if (latestPath != null) {
+            cachedImagePath = latestPath
             isLoading = false
-            // Call onImageLoaded if image is already cached
             onImageLoaded?.invoke()
         } else {
             // Download and cache if not exists
@@ -263,18 +265,17 @@ fun Modifier.shimmerEffect(): Modifier {
 @Composable
 fun rememberCachedPainter(url: String, errorPlaceholder: Int? = null): coil.compose.AsyncImagePainter {
     val context = LocalContext.current
-    var model: Any by remember(url) { mutableStateOf(url) }
-    
-    LaunchedEffect(url) {
+    val model = remember(url) {
         if (url.isNotEmpty()) {
             val cacheFileName = getImageCacheFileName(url)
             val cachedPath = getCachedImagePath(context, cacheFileName)
             if (cachedPath != null) {
-                model = File(cachedPath)
-                // Log.d("ImageCacheHelper", "Using cached image for: $url")
+                File(cachedPath)
             } else {
-                // Log.d("ImageCacheHelper", "Using network image for: $url")
+                url
             }
+        } else {
+            url
         }
     }
 

@@ -31,9 +31,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
 
 @Composable
-fun WallpaperSection() {
+fun WallpaperSection(hazeState: HazeState? = null) {
     var imageUrl by remember { mutableStateOf<String?>(null) }
     var localWallpaperPath by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -101,36 +103,45 @@ fun WallpaperSection() {
     val wallpaperFile = wallpaperFilePath?.let { File(it) }
     val useLocal = wallpaperFile?.exists() == true
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (useLocal) {
-            val bitmap: ImageBitmap? = remember(wallpaperFilePath) {
-                try {
-                    val bmp = android.graphics.BitmapFactory.decodeFile(wallpaperFilePath)
-                    bmp?.asImageBitmap()
-                } catch (e: Exception) { null }
-            }
-            bitmap?.let {
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (hazeState != null) Modifier.haze(hazeState) else Modifier)
+        ) {
+            if (useLocal) {
+                val bitmap: ImageBitmap? = remember(wallpaperFilePath) {
+                    try {
+                        val bmp = android.graphics.BitmapFactory.decodeFile(wallpaperFilePath)
+                        bmp?.asImageBitmap()
+                    } catch (e: Exception) { null }
+                }
+                bitmap?.let {
+                    Image(
+                        bitmap = it,
+                        contentDescription = "wallpaper",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            } else if (imageUrl != null) {
                 Image(
-                    bitmap = it,
+                    painter = rememberAsyncImagePainter(imageUrl),
                     contentDescription = "wallpaper",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
             }
-        } else if (imageUrl != null) {
-            Image(
-                painter = rememberAsyncImagePainter(imageUrl),
-                contentDescription = "wallpaper",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
         }
 
-        // Full-screen transparent black overlay for optimal contrast & readability
+        // Full-screen transparent black overlay for optimal contrast & readability.
+        // Placed outside the Haze capturing container so the blur buffer remains bright and vibrant.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f))
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f))
         )
     }
 }

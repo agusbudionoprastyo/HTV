@@ -137,6 +137,12 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
 
 //// Function to set system volume
 //fun setSystemVolume(context: Context, isMuted: Boolean) {
@@ -215,9 +221,28 @@ fun setSystemVolume(context: Context, isMuted: Boolean) {
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-fun FooterSection(navController: androidx.navigation.NavHostController? = null)  {
+fun FooterSection(navController: androidx.navigation.NavHostController? = null, hazeState: HazeState? = null)  {
     val navBackStackEntry = navController?.currentBackStackEntryAsState()?.value
     val currentRoute = navBackStackEntry?.destination?.route
+
+    val baseAlpha = 0.40f
+
+    var isNotifFocused by remember { mutableStateOf(false) }
+    var isSettingsFocused by remember { mutableStateOf(false) }
+    var focusedLabel3 by remember { mutableStateOf<String?>(null) }
+    var focusedLabel4 by remember { mutableStateOf<String?>(null) }
+
+    var redrawTrigger by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        delay(500)
+        redrawTrigger++
+        delay(1000)
+        redrawTrigger++
+        delay(2000)
+        redrawTrigger++
+        delay(4000)
+        redrawTrigger++
+    }
 
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
@@ -551,17 +576,53 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             horizontalArrangement = Arrangement.spacedBy(17.dp),
             verticalAlignment = Alignment.Bottom
         ) {
-            Box(
-                modifier = Modifier
-                    .background(
-                        color = Color(207, 223, 237).copy(alpha = 0.25f),
-                        shape = RoundedCornerShape(50.dp)
-                    )
-                    .padding(4.dp)
-            ) {
+            // Capsule 1 (Notifications)
+            Box {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(50.dp))
+                        .then(
+                            if (hazeState != null) {
+                                val trigger = redrawTrigger
+                                Modifier.hazeChild(
+                                    state = hazeState,
+                                    shape = RoundedCornerShape(50.dp),
+                                    style = HazeStyle(
+                                        tint = HazeTint(Color.Transparent),
+                                        blurRadius = 24.dp
+                                    )
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .background(
+                            color = Color(207, 223, 237).copy(alpha = baseAlpha),
+                            shape = RoundedCornerShape(50.dp)
+                        )
+                        .drawBehind {
+                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
+                            drawRoundRect(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.35f),
+                                        Color.White.copy(alpha = 0.03f),
+                                        Color.White.copy(alpha = 0.20f)
+                                    ),
+                                    start = Offset(0f, 0f),
+                                    end = Offset(this.size.width, this.size.height)
+                                ),
+                                cornerRadius = CornerRadius(this.size.height / 2),
+                                style = Stroke(width = 1.2.dp.toPx())
+                            )
+                        }
+                )
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
+                    horizontalArrangement = Arrangement.Start,
+                    modifier = Modifier.padding(4.dp)
                 ) {
                     SmallServiceButtonWithBadge(
                         iconRes = R.drawable.notifications_svgrepo_com,
@@ -573,17 +634,53 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .background(
-                        color = Color(207, 223, 237).copy(alpha = 0.25f),
-                        shape = RoundedCornerShape(50.dp)
-                    )
-                    .padding(4.dp)
-            ) {
+            // Capsule 2 (Settings)
+            Box {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(50.dp))
+                        .then(
+                            if (hazeState != null) {
+                                val trigger = redrawTrigger
+                                Modifier.hazeChild(
+                                    state = hazeState,
+                                    shape = RoundedCornerShape(50.dp),
+                                    style = HazeStyle(
+                                        tint = HazeTint(Color.Transparent),
+                                        blurRadius = 24.dp
+                                    )
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .background(
+                            color = Color(207, 223, 237).copy(alpha = baseAlpha),
+                            shape = RoundedCornerShape(50.dp)
+                        )
+                        .drawBehind {
+                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
+                            drawRoundRect(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.35f),
+                                        Color.White.copy(alpha = 0.03f),
+                                        Color.White.copy(alpha = 0.20f)
+                                    ),
+                                    start = Offset(0f, 0f),
+                                    end = Offset(this.size.width, this.size.height)
+                                ),
+                                cornerRadius = CornerRadius(this.size.height / 2),
+                                style = Stroke(width = 1.2.dp.toPx())
+                            )
+                        }
+                )
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
+                    horizontalArrangement = Arrangement.Start,
+                    modifier = Modifier.padding(4.dp)
                 ) {
                     SmallServiceButton(
                         iconRes = R.drawable.setting_svgrepo_com,
@@ -594,17 +691,53 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .background(
-                        color = Color(207, 223, 237).copy(alpha = 0.25f),
-                        shape = RoundedCornerShape(50.dp)
-                    )
-                    .padding(4.dp)
-            ) {
+            // Capsule 3 (DND / Wi-Fi / WhatsApp)
+            Box {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(50.dp))
+                        .then(
+                            if (hazeState != null) {
+                                val trigger = redrawTrigger
+                                Modifier.hazeChild(
+                                    state = hazeState,
+                                    shape = RoundedCornerShape(50.dp),
+                                    style = HazeStyle(
+                                        tint = HazeTint(Color.Transparent),
+                                        blurRadius = 24.dp
+                                    )
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .background(
+                            color = Color(207, 223, 237).copy(alpha = baseAlpha),
+                            shape = RoundedCornerShape(50.dp)
+                        )
+                        .drawBehind {
+                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
+                            drawRoundRect(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.35f),
+                                        Color.White.copy(alpha = 0.03f),
+                                        Color.White.copy(alpha = 0.20f)
+                                    ),
+                                    start = Offset(0f, 0f),
+                                    end = Offset(this.size.width, this.size.height)
+                                ),
+                                cornerRadius = CornerRadius(this.size.height / 2),
+                                style = Stroke(width = 1.2.dp.toPx())
+                            )
+                        }
+                )
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
+                    horizontalArrangement = Arrangement.Start,
+                    modifier = Modifier.padding(4.dp)
                 ) {
                     SmallServiceButton(
                         iconRes = R.drawable.do_not_disturb_svgrepo_com,
@@ -645,25 +778,71 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     )
                 }
             }
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(
-                        color = Color(207, 223, 237).copy(alpha = 0.25f),
-                        shape = CircleShape
-                    )
-                    .animateContentSize(animationSpec = tween(durationMillis = 500))
-                    .padding(4.dp)
-            ) {
+
+            // Capsule 4 (Home / F&B / Request / Hotel Info)
+            Box {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(CircleShape)
+                        .then(
+                            if (hazeState != null) {
+                                val trigger = redrawTrigger
+                                Modifier.hazeChild(
+                                    state = hazeState,
+                                    shape = CircleShape,
+                                    style = HazeStyle(
+                                        tint = HazeTint(Color.Transparent),
+                                        blurRadius = 24.dp
+                                    )
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .background(
+                            color = Color(207, 223, 237).copy(alpha = baseAlpha),
+                            shape = CircleShape
+                        )
+                        .animateContentSize(animationSpec = tween(durationMillis = 500))
+                        .drawBehind {
+                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
+                            drawRoundRect(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.35f),
+                                        Color.White.copy(alpha = 0.03f),
+                                        Color.White.copy(alpha = 0.20f)
+                                    ),
+                                    start = Offset(0f, 0f),
+                                    end = Offset(this.size.width, this.size.height)
+                                ),
+                                cornerRadius = CornerRadius(this.size.height / 2),
+                                style = Stroke(width = 1.2.dp.toPx())
+                            )
+                        }
+                )
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
+                    horizontalArrangement = Arrangement.Start,
+                    modifier = Modifier.padding(4.dp)
                 ) {
                     SmallServiceButton(
                         iconRes = R.drawable.ic_home_launcher_custom,
-                        onClick = { if (currentRoute != "home") navController?.navigate("home") },
-                        title = "Home",
-                        onFocusAction = { if (currentRoute != "home") navController?.navigate("home") },
+                        onClick = {
+                            if (currentRoute != "home") navController?.navigate("home") {
+                                popUpTo("home") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        title = null,
+                        onFocusAction = {
+                            if (currentRoute != "home") navController?.navigate("home") {
+                                launchSingleTop = true
+                            }
+                        },
                         isActive = currentRoute == "home",
                         focusRequester = homeFocusRequester
                     )
@@ -672,9 +851,19 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
 
                     SmallServiceButton(
                         iconRes = R.drawable.room_service_3_svgrepo_com,
-                        onClick = { if (currentRoute != "cantingfood") navController?.navigate("cantingfood") },
-                        title = "F&B",
-                        onFocusAction = { if (currentRoute != "cantingfood") navController?.navigate("cantingfood") },
+                        onClick = {
+                            if (currentRoute != "cantingfood") navController?.navigate("cantingfood") {
+                                popUpTo("home") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        title = null,
+                        onFocusAction = {
+                            if (currentRoute != "cantingfood") navController?.navigate("cantingfood") {
+                                launchSingleTop = true
+                            }
+                        },
                         isActive = currentRoute == "cantingfood",
                         focusRequester = foodFocusRequester
                     )
@@ -731,7 +920,9 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                                 modifier = Modifier
                                                     .size(width = 64.dp, height = 28.dp)
                                                     .clip(RoundedCornerShape(14.dp))
-                                                    .onFocusChanged { isCartFocused = it.isFocused }
+                                                    .onFocusChanged { 
+                                                        isCartFocused = it.isFocused
+                                                    }
                                                     .background(
                                                         color = if (isCartFocused) Color(0xFFCFDFED) else Color.Transparent,
                                                         shape = RoundedCornerShape(14.dp)
@@ -771,7 +962,9 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                             modifier = Modifier
                                                 .size(width = 88.dp, height = 28.dp)
                                                 .clip(RoundedCornerShape(14.dp))
-                                                .onFocusChanged { isOrderFocused = it.isFocused }
+                                                .onFocusChanged { 
+                                                    isOrderFocused = it.isFocused
+                                                }
                                                 .background(
                                                     color = if (isOrderFocused) Color(0xFFCFDFED) else Color.Transparent,
                                                     shape = RoundedCornerShape(14.dp)
@@ -800,9 +993,19 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
 
                     SmallServiceButton(
                         iconRes = R.drawable.service_request_svgrepo_com,
-                        onClick = { if (currentRoute != "contact") navController?.navigate("contact") },
-                        title = "Request",
-                        onFocusAction = { if (currentRoute != "contact") navController?.navigate("contact") },
+                        onClick = {
+                            if (currentRoute != "contact") navController?.navigate("contact") {
+                                popUpTo("home") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        title = null,
+                        onFocusAction = {
+                            if (currentRoute != "contact") navController?.navigate("contact") {
+                                launchSingleTop = true
+                            }
+                        },
                         isActive = currentRoute == "contact",
                         focusRequester = requestFocusRequester
                     )
@@ -845,7 +1048,9 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                                     .size(width = 90.dp, height = 28.dp)
                                                     .clip(RoundedCornerShape(14.dp))
                                                     .focusRequester(myRequestFocusRequester)
-                                                    .onFocusChanged { isMyRequestFocused = it.isFocused }
+                                                    .onFocusChanged { 
+                                                        isMyRequestFocused = it.isFocused
+                                                    }
                                                     .background(
                                                         color = if (isMyRequestFocused) Color(0xFFCFDFED) else Color.Transparent,
                                                         shape = RoundedCornerShape(14.dp)
@@ -881,9 +1086,19 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
 
                     SmallServiceButton(
                         iconRes = R.drawable.info_circle_svgrepo_com,
-                        onClick = { if (currentRoute != "hotel_guide") navController?.navigate("hotel_guide") },
-                        title = "Hotel Info",
-                        onFocusAction = { if (currentRoute != "hotel_guide") navController?.navigate("hotel_guide") },
+                        onClick = {
+                            if (currentRoute != "hotel_guide") navController?.navigate("hotel_guide") {
+                                popUpTo("home") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        title = null,
+                        onFocusAction = {
+                            if (currentRoute != "hotel_guide") navController?.navigate("hotel_guide") {
+                                launchSingleTop = true
+                            }
+                        },
                         isActive = currentRoute == "hotel_guide",
                         focusRequester = hotelFocusRequester
                     )
@@ -2333,7 +2548,8 @@ fun SmallServiceButton(
     title: String? = null,
     onFocusAction: (() -> Unit)? = null,
     isActive: Boolean = false,
-    focusRequester: FocusRequester? = null
+    focusRequester: FocusRequester? = null,
+    onFocusStateChange: ((Boolean) -> Unit)? = null
 ) {
     var isClicked by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
@@ -2360,6 +2576,7 @@ fun SmallServiceButton(
             modifier = boxModifier
                 .onFocusChanged { 
                     isFocused = it.isFocused 
+                    onFocusStateChange?.invoke(it.isFocused)
                     if (it.isFocused && !isActive) {
                         onFocusAction?.invoke()
                     }
@@ -2402,7 +2619,7 @@ fun SmallServiceButton(
                     .align(Alignment.BottomCenter)
                     .offset(y = 24.dp)
                     .alpha(titleAlpha)
-                    .wrapContentWidth(unbounded = true),
+                    .requiredWidth(160.dp),
                 maxLines = 1,
                 textAlign = TextAlign.Center
             )
@@ -2417,7 +2634,8 @@ fun SmallServiceButtonWithBadge(
     badgeCount: Int,
     onClick: () -> Unit,
     title: String? = null,
-    isActive: Boolean = false
+    isActive: Boolean = false,
+    onFocusStateChange: ((Boolean) -> Unit)? = null
 ) {
     var isClicked by remember { mutableStateOf(false) }
     val infiniteTransition = rememberInfiniteTransition(label = "pulseAnimation")
@@ -2458,7 +2676,10 @@ fun SmallServiceButtonWithBadge(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(CircleShape)
-                .onFocusChanged { isFocused = it.isFocused }
+                .onFocusChanged { 
+                    isFocused = it.isFocused 
+                    onFocusStateChange?.invoke(it.isFocused)
+                }
                 .background(
                     color = if (isFocused) Color(0xFFCFDFED) else if (isActive) Color.White.copy(alpha = 0.15f) else Color.Transparent,
                     shape = CircleShape
@@ -2522,7 +2743,7 @@ fun SmallServiceButtonWithBadge(
                     .align(Alignment.BottomCenter)
                     .offset(y = 24.dp)
                     .alpha(titleAlpha)
-                    .wrapContentWidth(unbounded = true),
+                    .requiredWidth(160.dp),
                 maxLines = 1,
                 textAlign = TextAlign.Center
             )
