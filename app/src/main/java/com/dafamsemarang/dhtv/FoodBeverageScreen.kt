@@ -210,6 +210,7 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
     val cartPreferences = remember { CartPreferences(context) }
 
     var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var focusedCategoryForSelection by remember { mutableStateOf<String?>(null) }
 
     val categories = derivedStateOf { menuItems.map { it.category }.distinct() }
     
@@ -282,6 +283,11 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
         focusedItemIndex = 0
     }
 
+    LaunchedEffect(focusedCategoryForSelection) {
+        delay(200)
+        selectedCategory = focusedCategoryForSelection
+    }
+
 
 
     Scaffold(containerColor = Color.Transparent) { paddingValues ->
@@ -350,7 +356,6 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                         CompositionLocalProvider(LocalBringIntoViewSpec provides categoryBringIntoViewSpec) {
                             LazyRow(
                             state = categoryListState,
-                            flingBehavior = categorySnapBehavior,
                              modifier = Modifier
                                  .padding(bottom = 12.dp)
                                  .fillMaxWidth()
@@ -435,16 +440,16 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                                          .onFocusChanged { focusState ->
                                              isFocused = focusState.isFocused
                                              if (focusState.isFocused) {
-                                                 if (selectedCategory != null) {
-                                                     focusScope.launch { itemListState.scrollToItem(0) }
-                                                 }
-                                                 selectedCategory = null
+                                                 focusedCategoryForSelection = null
                                                  focusedCategoryIndex = 0
                                                  categoryScrollTrigger++
                                              }
                                          }
                                          .clickable(
-                                             onClick = { selectedCategory = null },
+                                             onClick = {
+                                                 focusedCategoryForSelection = null
+                                                 selectedCategory = null
+                                             },
                                              indication = null,
                                              interactionSource = remember { MutableInteractionSource() }
                                          )
@@ -519,16 +524,16 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                                              isFocused = focusState.isFocused
                                              if (focusState.isFocused) {
                                                  val targetIndex = categories.value.indexOf(category) + 1
-                                                 if (selectedCategory != category) {
-                                                     focusScope.launch { itemListState.scrollToItem(0) }
-                                                 }
-                                                 selectedCategory = category
+                                                 focusedCategoryForSelection = category
                                                  focusedCategoryIndex = targetIndex
                                                  categoryScrollTrigger++
                                              }
                                          }
                                          .clickable(
-                                             onClick = { selectedCategory = category },
+                                             onClick = {
+                                                 focusedCategoryForSelection = category
+                                                 selectedCategory = category
+                                             },
                                              indication = null,
                                              interactionSource = remember { MutableInteractionSource() }
                                          )

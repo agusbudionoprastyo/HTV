@@ -125,8 +125,9 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
    var isVisible by remember { mutableStateOf(false) }
    val requestItems by DataRepository.requestItems
    val categories by remember(requestItems) { derivedStateOf { requestItems.map { it.category }.distinct() } }
-   var selectedCategory by remember { mutableStateOf<String?>(null) }
-   var errorMessage by remember { mutableStateOf<String?>(null) }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var focusedCategoryForSelection by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
     val sharedPreferences = remember(context) { 
@@ -140,7 +141,6 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
 
     val database: DatabaseReference = remember { Firebase.database.reference }
 
-    // 🚀 CRITICAL FIX: Fetch guestInfo and folioId in real-time so users can submit requests!
     DisposableEffect(roomId, branchId) {
         var guestRef: DatabaseReference? = null
         var guestListener: ValueEventListener? = null
@@ -184,7 +184,6 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
         }
     }
 
-   // Use derivedStateOf for filtering - more performant, only recomputes when inputs change
    val displayRequests = remember(requestItems, selectedCategory) {
        if (selectedCategory.isNullOrEmpty()) {
            requestItems
@@ -193,10 +192,8 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
        }
    }
    
-   // Loading state for shimmer
    var isLoadingRequests by remember { mutableStateOf(true) }
    var isFiltering by remember { mutableStateOf(false) }
-   // Delay shimmer visibility until after screen transition completes (500ms)
    var shimmerVisible by remember { mutableStateOf(false) }
    LaunchedEffect(isLoadingRequests) {
        if (isLoadingRequests) {
@@ -208,7 +205,6 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
    }
    
     val isRequestLoaded by com.dafamsemarang.dhtv.DataRepository.isRequestLoaded
-    // Update loading state when request items are loaded or finished loading
     LaunchedEffect(isRequestLoaded) {
         if (isRequestLoaded) {
             isLoadingRequests = false
@@ -220,10 +216,7 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
         cats.indexOf(selectedCategory).coerceAtLeast(0)
     }
 
-
-   // Snap states — declared at screen level to survive recomposition
    val categoryListState = rememberLazyListState()
-   val categorySnapBehavior = rememberSnapFlingBehavior(lazyListState = categoryListState)
    val itemListState = remember(selectedCategory) { androidx.compose.foundation.lazy.LazyListState() }
    val itemSnapBehavior = rememberSnapFlingBehavior(lazyListState = itemListState)
    val focusScope = rememberCoroutineScope()
@@ -239,13 +232,16 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
     val categoryRequesters = remember(categories) { List(categories.size + 1) { FocusRequester() } }
    val itemRequesters = remember(displayRequests) { List(displayRequests.size + 10) { FocusRequester() } }
 
-   // Reset scroll to start when category changes
    LaunchedEffect(selectedCategory) {
        itemListState.scrollToItem(0)
        focusedItemIndex = 0
    }
    
-   // FORCE PIVOT: High-performance BringIntoViewSpec scroll logic from F&B
+    LaunchedEffect(focusedCategoryForSelection) {
+        delay(200)
+        selectedCategory = focusedCategoryForSelection
+    }
+   
     val density = androidx.compose.ui.platform.LocalDensity.current
     val startPaddingPx = with(density) { 58.dp.toPx() }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -286,15 +282,7 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
             }
         }
     }
-// Duplicate density deleted
-   
 
-   
-// Deactivated item scroll LaunchedEffect deleted
-   
-// Deactivated category scroll LaunchedEffect deleted
-
-   // Main Content & Footer Root Wrapper - Unified with HomeScreen
    Box(
        modifier = Modifier
            .fillMaxSize()
@@ -302,9 +290,6 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
        Box(
            modifier = Modifier.fillMaxSize()
        ) {
-           // Header section
-
-           // Show error message
            if (errorMessage != null) {
                Box(
                    modifier = Modifier.fillMaxSize(),
@@ -329,7 +314,6 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
                CompositionLocalProvider(LocalBringIntoViewSpec provides categoryBringIntoViewSpec) {
                 LazyRow(
                      state = categoryListState,
-                     flingBehavior = categorySnapBehavior,
                      modifier = Modifier
                          .fillMaxWidth()
                           .onPreviewKeyEvent { keyEvent ->
@@ -419,17 +403,16 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
                                   .onFocusChanged { focusState ->
                                       isFocused = focusState.isFocused
                                       if (focusState.isFocused) {
-                                          if (selectedCategory != null) {
-                                              categoryChanged = true
-                                              focusScope.launch { itemListState.scrollToItem(0) }
-                                          }
-                                          selectedCategory = null
+                                          focusedCategoryForSelection = null
                                           focusedCategoryIndex = 0
                                           categoryScrollTrigger++
                                       }
                                   }
                                   .clickable(
-                                      onClick = { selectedCategory = null },
+                                      onClick = {
+                                          focusedCategoryForSelection = null
+                                          selectedCategory = null
+                                      },
                                       indication = null,
                                       interactionSource = remember { MutableInteractionSource() }
                                   )
@@ -529,17 +512,16 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
                                       isFocused = focusState.isFocused
                                       if (focusState.isFocused) {
                                           val targetIndex = categories.indexOf(category) + 1
-                                          if (selectedCategory != category) {
-                                              categoryChanged = true
-                                              focusScope.launch { itemListState.scrollToItem(0) }
-                                          }
-                                          selectedCategory = category
+                                          focusedCategoryForSelection = category
                                           focusedCategoryIndex = targetIndex
                                           categoryScrollTrigger++
                                       }
                                   }
                                   .clickable(
-                                      onClick = { selectedCategory = category },
+                                      onClick = {
+                                          focusedCategoryForSelection = category
+                                          selectedCategory = category
+                                      },
                                       indication = null,
                                       interactionSource = remember { MutableInteractionSource() }
                                   )
