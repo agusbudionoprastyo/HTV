@@ -295,24 +295,23 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
             val defaultSpec = LocalBringIntoViewSpec.current
 
             LaunchedEffect(focusedCategoryIndex) {
-                if (isNavigatingHorizontally) {
-                    categoryListState.animateScrollToItem(
-                        index = focusedCategoryIndex,
-                        scrollOffset = 0
-                    )
-                }
+                delay(60) // Tiny delay to let focus jump visually first
+                categoryListState.animateScrollToItem(
+                    index = focusedCategoryIndex,
+                    scrollOffset = 0
+                )
             }
 
             val categoryBringIntoViewSpec = remember(defaultSpec) {
                 object : BringIntoViewSpec {
                     override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
                         get() = androidx.compose.animation.core.tween(
-                            durationMillis = 300,
+                            durationMillis = 250,
                             easing = androidx.compose.animation.core.FastOutSlowInEasing
                         )
 
                     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-                        return 0f // Let programmatic LaunchedEffect handle all horizontal scrolls smoothly!
+                        return 0f // Let LaunchedEffect with delay handle the smooth flowing scroll!
                     }
                 }
             }
@@ -1096,7 +1095,7 @@ fun MenuItem(
                 .then(borderModifier) // Conditionally injected! Zero overhead when not focused!
                 .padding(6.dp) // The Floating Air Gap (6.dp padding - 3.dp border width = 3.dp gap, equal to border size!)
                 .clip(RoundedCornerShape(24.dp))
-                .background(color = Color(207, 223, 237).copy(alpha = 0.55f))
+                .background(color = Color(207, 223, 237).copy(alpha = 0.25f))
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 

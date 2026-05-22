@@ -248,29 +248,28 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
     val density = androidx.compose.ui.platform.LocalDensity.current
     val startPaddingPx = with(density) { 58.dp.toPx() }
     val defaultSpec = LocalBringIntoViewSpec.current
-
+    
     LaunchedEffect(focusedCategoryIndex) {
-        if (isNavigatingHorizontally) {
-            categoryListState.animateScrollToItem(
-                index = focusedCategoryIndex,
-                scrollOffset = 0
-            )
-        }
-    }
+         delay(60) // Tiny delay to let focus jump visually first
+         categoryListState.animateScrollToItem(
+             index = focusedCategoryIndex,
+             scrollOffset = 0
+         )
+     }
 
-    val categoryBringIntoViewSpec = remember(defaultSpec) {
-        object : BringIntoViewSpec {
-            override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
-                get() = androidx.compose.animation.core.tween(
-                    durationMillis = 300,
-                    easing = androidx.compose.animation.core.FastOutSlowInEasing
-                )
+     val categoryBringIntoViewSpec = remember(defaultSpec) {
+         object : BringIntoViewSpec {
+             override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
+                 get() = androidx.compose.animation.core.tween(
+                     durationMillis = 250,
+                     easing = androidx.compose.animation.core.FastOutSlowInEasing
+                 )
 
-            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-                return 0f // Let programmatic LaunchedEffect handle all horizontal scrolls smoothly!
-            }
-        }
-    }
+             override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+                 return 0f // Let LaunchedEffect with delay handle the smooth flowing scroll!
+             }
+         }
+     }
 
     val itemBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
         object : BringIntoViewSpec {
