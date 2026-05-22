@@ -453,8 +453,11 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
         }
     }
 
-    // Background Image
-    val backgroundImage = rememberCachedPainter(welcomeData.backgroundUrl)
+    // Background Image (Custom background from Firebase WELCOME_LETTER or fallback to Cached Wallpaper)
+    val backgroundUrl = welcomeData.backgroundUrl.ifEmpty {
+        sharedPreferences.getString("cached_wallpaper_url", "") ?: ""
+    }
+    val backgroundImage = rememberCachedPainter(backgroundUrl)
 
     // Room Image
     val roomImage = rememberCachedPainter(welcomeData.roomImageUrl, R.drawable.err)
@@ -577,22 +580,23 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 interactionSource = remember { MutableInteractionSource() }
             )
     ) {
-        val guestImageState = guestImage.state
-
+        // 1. Draw the Background Image first (vibrant, no dark overlay)
         Image(
-            painter = if (guestImageState is AsyncImagePainter.State.Error) roomImage else guestImage,
+            painter = backgroundImage,
+            contentDescription = "Welcome Screen Background",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        // 2. Draw the Guest Image (or Room Image fallback) on top of the background (aligned to the right)
+        val guestImageState = guestImage.state
+        Image(
+            painter = if (guestImageState is AsyncImagePainter.State.Success) guestImage else roomImage,
             contentDescription = "Guest Image",
             modifier = Modifier
                 .fillMaxHeight()
                 .align(Alignment.CenterEnd) // Centering guest image
                 .fillMaxSize(.5f),
-            contentScale = ContentScale.Crop
-        )
-
-        Image(
-            painter = backgroundImage,
-            contentDescription = "Welcome Screen Background",
-            modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
 

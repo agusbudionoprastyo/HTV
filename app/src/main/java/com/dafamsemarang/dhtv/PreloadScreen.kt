@@ -56,7 +56,7 @@ fun PreloadScreen(onPreloadFinished: () -> Unit) {
             try {
                 // 1. Fetch all URLs from Firebase
                 withContext(Dispatchers.Main) { statusText = "Fetching content list..." }
-                val urls = fetchAllContentUrls(branchId)
+                val urls = fetchAllContentUrls(context, branchId)
                 
                 withContext(Dispatchers.Main) { 
                     totalItems = urls.size
@@ -128,7 +128,7 @@ fun PreloadScreen(onPreloadFinished: () -> Unit) {
 }
 
 // Data structures handling
-private suspend fun fetchAllContentUrls(branchId: String): List<String> = suspendCoroutine { continuation ->
+private suspend fun fetchAllContentUrls(context: Context, branchId: String): List<String> = suspendCoroutine { continuation ->
     val database = FirebaseDatabase.getInstance().reference
     val branchRef = database.child("BRANCHES").child(branchId)
     val urls = mutableListOf<String>()
@@ -181,6 +181,27 @@ private suspend fun fetchAllContentUrls(branchId: String): List<String> = suspen
                 // 7. Company Icon
                 val iconUrl = snapshot.child("SETTING").child("COMPANY_ICON").child("iconUrl").getValue(String::class.java)
                 if (!iconUrl.isNullOrEmpty()) urls.add(iconUrl)
+
+                // 8. Wallpaper
+                val wallpaperUrl = snapshot.child("SETTING").child("WALLPAPER").child("imageUrl").getValue(String::class.java)
+                if (!wallpaperUrl.isNullOrEmpty()) {
+                    urls.add(wallpaperUrl)
+                    Log.d("PreloadScreen", "Added wallpaper to preload: $wallpaperUrl")
+                }
+
+                // 9. Guest Image Preloading
+                val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                val roomId = sharedPreferences.getString("room", null)
+                if (roomId != null) {
+                    val guestFolio = snapshot.child("FOGUEST").child(roomId).child("folio").getValue(Int::class.java)
+                    if (guestFolio != null) {
+                        val guestImageUrl = snapshot.child("GUESTIMAGE").child(guestFolio.toString()).child("imageUrl").getValue(String::class.java)
+                        if (!guestImageUrl.isNullOrEmpty()) {
+                            urls.add(guestImageUrl)
+                            Log.d("PreloadScreen", "Added guest image to preload: $guestImageUrl")
+                        }
+                    }
+                }
 
                 continuation.resume(urls)
             } catch (e: Exception) {
