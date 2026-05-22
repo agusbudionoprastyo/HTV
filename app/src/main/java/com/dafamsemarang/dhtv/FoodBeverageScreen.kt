@@ -307,7 +307,7 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                 object : BringIntoViewSpec {
                     override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
                         get() {
-                            val duration = if (android.os.Build.VERSION.SDK_INT < 31) 90 else 150
+                            val duration = if (android.os.Build.VERSION.SDK_INT < 31) 60 else 100
                             return androidx.compose.animation.core.tween(
                                 durationMillis = duration,
                                 easing = androidx.compose.animation.core.FastOutSlowInEasing
