@@ -30,14 +30,13 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("/Users/ag/Project/HTV/Keystore_htv.jks")
-            storePassword = "Ag7us777"
-            keyAlias = "Release"
-            keyPassword = "Ag7us777"
             if (hasKeystore) {
                 keyAlias = keystoreProperties["keyAlias"] as? String
                 keyPassword = keystoreProperties["keyPassword"] as? String
-                storeFile = (keystoreProperties["storeFile"] as? String)?.let { file(rootProject.file(it)) }
+                val storePath = keystoreProperties["storeFile"] as? String
+                storeFile = storePath?.let {
+                    if (file(it).isAbsolute) file(it) else rootProject.file(it)
+                }
                 storePassword = keystoreProperties["storePassword"] as? String
             }
         }
@@ -50,7 +49,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
             if (hasKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
