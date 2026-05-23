@@ -1,16 +1,12 @@
 package com.dafamsemarang.dhtv
 
 import android.app.Activity
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings
 import android.util.Log
 import android.view.TextureView
-import android.view.ViewTreeObserver
 import android.view.WindowManager
-import android.widget.FrameLayout
 import android.widget.Toast
 import android.media.MediaPlayer
 import android.os.Handler
@@ -27,9 +23,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -43,10 +36,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
@@ -57,23 +46,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
-import com.google.firebase.Firebase
-import com.google.firebase.database.database
-import kotlinx.coroutines.tasks.await
 import androidx.navigation.NavHostController
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
-import coil.compose.AsyncImage
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.*
@@ -86,7 +67,6 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import androidx.core.net.toUri
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
@@ -95,14 +75,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.key.onKeyEvent
@@ -115,13 +92,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.indication
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.border
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 
@@ -325,9 +298,43 @@ fun playNextVideo(
             onError = { exception ->
                 Log.e("VideoCache", "Failed to cache video", exception)
             })
-    } else {
-        playVideo(cachedVideoFile)
     }
+}
+
+fun parseUtcToWib(timeStr: String): Date? {
+    if (timeStr.isEmpty()) return null
+    var cleanStr = timeStr.trim()
+    val formats = listOf(
+        "yyyy-MM-dd HH:mm'Z'",
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd'T'HH:mm'Z'"
+    )
+    for (format in formats) {
+        try {
+            val sdf = SimpleDateFormat(format, Locale.US)
+            sdf.timeZone = TimeZone.getTimeZone("UTC")
+            val date = sdf.parse(cleanStr)
+            if (date != null) return date
+        } catch (e: Exception) {}
+    }
+    try {
+        cleanStr = cleanStr.replace("Z", "")
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+        sdf.timeZone = TimeZone.getTimeZone("UTC")
+        return sdf.parse(cleanStr)
+    } catch (e: Exception) {}
+    return null
+}
+
+fun isSameDayInWib(date: Date): Boolean {
+    val todayWib = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("GMT+7")
+    }
+    val todayStr = todayWib.format(Date())
+    val flightStr = todayWib.format(date)
+    return todayStr == flightStr
 }
 
 @Composable
@@ -342,19 +349,20 @@ fun FlightInfoSection(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.3f))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
-            .padding(top = 6.dp, bottom = 4.dp, start = 10.dp, end = 10.dp)
+            .padding(top = 6.dp, bottom = 4.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Header Row
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 2.dp)
+                    .padding(start = 10.dp, end = 10.dp, bottom = 2.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Title on the left
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.align(Alignment.CenterStart)
+                ) {
                     Icon(
                         painter = painterResource(id = if (isArrival) R.drawable.flight_land else R.drawable.flight_takeoff),
                         contentDescription = null,
@@ -370,68 +378,77 @@ fun FlightInfoSection(
                         letterSpacing = 1.sp
                     )
                 }
+
+                // Airport Name in the center
                 Text(
                     text = airportName.uppercase(Locale.US),
-                    fontSize = 11.sp,
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White.copy(alpha = 0.9f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 260.dp),
-                    textAlign = TextAlign.End
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            // Column Header Row (6 columns)
+            // Column Header Row (7 columns)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 2.dp),
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "KODE",
-                    color = Color.White.copy(alpha = 0.4f),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 7.sp,
-                    modifier = Modifier.weight(0.14f)
-                )
-                Text(
-                    text = "MASKAPAI",
-                    color = Color.White.copy(alpha = 0.4f),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 7.sp,
-                    modifier = Modifier.weight(0.32f)
-                )
-                Text(
-                    text = if (isArrival) "DARI" else "KE",
-                    color = Color.White.copy(alpha = 0.4f),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 7.sp,
-                    modifier = Modifier.weight(0.20f)
-                )
-                Text(
-                    text = "BANDARA",
-                    color = Color.White.copy(alpha = 0.4f),
+                    color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
                     modifier = Modifier.weight(0.12f)
                 )
                 Text(
+                    text = "MASKAPAI",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.22f)
+                )
+                Text(
+                    text = if (isArrival) "DARI" else "KE",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.13f)
+                )
+                Text(
+                    text = "IATA",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.09f)
+                )
+                Text(
+                    text = "BANDARA",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.24f)
+                )
+                Text(
                     text = "JAM",
-                    color = Color.White.copy(alpha = 0.4f),
+                    color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
                     modifier = Modifier.weight(0.10f)
                 )
                 Text(
                     text = "STATUS",
-                    color = Color.White.copy(alpha = 0.4f),
+                    color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.5.sp,
-                    modifier = Modifier.weight(0.12f),
+                    modifier = Modifier.weight(0.10f),
                     textAlign = TextAlign.End
                 )
             }
@@ -454,7 +471,7 @@ fun FlightInfoSection(
             }
             
             // Bottom breathing room spacer to avoid dots overlapping
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
@@ -482,17 +499,46 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
         }
     }
 
+    val airportNameLong = remember(flight.otherAirport) {
+        when (flight.otherAirport.uppercase(Locale.US)) {
+            "CGK" -> "Soekarno-Hatta"
+            "KUL" -> "Kuala Lumpur Int'l"
+            "PKN" -> "Iskandar"
+            "SMQ" -> "H. Asan"
+            "DPS" -> "Ngurah Rai"
+            "PKY" -> "Tjilik Riwut"
+            "PNK" -> "Supadio"
+            "BPN" -> "SAMS Sepinggan"
+            "BTH" -> "Hang Nadim"
+            "BDJ" -> "Syamsudin Noor"
+            "UPG" -> "Sultan Hasanuddin"
+            "SIN" -> "Changi"
+            "SUB" -> "Juanda"
+            "SRG" -> "Jenderal Ahmad Yani"
+            "YIA" -> "Yogyakarta Int'l"
+            else -> flight.otherAirport
+        }
+    }
+
     val timeStr = remember(flight.revisedTime, flight.scheduledTime) {
         val rawTime = flight.revisedTime.ifEmpty { flight.scheduledTime }
-        try {
-            val idx = rawTime.indexOf(' ')
-            if (idx != -1 && rawTime.length >= idx + 6) {
-                rawTime.substring(idx + 1, idx + 6)
-            } else {
-                rawTime.replace("Z", "").takeLast(5)
+        val date = parseUtcToWib(rawTime)
+        if (date != null) {
+            val wibFormat = SimpleDateFormat("HH:mm", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("GMT+7")
             }
-        } catch (e: Exception) {
-            rawTime
+            wibFormat.format(date)
+        } else {
+            try {
+                val idx = rawTime.indexOf(' ')
+                if (idx != -1 && rawTime.length >= idx + 6) {
+                    rawTime.substring(idx + 1, idx + 6)
+                } else {
+                    rawTime.replace("Z", "").takeLast(5)
+                }
+            } catch (e: Exception) {
+                rawTime
+            }
         }
     }
 
@@ -514,20 +560,21 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(19.dp),
+            .height(19.dp)
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Column 1: Flight Number
+        // Column 1: Flight Number (weight = 0.12f)
         Text(
             text = flight.flightNumber,
             color = Color.White,
             fontWeight = FontWeight.Bold,
             fontSize = 8.5.sp,
             maxLines = 1,
-            modifier = Modifier.weight(0.14f)
+            modifier = Modifier.weight(0.12f)
         )
 
-        // Column 2: Airline Name
+        // Column 2: Airline Name (Text Only, weight = 0.22f)
         Text(
             text = flight.airline,
             color = Color.White.copy(alpha = 0.9f),
@@ -535,29 +582,39 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             fontSize = 8.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(0.32f)
+            modifier = Modifier.weight(0.22f)
         )
 
-        // Column 3: Destination/Origin City Name
+        // Column 3: Destination/Origin City Name (weight = 0.13f)
         Text(
             text = cityName,
             color = Color.White.copy(alpha = 0.6f),
             fontSize = 8.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(0.20f)
+            modifier = Modifier.weight(0.13f)
         )
 
-        // Column 4: Airport Code
+        // Column 4: Airport Code (weight = 0.09f)
         Text(
             text = flight.otherAirport.uppercase(Locale.US),
             color = Color.White.copy(alpha = 0.5f),
             fontSize = 8.5.sp,
             maxLines = 1,
-            modifier = Modifier.weight(0.12f)
+            modifier = Modifier.weight(0.09f)
         )
 
-        // Column 5: Time
+        // Column 5: Mapped Airport Long Name (weight = 0.24f)
+        Text(
+            text = airportNameLong,
+            color = Color.White.copy(alpha = 0.6f),
+            fontSize = 8.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(0.24f)
+        )
+
+        // Column 6: Time (weight = 0.10f)
         Text(
             text = timeStr,
             color = Color.White.copy(alpha = 0.8f),
@@ -566,7 +623,7 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             modifier = Modifier.weight(0.10f)
         )
 
-        // Column 6: Status (directly text, no background badge)
+        // Column 7: Status (weight = 0.10f)
         Text(
             text = statusText,
             color = statusColor,
@@ -574,7 +631,7 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             fontSize = 7.5.sp,
             maxLines = 1,
             textAlign = TextAlign.End,
-            modifier = Modifier.weight(0.12f)
+            modifier = Modifier.weight(0.10f)
         )
     }
 }
@@ -1150,24 +1207,17 @@ fun VideoAndSlideshowSection(
                             
                             if (isArrivalDot || isDepartureDot) {
                                 val tintColor = if (isActive) {
-                                    if (isArrivalDot) Color(0xFF29B6F6) else Color(0xFFFF9800)
+                                    Color.White
                                 } else {
                                     Color.White.copy(alpha = 0.4f)
                                 }
-                                val iconScale by animateFloatAsState(
-                                    targetValue = if (isActive) 1.2f else 0.8f,
-                                    animationSpec = tween(durationMillis = 300),
-                                    label = "icon_scale"
-                                )
                                 Icon(
                                     painter = painterResource(
-                                        id = if (isArrivalDot) R.drawable.flight_land else R.drawable.flight_takeoff
+                                        id = if (isArrivalDot) R.drawable.ic_flight_land else R.drawable.ic_flight_takeoff
                                     ),
                                     contentDescription = null,
                                     tint = tintColor,
-                                    modifier = Modifier
-                                        .size(14.dp)
-                                        .scale(iconScale)
+                                    modifier = Modifier.size(10.dp)
                                 )
                             } else {
                                 val widthCoeff by animateDpAsState(
@@ -1347,42 +1397,62 @@ fun HomeScreen(navController: NavHostController) {
                     val arrivalsSnap = airportSnapshot.child("arrivals")
                     for (flightSnap in arrivalsSnap.children) {
                         try {
-                            val f = Flight(
-                                flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
-                                airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
-                                otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
-                                scheduledTime = flightSnap.child("scheduledTime").getValue(String::class.java) ?: "",
-                                revisedTime = flightSnap.child("revisedTime").getValue(String::class.java) ?: "",
-                                status = flightSnap.child("status").getValue(String::class.java) ?: "",
-                                direction = "arrival"
-                            )
-                            arrivalsList.add(f)
+                            val scheduled = flightSnap.child("scheduledTime").getValue(String::class.java) ?: ""
+                            val revised = flightSnap.child("revisedTime").getValue(String::class.java) ?: ""
+                            val timeStr = revised.ifEmpty { scheduled }
+                            
+                            val flightDate = parseUtcToWib(timeStr)
+                            if (flightDate != null && isSameDayInWib(flightDate)) {
+                                val f = Flight(
+                                    flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
+                                    airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
+                                    otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
+                                    scheduledTime = scheduled,
+                                    revisedTime = revised,
+                                    status = flightSnap.child("status").getValue(String::class.java) ?: "",
+                                    direction = "arrival"
+                                )
+                                arrivalsList.add(f)
+                            }
                         } catch (e: Exception) {}
                     }
-                    // Sort by time and take top 4
-                    arrivalsList.sortBy { it.revisedTime.ifEmpty { it.scheduledTime } }
-                    flightArrivals = arrivalsList.take(4)
+                    // Sort by time and take top 5
+                    arrivalsList.sortBy { 
+                        val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
+                        parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
+                    }
+                    flightArrivals = arrivalsList.take(5)
 
                     // Parse Departures
                     val departuresList = mutableListOf<Flight>()
                     val departuresSnap = airportSnapshot.child("departures")
                     for (flightSnap in departuresSnap.children) {
                         try {
-                            val f = Flight(
-                                flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
-                                airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
-                                otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
-                                scheduledTime = flightSnap.child("scheduledTime").getValue(String::class.java) ?: "",
-                                revisedTime = flightSnap.child("revisedTime").getValue(String::class.java) ?: "",
-                                status = flightSnap.child("status").getValue(String::class.java) ?: "",
-                                direction = "departure"
-                            )
-                            departuresList.add(f)
+                            val scheduled = flightSnap.child("scheduledTime").getValue(String::class.java) ?: ""
+                            val revised = flightSnap.child("revisedTime").getValue(String::class.java) ?: ""
+                            val timeStr = revised.ifEmpty { scheduled }
+                            
+                            val flightDate = parseUtcToWib(timeStr)
+                            if (flightDate != null && isSameDayInWib(flightDate)) {
+                                val f = Flight(
+                                    flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
+                                    airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
+                                    otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
+                                    scheduledTime = scheduled,
+                                    revisedTime = revised,
+                                    status = flightSnap.child("status").getValue(String::class.java) ?: "",
+                                    direction = "departure"
+                                )
+                                departuresList.add(f)
+                            }
                         } catch (e: Exception) {}
                     }
-                    // Sort by time and take top 4
-                    departuresList.sortBy { it.revisedTime.ifEmpty { it.scheduledTime } }
-                    flightDepartures = departuresList.take(4)
+                    // Sort by time and take top 5
+                    departuresList.sortBy { 
+                        val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
+                        parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
+                    }
+                    flightDepartures = departuresList.take(5)
 
                     Log.d("HomeScreen", "FlightInfo parsed successfully: ${flightArrivals.size} arrivals, ${flightDepartures.size} departures")
                 } catch (e: Exception) {
