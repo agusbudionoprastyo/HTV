@@ -1124,19 +1124,26 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
             val showPlaceholder = iconUrl.isNullOrEmpty() || isIconLoadError
 
             Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(16.dp)),
+                modifier = if (showPlaceholder) {
+                    Modifier
+                        .width(160.dp)
+                        .height(80.dp)
+                } else {
+                    Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                },
                 contentAlignment = Alignment.Center
             ) {
                 if (showPlaceholder) {
                     Text(
-                        text = "DAFAM",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        text = "Your Company Logo",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp,
+                        letterSpacing = 1.5.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 } else {
                     AsyncImage(

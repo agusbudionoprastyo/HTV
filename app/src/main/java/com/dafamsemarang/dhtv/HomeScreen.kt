@@ -155,6 +155,16 @@ data class SupportedApp(
     val banner: android.graphics.drawable.Drawable? = null
 )
 
+data class Flight(
+    val flightNumber: String = "",
+    val airline: String = "",
+    val otherAirport: String = "",
+    val scheduledTime: String = "",
+    val revisedTime: String = "",
+    val status: String = "",
+    val direction: String = ""
+)
+
 // Helper to fetch installed apps
 fun getInstalledApps(context: Context): List<SupportedApp> {
     val pm = context.packageManager
@@ -321,6 +331,255 @@ fun playNextVideo(
 }
 
 @Composable
+fun FlightInfoSection(
+    title: String,
+    airportName: String,
+    flights: List<Flight>,
+    isArrival: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.3f))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+            .padding(top = 6.dp, bottom = 4.dp, start = 10.dp, end = 10.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Header Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 2.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = if (isArrival) R.drawable.flight_land else R.drawable.flight_takeoff),
+                        contentDescription = null,
+                        tint = if (isArrival) Color(0xFF29B6F6) else Color(0xFFFF9800),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = title,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isArrival) Color(0xFF29B6F6) else Color(0xFFFF9800),
+                        letterSpacing = 1.sp
+                    )
+                }
+                Text(
+                    text = airportName.uppercase(Locale.US),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.9f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 260.dp),
+                    textAlign = TextAlign.End
+                )
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // Column Header Row (6 columns)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "KODE",
+                    color = Color.White.copy(alpha = 0.4f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.14f)
+                )
+                Text(
+                    text = "MASKAPAI",
+                    color = Color.White.copy(alpha = 0.4f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.32f)
+                )
+                Text(
+                    text = if (isArrival) "DARI" else "KE",
+                    color = Color.White.copy(alpha = 0.4f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.20f)
+                )
+                Text(
+                    text = "BANDARA",
+                    color = Color.White.copy(alpha = 0.4f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.12f)
+                )
+                Text(
+                    text = "JAM",
+                    color = Color.White.copy(alpha = 0.4f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.10f)
+                )
+                Text(
+                    text = "STATUS",
+                    color = Color.White.copy(alpha = 0.4f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.5.sp,
+                    modifier = Modifier.weight(0.12f),
+                    textAlign = TextAlign.End
+                )
+            }
+
+            if (flights.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No flights scheduled",
+                        color = Color.White.copy(alpha = 0.4f),
+                        fontSize = 9.sp
+                    )
+                }
+            } else {
+                flights.forEach { flight ->
+                    FlightRow(flight = flight, isArrival = isArrival)
+                }
+            }
+            
+            // Bottom breathing room spacer to avoid dots overlapping
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+    }
+}
+
+@Composable
+fun FlightRow(flight: Flight, isArrival: Boolean) {
+    val cityName = remember(flight.otherAirport) {
+        when (flight.otherAirport.uppercase(Locale.US)) {
+            "CGK" -> "Jakarta"
+            "KUL" -> "Kuala Lumpur"
+            "PKN" -> "Pangkalan Bun"
+            "SMQ" -> "Sampit"
+            "DPS" -> "Bali"
+            "PKY" -> "Palangkaraya"
+            "PNK" -> "Pontianak"
+            "BPN" -> "Balikpapan"
+            "BTH" -> "Batam"
+            "BDJ" -> "Banjarmasin"
+            "UPG" -> "Makassar"
+            "SIN" -> "Singapore"
+            "SUB" -> "Surabaya"
+            "SRG" -> "Semarang"
+            "YIA" -> "Yogyakarta"
+            else -> flight.otherAirport
+        }
+    }
+
+    val timeStr = remember(flight.revisedTime, flight.scheduledTime) {
+        val rawTime = flight.revisedTime.ifEmpty { flight.scheduledTime }
+        try {
+            val idx = rawTime.indexOf(' ')
+            if (idx != -1 && rawTime.length >= idx + 6) {
+                rawTime.substring(idx + 1, idx + 6)
+            } else {
+                rawTime.replace("Z", "").takeLast(5)
+            }
+        } catch (e: Exception) {
+            rawTime
+        }
+    }
+
+    val statusColor = when (flight.status.uppercase(Locale.US)) {
+        "EXPECTED", "LANDED", "ARRIVED" -> Color(0xFF81C784)
+        "DELAYED" -> Color(0xFFFFB74D)
+        "DEPARTED" -> Color.White.copy(alpha = 0.4f)
+        else -> Color.White.copy(alpha = 0.7f)
+    }
+
+    val statusText = remember(flight.status) {
+        if (flight.status.trim().uppercase(Locale.US) == "UNKNOWN" || flight.status.trim().isEmpty()) {
+            "-"
+        } else {
+            flight.status
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(19.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Column 1: Flight Number
+        Text(
+            text = flight.flightNumber,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 8.5.sp,
+            maxLines = 1,
+            modifier = Modifier.weight(0.14f)
+        )
+
+        // Column 2: Airline Name
+        Text(
+            text = flight.airline,
+            color = Color.White.copy(alpha = 0.9f),
+            fontWeight = FontWeight.Medium,
+            fontSize = 8.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(0.32f)
+        )
+
+        // Column 3: Destination/Origin City Name
+        Text(
+            text = cityName,
+            color = Color.White.copy(alpha = 0.6f),
+            fontSize = 8.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(0.20f)
+        )
+
+        // Column 4: Airport Code
+        Text(
+            text = flight.otherAirport.uppercase(Locale.US),
+            color = Color.White.copy(alpha = 0.5f),
+            fontSize = 8.5.sp,
+            maxLines = 1,
+            modifier = Modifier.weight(0.12f)
+        )
+
+        // Column 5: Time
+        Text(
+            text = timeStr,
+            color = Color.White.copy(alpha = 0.8f),
+            fontWeight = FontWeight.Medium,
+            fontSize = 8.5.sp,
+            modifier = Modifier.weight(0.10f)
+        )
+
+        // Column 6: Status (directly text, no background badge)
+        Text(
+            text = statusText,
+            color = statusColor,
+            fontWeight = FontWeight.Bold,
+            fontSize = 7.5.sp,
+            maxLines = 1,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.12f)
+        )
+    }
+}
+
+@Composable
 fun VideoAndSlideshowSection(
     context: Context,
     videoUrls: List<String>,
@@ -335,7 +594,10 @@ fun VideoAndSlideshowSection(
     roomId: String?,
     roomTypeText: String,
     currentTime: String,
-    onImageIndexChanged: (Int) -> Unit = {}
+    onImageIndexChanged: (Int) -> Unit = {},
+    flightArrivals: List<Flight> = emptyList(),
+    flightDepartures: List<Flight> = emptyList(),
+    flightAirportName: String = ""
 ) {
     // Use shared MediaPlayer if provided, otherwise create local one
     var localMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -776,14 +1038,14 @@ fun VideoAndSlideshowSection(
                         when (keyEvent.key) {
                             Key.DirectionRight -> {
                                 if (imageList.isNotEmpty()) {
-                                    val nextIndex = (currentImageIndex + 1) % imageList.size
+                                    val nextIndex = (currentImageIndex + 1) % (imageList.size + 2)
                                     onImageIndexChanged(nextIndex)
                                     true
                                 } else false
                             }
                             Key.DirectionLeft -> {
                                 if (imageList.isNotEmpty()) {
-                                    val prevIndex = (currentImageIndex - 1 + imageList.size) % imageList.size
+                                    val prevIndex = (currentImageIndex - 1 + imageList.size + 2) % (imageList.size + 2)
                                     onImageIndexChanged(prevIndex)
                                     true
                                 } else false
@@ -828,9 +1090,9 @@ fun VideoAndSlideshowSection(
                     AnimatedContent(
                         targetState = currentImageIndex,
                         transitionSpec = {
-                            val isForward = if (initialState == imageList.size - 1 && targetState == 0) {
+                            val isForward = if (initialState >= imageList.size && targetState == 0) {
                                 true
-                            } else if (initialState == 0 && targetState == imageList.size - 1) {
+                            } else if (initialState == 0 && targetState >= imageList.size) {
                                 false
                             } else {
                                 targetState > initialState
@@ -845,13 +1107,31 @@ fun VideoAndSlideshowSection(
                             }
                         }, label = ""
                     ) { targetIndex ->
-                        val imageUrl = imageList.getOrNull(targetIndex) ?: ""
-                        Image(
-                            painter = rememberCachedPainter(imageUrl),
-                            contentDescription = "Slideshow Image",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+                        if (targetIndex == imageList.size) {
+                            FlightInfoSection(
+                                title = "ARRIVALS",
+                                airportName = flightAirportName,
+                                flights = flightArrivals,
+                                isArrival = true,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (targetIndex == imageList.size + 1) {
+                            FlightInfoSection(
+                                title = "DEPARTURES",
+                                airportName = flightAirportName,
+                                flights = flightDepartures,
+                                isArrival = false,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            val imageUrl = imageList.getOrNull(targetIndex) ?: ""
+                            Image(
+                                painter = rememberCachedPainter(imageUrl),
+                                contentDescription = "Slideshow Image",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     }
 
 
@@ -859,28 +1139,54 @@ fun VideoAndSlideshowSection(
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 10.dp),
+                            .padding(bottom = 3.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        imageList.forEachIndexed { idx, _ ->
+                        repeat(imageList.size + 2) { idx ->
                             val isActive = idx == currentImageIndex
-                            val widthCoeff by animateDpAsState(
-                                targetValue = if (isActive) 14.dp else 6.dp,
-                                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-                                label = "dot_width"
-                            )
-                            val alphaCoeff by animateFloatAsState(
-                                targetValue = if (isActive) 1.0f else 0.4f,
-                                animationSpec = tween(durationMillis = 300),
-                                label = "dot_alpha"
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(width = widthCoeff, height = 6.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(Color.White.copy(alpha = alphaCoeff))
-                            )
+                            val isArrivalDot = idx == imageList.size
+                            val isDepartureDot = idx == imageList.size + 1
+                            
+                            if (isArrivalDot || isDepartureDot) {
+                                val tintColor = if (isActive) {
+                                    if (isArrivalDot) Color(0xFF29B6F6) else Color(0xFFFF9800)
+                                } else {
+                                    Color.White.copy(alpha = 0.4f)
+                                }
+                                val iconScale by animateFloatAsState(
+                                    targetValue = if (isActive) 1.2f else 0.8f,
+                                    animationSpec = tween(durationMillis = 300),
+                                    label = "icon_scale"
+                                )
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (isArrivalDot) R.drawable.flight_land else R.drawable.flight_takeoff
+                                    ),
+                                    contentDescription = null,
+                                    tint = tintColor,
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .scale(iconScale)
+                                )
+                            } else {
+                                val widthCoeff by animateDpAsState(
+                                    targetValue = if (isActive) 14.dp else 6.dp,
+                                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                                    label = "dot_width"
+                                )
+                                val alphaCoeff by animateFloatAsState(
+                                    targetValue = if (isActive) 1.0f else 0.4f,
+                                    animationSpec = tween(durationMillis = 300),
+                                    label = "dot_alpha"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = widthCoeff, height = 6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(Color.White.copy(alpha = alphaCoeff))
+                                )
+                            }
                         }
                     }
                 }
@@ -1007,6 +1313,92 @@ fun HomeScreen(navController: NavHostController) {
     var guestInfo by remember { mutableStateOf<GuestInfo?>(null) }
     val roomTypeText = "${guestInfo?.roomtype ?: "Unavailable"}  "
     var currentTime by remember { mutableStateOf(getCurrentTime()) }
+
+    var flightArrivals by remember { mutableStateOf<List<Flight>>(emptyList()) }
+    var flightDepartures by remember { mutableStateOf<List<Flight>>(emptyList()) }
+    var flightAirportName by remember { mutableStateOf("Ahmad Yani Airport") }
+
+    // Set up Firebase listener for Flight Information
+    DisposableEffect(Unit) {
+        val flightRef = database.child("FlightInfo")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                try {
+                    val airportSnapshot = snapshot.children.firstOrNull { 
+                        it.hasChild("arrivals") || it.hasChild("departures") 
+                    } ?: snapshot.child("WARS")
+                    
+                    val airportCode = airportSnapshot.key ?: "WARS"
+                    
+                    // Try to get airport name from config
+                    var name = "Ahmad Yani Airport"
+                    val configAirports = snapshot.child("config").child("Airports")
+                    for (airportConfig in configAirports.children) {
+                        val icao = airportConfig.child("ICAO_Code").getValue(String::class.java)
+                        if (icao == airportCode) {
+                            name = airportConfig.child("airpotName").getValue(String::class.java) ?: name
+                            break
+                        }
+                    }
+                    flightAirportName = name
+
+                    // Parse Arrivals
+                    val arrivalsList = mutableListOf<Flight>()
+                    val arrivalsSnap = airportSnapshot.child("arrivals")
+                    for (flightSnap in arrivalsSnap.children) {
+                        try {
+                            val f = Flight(
+                                flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
+                                airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
+                                otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
+                                scheduledTime = flightSnap.child("scheduledTime").getValue(String::class.java) ?: "",
+                                revisedTime = flightSnap.child("revisedTime").getValue(String::class.java) ?: "",
+                                status = flightSnap.child("status").getValue(String::class.java) ?: "",
+                                direction = "arrival"
+                            )
+                            arrivalsList.add(f)
+                        } catch (e: Exception) {}
+                    }
+                    // Sort by time and take top 4
+                    arrivalsList.sortBy { it.revisedTime.ifEmpty { it.scheduledTime } }
+                    flightArrivals = arrivalsList.take(4)
+
+                    // Parse Departures
+                    val departuresList = mutableListOf<Flight>()
+                    val departuresSnap = airportSnapshot.child("departures")
+                    for (flightSnap in departuresSnap.children) {
+                        try {
+                            val f = Flight(
+                                flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
+                                airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
+                                otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
+                                scheduledTime = flightSnap.child("scheduledTime").getValue(String::class.java) ?: "",
+                                revisedTime = flightSnap.child("revisedTime").getValue(String::class.java) ?: "",
+                                status = flightSnap.child("status").getValue(String::class.java) ?: "",
+                                direction = "departure"
+                            )
+                            departuresList.add(f)
+                        } catch (e: Exception) {}
+                    }
+                    // Sort by time and take top 4
+                    departuresList.sortBy { it.revisedTime.ifEmpty { it.scheduledTime } }
+                    flightDepartures = departuresList.take(4)
+
+                    Log.d("HomeScreen", "FlightInfo parsed successfully: ${flightArrivals.size} arrivals, ${flightDepartures.size} departures")
+                } catch (e: Exception) {
+                    Log.e("HomeScreen", "Error parsing FlightInfo: ${e.message}", e)
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("HomeScreen", "FlightInfo listener cancelled: ${error.message}")
+            }
+        }
+        flightRef.addValueEventListener(listener)
+        onDispose {
+            flightRef.removeEventListener(listener)
+        }
+    }
 
     // Set up Firebase listener for guest info
     DisposableEffect(roomId, branchId) {
@@ -1155,10 +1547,15 @@ fun HomeScreen(navController: NavHostController) {
     LaunchedEffect(isSlideshowActive, imageList, slideDurations, currentImageIndex) {
         if (isSlideshowActive && imageList.isNotEmpty() && slideDurations.isNotEmpty()) {
             try {
-                val duration = slideDurations.getOrNull(currentImageIndex) ?: 5
+                // If it is the last slides (Arrivals or Departures), duration is 30 seconds as requested!
+                val duration = if (currentImageIndex >= imageList.size) {
+                    30
+                } else {
+                    slideDurations.getOrNull(currentImageIndex) ?: 5
+                }
                 delay(duration * 1000L)
                 if (isSlideshowActive && imageList.isNotEmpty()) {
-                    currentImageIndex = (currentImageIndex + 1) % imageList.size
+                    currentImageIndex = (currentImageIndex + 1) % (imageList.size + 2)
                 }
             } catch (e: Exception) {
                 Log.e("HomeScreen", "Error in slideshow timer: ${e.message}")
@@ -1238,7 +1635,10 @@ fun HomeScreen(navController: NavHostController) {
                         roomId = roomId,
                         roomTypeText = roomTypeText,
                         currentTime = currentTime,
-                        onImageIndexChanged = { currentImageIndex = it }
+                        onImageIndexChanged = { currentImageIndex = it },
+                        flightArrivals = flightArrivals,
+                        flightDepartures = flightDepartures,
+                        flightAirportName = flightAirportName
                     )
 
                     // Large white 20% opacity DND Active Indicator (Icon Only)
@@ -1247,7 +1647,7 @@ fun HomeScreen(navController: NavHostController) {
                         modifier = Modifier
                     ) {
                         Icon(
-                            painter = rememberAsyncImagePainter(R.drawable.do_not_disturb_svgrepo_com),
+                            painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
                             contentDescription = "DND Active Indicator",
                             modifier = Modifier.size(96.dp),
                             tint = Color.White.copy(alpha = 0.2f)
@@ -1591,12 +1991,21 @@ fun PinKeypadButton(
             )
             .focusable(enabled = isEnabled, interactionSource = interactionSource)
     ) {
-        Text(
-            text = text,
-            color = if (isEnabled) textColor else textColor.copy(alpha = 0.3f),
-            fontWeight = FontWeight.Bold,
-            fontSize = 22.sp
-        )
+        if (text == "⌫") {
+            Icon(
+                painter = painterResource(id = R.drawable.backspace),
+                contentDescription = "Delete",
+                tint = if (isEnabled) textColor else textColor.copy(alpha = 0.3f),
+                modifier = Modifier.size(24.dp)
+            )
+        } else {
+            Text(
+                text = text,
+                color = if (isEnabled) textColor else textColor.copy(alpha = 0.3f),
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp
+            )
+        }
     }
 }
 

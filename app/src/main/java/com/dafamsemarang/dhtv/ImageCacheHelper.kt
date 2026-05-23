@@ -3,6 +3,7 @@ package com.dafamsemarang.dhtv
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.util.Log
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -62,12 +63,17 @@ fun downloadAndCacheImage(
         try {
             val request = ImageRequest.Builder(context)
                 .data(imageUrl)
+                .allowHardware(false) // Disable hardware bitmaps during caching download
                 .build()
             
             val result = context.imageLoader.execute(request)
             if (result is SuccessResult) {
                 val drawable = result.drawable
-                val bitmap = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                val bitmap = try {
+                    drawable.toBitmap()
+                } catch (e: Exception) {
+                    (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                }
                 
                 if (bitmap != null) {
                     FileOutputStream(cacheFile).use { out ->
@@ -96,7 +102,9 @@ fun downloadAndCacheImage(
  * Get cache file name from image URL
  */
 fun getImageCacheFileName(imageUrl: String, prefix: String = "img"): String {
-    val extension = imageUrl.substringAfterLast('.', "").take(4).ifEmpty { "png" }
+    val cleanUrl = imageUrl.substringBefore('?').substringBefore('#')
+    val rawExtension = cleanUrl.substringAfterLast('.', "")
+    val extension = rawExtension.lowercase().filter { it.isLetterOrDigit() }.take(4).ifEmpty { "png" }
     val hash = imageUrl.hashCode().toString().replace("-", "n")
     // v2: Invalidate cache to force PNG re-download (fixes black background transparency issue)
     return "${prefix}_${hash}_v2.$extension"

@@ -740,7 +740,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
                     modifier = Modifier.padding(4.dp)
                 ) {
                     SmallServiceButton(
-                        iconRes = R.drawable.do_not_disturb_svgrepo_com,
+                        iconRes = R.drawable.ic_dnd,
                         buttonColor = FooterIcon,
                         onClick = {
                             Log.d("FooterSection", "DND button clicked. Current status: $isDndActive, folioId: $folioId")
@@ -1187,7 +1187,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            painter = rememberAsyncImagePainter(R.drawable.do_not_disturb_svgrepo_com),
+                            painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
                             contentDescription = "DND Icon",
                             modifier = Modifier.size(32.dp),
                             tint = Color(0xFFE91E63)
@@ -1364,7 +1364,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            painter = rememberAsyncImagePainter(R.drawable.do_not_disturb_svgrepo_com),
+                            painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
                             contentDescription = "DND Icon",
                             modifier = Modifier.size(32.dp),
                             tint = Color.White
@@ -2319,7 +2319,7 @@ fun NotificationItem(
                     // Show the appropriate icon based on the click count
                     val iconRes = when {
                         clickCount == 1 -> R.drawable.delete_alt_svgrepo_com // Show delete icon after first click
-                        notification.type == "DND" -> R.drawable.do_not_disturb_svgrepo_com
+                        notification.type == "DND" -> R.drawable.ic_dnd
                         notification.type == "LAUNDRY" -> R.drawable.hotel_coat_check_svgrepo_com
                         notification.type == "ROOM_SERVICE" -> R.drawable.room_service_3_svgrepo_com
                         notification.type == "GUEST_REQUEST" -> R.drawable.service_request_svgrepo_com

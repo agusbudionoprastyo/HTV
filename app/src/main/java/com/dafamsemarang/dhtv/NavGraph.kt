@@ -162,7 +162,21 @@ fun AppNavigation() {
                 )
             }
 
-            composable("welcome") {
+            composable(
+                "welcome",
+                enterTransition = {
+                    fadeIn(animationSpec = tween(500, easing = FastOutSlowInEasing))
+                },
+                exitTransition = {
+                    fadeOut(animationSpec = tween(500, easing = FastOutSlowInEasing))
+                },
+                popEnterTransition = {
+                    fadeIn(animationSpec = tween(500, easing = FastOutSlowInEasing))
+                },
+                popExitTransition = {
+                    fadeOut(animationSpec = tween(500, easing = FastOutSlowInEasing))
+                }
+            ) {
                 WelcomeScreen(
                     onNavigateToHome = {
                         // Transition smoothly from welcome to home screen

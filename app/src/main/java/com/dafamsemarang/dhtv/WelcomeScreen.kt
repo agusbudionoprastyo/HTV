@@ -57,6 +57,52 @@ import kotlinx.coroutines.Dispatchers
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.graphics.Bitmap
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+
+fun getDominantColor(bitmap: Bitmap): Int {
+    return try {
+        val tinyBitmap = Bitmap.createScaledBitmap(bitmap, 1, 1, true)
+        val color = tinyBitmap.getPixel(0, 0)
+        tinyBitmap.recycle()
+        color
+    } catch (e: Exception) {
+        Log.e("WelcomeScreen", "Error in getDominantColor: ${e.message}", e)
+        android.graphics.Color.parseColor("#1E1E1E")
+    }
+}
+
+fun darkenColor(color: Int, factor: Float = 0.35f): Int {
+    val a = android.graphics.Color.alpha(color)
+    val r = Math.round(android.graphics.Color.red(color) * factor)
+    val g = Math.round(android.graphics.Color.green(color) * factor)
+    val b = Math.round(android.graphics.Color.blue(color) * factor)
+    return android.graphics.Color.argb(a, r, g, b)
+}
+
+fun isValidImageUrl(url: String?): Boolean {
+    if (url.isNullOrBlank()) return false
+    val trimmed = url.trim()
+    return (trimmed.startsWith("http://", ignoreCase = true) || 
+            trimmed.startsWith("https://", ignoreCase = true) || 
+            trimmed.startsWith("file://", ignoreCase = true) ||
+            trimmed.startsWith("/")) && 
+           !trimmed.equals("null", ignoreCase = true) && 
+           !trimmed.contains("no image", ignoreCase = true) &&
+           !trimmed.contains("no_image", ignoreCase = true)
+}
 
 fun formatNameID(fname: String): String {
     val words = fname.split(", ")
@@ -108,6 +154,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
 
     var guestInfo by remember(pairingSessionKey) { mutableStateOf<GuestInfo?>(null) }
     var guestImageUrl by remember(pairingSessionKey) { mutableStateOf("") }
+    var isGuestDataLoaded by remember(pairingSessionKey) { mutableStateOf(false) }
 
     var welcomeData by remember(pairingSessionKey) { mutableStateOf(WelcomeData()) }
 
@@ -151,6 +198,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
         ttsDisabled = false
         guestInfo = null
         guestImageUrl = ""
+        isGuestDataLoaded = false
         welcomeData = WelcomeData()
         iconUrl = null
         isTTSInitialized = false
@@ -158,6 +206,15 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
         textToSpeech?.stop()
         textToSpeech?.shutdown()
         textToSpeech = null
+    }
+
+    // Safety fallback timer to prevent infinite loading state if Firebase is slow/offline
+    LaunchedEffect(pairingSessionKey) {
+        delay(2000)
+        if (!isGuestDataLoaded) {
+            Log.w("WelcomeScreen", "Firebase guest data load timed out - falling back to default view")
+            isGuestDataLoaded = true
+        }
     }
 
     // Fetch company icon URL from Firebase and check data validity
@@ -218,10 +275,59 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 
             val guestListener = object : ValueEventListener {
                     override fun onDataChange(dataSnapshot: DataSnapshot) {
-                        // Ambil data guest dari FOGUEST
-                        val guest = dataSnapshot.getValue(GuestInfo::class.java)
+                        if (!dataSnapshot.exists()) {
+                            guestInfo = null
+                            guestImageUrl = ""
+                            isGuestDataLoaded = true
+                            return
+                        }
+
+                        // Try parsing GuestInfo automatically, fallback to robust manual parsing on error
+                        val guest = try {
+                            dataSnapshot.getValue(GuestInfo::class.java)
+                        } catch (e: Exception) {
+                            Log.e("WelcomeScreen", "Failed to deserialize GuestInfo automatically, falling back to manual parsing", e)
+                            try {
+                                val folioVal = try {
+                                    dataSnapshot.child("folio").getValue(Int::class.java) ?: 0
+                                } catch (e2: Exception) {
+                                    try {
+                                        dataSnapshot.child("folio").getValue(String::class.java)?.toIntOrNull() ?: 0
+                                    } catch (e3: Exception) { 0 }
+                                }
+                                val roomnightVal = try {
+                                    dataSnapshot.child("roomnight").getValue(Int::class.java) ?: 0
+                                } catch (e2: Exception) {
+                                    try {
+                                        dataSnapshot.child("roomnight").getValue(String::class.java)?.toIntOrNull() ?: 0
+                                    } catch (e3: Exception) { 0 }
+                                }
+                                GuestInfo(
+                                    folio = folioVal,
+                                    dateci = dataSnapshot.child("dateci").getValue(String::class.java) ?: "",
+                                    dateco = dataSnapshot.child("dateco").getValue(String::class.java) ?: "",
+                                    datecreate = dataSnapshot.child("datecreate").getValue(String::class.java) ?: "",
+                                    fname = dataSnapshot.child("fname").getValue(String::class.java) ?: "",
+                                    foliostatus = dataSnapshot.child("foliostatus").getValue(String::class.java) ?: "",
+                                    email = dataSnapshot.child("email").getValue(String::class.java) ?: "",
+                                    phone = dataSnapshot.child("phone").getValue(String::class.java) ?: "",
+                                    room = dataSnapshot.child("room").getValue(String::class.java) ?: "",
+                                    roomnight = roomnightVal,
+                                    roomtype = dataSnapshot.child("roomtype").getValue(String::class.java) ?: "",
+                                    guestImageUrl = dataSnapshot.child("guestImageUrl").getValue(String::class.java) ?: "",
+                                    isSmoking = dataSnapshot.child("isSmoking").getValue(Boolean::class.java) == true
+                                )
+                            } catch (manualEx: Exception) {
+                                Log.e("WelcomeScreen", "Failed manual parse of GuestInfo", manualEx)
+                                null
+                            }
+                        }
+
                         guestInfo = guest
-                        Log.d("WelcomeScreen", "Guest data received: ${guest?.fname}, Folio: ${guest?.folio}")
+                        // Initialize guestImageUrl with the direct guestImageUrl property from FOGUEST first
+                        val rawGuestUrl = guest?.guestImageUrl ?: ""
+                        guestImageUrl = if (isValidImageUrl(rawGuestUrl)) rawGuestUrl else ""
+                        Log.d("WelcomeScreen", "Guest data received: ${guest?.fname}, Folio: ${guest?.folio}, guestImageUrl: $guestImageUrl")
 
                         // Setelah mendapatkan guestInfo, ambil data dari GUESTIMAGE
                         guestInfo?.folio?.let { folio ->
@@ -229,30 +335,36 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                             val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folio.toString()).child("imageUrl")
                             Log.d("WelcomeScreen", "Fetching guest image from path: BRANCHES/$branchId/GUESTIMAGE/$folio/imageUrl")
                             
-                        imageListener = object : ValueEventListener {
+                            val imageListenerObj = object : ValueEventListener {
                                 override fun onDataChange(imageSnapshot: DataSnapshot) {
                                     // Ambil URL gambar dari child imageUrl
                                     val imageUrl = imageSnapshot.getValue(String::class.java)
-                                    // Simpan URL gambar ke dalam state guestImageUrl
-                                    guestImageUrl = imageUrl ?: ""
+                                    // Simpan URL gambar ke dalam state guestImageUrl, falling back to direct guestImageUrl from FOGUEST if null/empty
+                                    val resolvedUrl = if (!imageUrl.isNullOrBlank()) imageUrl else (guest?.guestImageUrl ?: "")
+                                    guestImageUrl = if (isValidImageUrl(resolvedUrl)) resolvedUrl else ""
                                     Log.d("WelcomeScreen", "Guest image URL received: $guestImageUrl")
+                                    isGuestDataLoaded = true
                                 }
 
                                 override fun onCancelled(imageError: DatabaseError) {
                                     Log.e("WelcomeScreen", "Error fetching guest image: ${imageError.message}")
-                                    guestImageUrl = "" // fallback jika gagal mengambil imageUrl
+                                    val rawFallback = guest?.guestImageUrl ?: ""
+                                    guestImageUrl = if (isValidImageUrl(rawFallback)) rawFallback else ""
+                                    isGuestDataLoaded = true
                                 }
-                        }
-                        
-                        imageRef.addValueEventListener(imageListener!!)
+                            }
+                            imageListener = imageListenerObj
+                            imageRef.addValueEventListener(imageListenerObj)
                         } ?: run {
                             Log.w("WelcomeScreen", "No folio found for guest")
+                            isGuestDataLoaded = true
                         }
                     }
 
                     override fun onCancelled(databaseError: DatabaseError) {
                         Log.e("WelcomeScreen", "Error fetching guest data: ${databaseError.message}")
                         guestInfo = null
+                        isGuestDataLoaded = true
                     }
             }
 
@@ -453,20 +565,121 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
         }
     }
 
-    // Background Image (Custom background from Firebase WELCOME_LETTER or fallback to Cached Wallpaper)
-    val backgroundUrl = welcomeData.backgroundUrl.ifEmpty {
-        sharedPreferences.getString("cached_wallpaper_url", "") ?: ""
-    }
-    val backgroundImage = rememberCachedPainter(backgroundUrl)
-
     // Room Image
     val roomImage = rememberCachedPainter(welcomeData.roomImageUrl, R.drawable.err)
     
     // Sign Image
     val signImage = rememberCachedPainter(welcomeData.signUrl, R.drawable.err)
 
-    // Guest Image
-    val guestImage = rememberCachedPainter(guestImageUrl, R.drawable.err)
+    // Welcome Background Image from CMS
+    val welcomeBackground = rememberCachedPainter(welcomeData.backgroundUrl, R.drawable.err)
+    val hasBackgroundImage = remember(welcomeData.backgroundUrl) { isValidImageUrl(welcomeData.backgroundUrl) }
+
+    // Local path state for guest image
+    var localGuestImagePath by remember(guestImageUrl) { 
+        mutableStateOf(if (guestImageUrl.isNotEmpty()) getCachedImagePath(context, getImageCacheFileName(guestImageUrl)) else null) 
+    }
+
+    // Download and cache guest image on-the-fly if not cached
+    LaunchedEffect(guestImageUrl) {
+        if (guestImageUrl.isNotEmpty()) {
+            val cacheFileName = getImageCacheFileName(guestImageUrl)
+            val cachedPath = getCachedImagePath(context, cacheFileName)
+            if (cachedPath == null) {
+                Log.d("WelcomeScreen", "Guest image not cached - starting on-the-fly caching: $guestImageUrl")
+                downloadAndCacheImage(
+                    context = context,
+                    imageUrl = guestImageUrl,
+                    cacheFileName = cacheFileName,
+                    onSuccess = { path ->
+                        localGuestImagePath = path
+                        Log.d("WelcomeScreen", "Guest image cached on-the-fly: $path")
+                    },
+                    onError = { e ->
+                        Log.e("WelcomeScreen", "Failed to cache guest image on-the-fly: ${e.message}")
+                    }
+                )
+            } else {
+                localGuestImagePath = cachedPath
+            }
+        } else {
+            localGuestImagePath = null
+        }
+    }
+
+    // Guest Image with hardware bitmaps disabled to allow dominant color extraction
+    val guestImageModel = remember(guestImageUrl, localGuestImagePath) {
+        if (localGuestImagePath != null) {
+            java.io.File(localGuestImagePath!!)
+        } else if (guestImageUrl.isNotEmpty()) {
+            guestImageUrl
+        } else {
+            ""
+        }
+    }
+
+    val guestImageRequest = remember(guestImageModel) {
+        ImageRequest.Builder(context)
+            .data(guestImageModel)
+            .allowHardware(false) // CRITICAL: Disable hardware bitmaps to allow CPU pixel extraction!
+            .listener(
+                onStart = { request -> Log.d("WelcomeScreen", "Coil: Start loading $guestImageModel") },
+                onSuccess = { request, metadata -> Log.d("WelcomeScreen", "Coil: Success loading $guestImageModel") },
+                onError = { request, result -> Log.e("WelcomeScreen", "Coil: Error loading $guestImageModel", result.throwable) }
+            )
+            .error(R.drawable.err)
+            .crossfade(false)
+            .build()
+    }
+
+    val guestImage = rememberAsyncImagePainter(model = guestImageRequest)
+
+    val showRoomImage = (isGuestDataLoaded && guestImageUrl.isEmpty()) || 
+            (guestImageUrl.isNotEmpty() && guestImage.state is AsyncImagePainter.State.Error)
+
+
+
+    val roomImageAlpha by animateFloatAsState(
+        targetValue = if (showRoomImage) 1f else 0f,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "RoomImageAlpha"
+    )
+
+    val guestImageAlpha by animateFloatAsState(
+        targetValue = if (guestImage.state is AsyncImagePainter.State.Success) 1f else 0f,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "GuestImageAlpha"
+    )
+
+    // Dynamic color matching the guest image nuance
+    var dominantColor by remember(pairingSessionKey) { mutableStateOf(Color(0xFF1E1E1E)) }
+
+    LaunchedEffect(guestImage, guestImageUrl) {
+        snapshotFlow { guestImage.state }
+            .collect { state ->
+                Log.d("WelcomeScreen", "snapshotFlow state change: $state")
+                if (guestImageUrl.isBlank()) {
+                    dominantColor = Color(0xFF1E1E1E)
+                } else if (state is AsyncImagePainter.State.Success) {
+                    try {
+                        val bitmap = state.result.drawable.toBitmap(config = android.graphics.Bitmap.Config.ARGB_8888)
+                        val averageColor = getDominantColor(bitmap)
+                        val darkened = darkenColor(averageColor, factor = 0.35f)
+                        dominantColor = Color(darkened)
+                        Log.d("WelcomeScreen", "Successfully extracted dominant nuance: #%06X".format(darkened and 0xFFFFFF))
+                    } catch (e: Exception) {
+                        Log.e("WelcomeScreen", "Failed to extract dominant color from guest photo: ${e.message}", e)
+                        dominantColor = Color(0xFF1E1E1E)
+                    }
+                }
+            }
+    }
+
+    val animatedDominantColor by animateColorAsState(
+        targetValue = dominantColor,
+        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+        label = "BackgroundColorTransition"
+    )
 
     // Request focus when composable is first displayed and after pairing session changes
     LaunchedEffect(pairingSessionKey) {
@@ -479,7 +692,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(animatedDominantColor)
             .focusRequester(focusRequester)
             .focusable() // Make the Box focusable to handle remote events
             .onKeyEvent { keyEvent ->
@@ -580,25 +793,81 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 interactionSource = remember { MutableInteractionSource() }
             )
     ) {
-        // 1. Draw the Background Image first (vibrant, no dark overlay)
+        // 1. Draw the Room Image fallback as the base underlay (occupies right 45% of the screen width)
         Image(
-            painter = backgroundImage,
-            contentDescription = "Welcome Screen Background",
-            modifier = Modifier.fillMaxSize(),
+            painter = roomImage,
+            contentDescription = "Room Image fallback",
+            modifier = Modifier
+                .fillMaxHeight()
+                .align(Alignment.CenterEnd)
+                .fillMaxWidth(0.45f)
+                .alpha(roomImageAlpha),
             contentScale = ContentScale.Crop
         )
 
-        // 2. Draw the Guest Image (or Room Image fallback) on top of the background (aligned to the right)
-        val guestImageState = guestImage.state
-        Image(
-            painter = if (guestImageState is AsyncImagePainter.State.Success) guestImage else roomImage,
-            contentDescription = "Guest Image",
+        // 2. Draw the Guest Image on top if guestImageUrl is not empty (occupies right 45% of the screen width)
+        if (guestImageUrl.isNotEmpty()) {
+            Image(
+                painter = guestImage,
+                contentDescription = "Guest Image",
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .align(Alignment.CenterEnd)
+                    .fillMaxWidth(0.45f)
+                    .alpha(guestImageAlpha),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        // 3. Background Layer (CMS Background Image or Solid Fallback Color) drawn ON TOP of the images.
+        // We apply a PorterDuff DstIn mask to make it transparent on the right, letting the images show through!
+        Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .align(Alignment.CenterEnd) // Centering guest image
-                .fillMaxSize(.5f),
-            contentScale = ContentScale.Crop
-        )
+                .fillMaxSize()
+                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                .drawWithContent {
+                    // 1. Draw the background content (image or color)
+                    drawContent()
+                    
+                    // 2. Apply the curved mask using BlendMode.DstIn
+                    // On the left side, we want it to be solid Black (retaining the background)
+                    // On the right side, we want it to be Transparent (showing the images underneath)
+                    val w = size.width
+                    val h = size.height
+                    
+                    val curvedMask = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.0f to Color.Transparent,
+                            0.38f to Color.Transparent,       // Right side is transparent (90% screen width)
+                            0.63f to Color.Black,             // Left side is solid Black (60% screen width)
+                            1.0f to Color.Black
+                        ),
+                        center = Offset(w * 1.35f, h * 0.5f), // Center offscreen to the right
+                        radius = w * 1.20f
+                    )
+                    
+                    drawRect(
+                        brush = curvedMask,
+                        blendMode = BlendMode.DstIn
+                    )
+                }
+        ) {
+            // Render the Background Content inside the masked Box
+            if (hasBackgroundImage) {
+                Image(
+                    painter = welcomeBackground,
+                    contentDescription = "CMS Background Image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(animatedDominantColor)
+                )
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -738,6 +1007,8 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 }
             }
         }
+
+
 
         // Text instruction at the bottom - not blocking clicks
             Text(

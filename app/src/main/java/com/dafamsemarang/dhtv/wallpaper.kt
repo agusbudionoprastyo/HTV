@@ -39,8 +39,23 @@ fun WallpaperSection(hazeState: HazeState? = null) {
     var imageUrl by remember { mutableStateOf<String?>(null) }
     var localWallpaperPath by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-    val branchId = sharedPreferences.getString("branchId", null)
+    val sharedPreferences = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    
+    // Make branchId a reactive state observed by compose, listening to SharedPreferences changes
+    var branchId by remember { mutableStateOf(sharedPreferences.getString("branchId", null)) }
+
+    DisposableEffect(sharedPreferences) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            if (key == "branchId") {
+                branchId = prefs.getString("branchId", null)
+                Log.d("WallpaperSection", "branchId updated dynamically in SharedPreferences: $branchId")
+            }
+        }
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
 
     // Setup Firebase Realtime Database references
     val database = FirebaseDatabase.getInstance().reference
@@ -50,16 +65,17 @@ fun WallpaperSection(hazeState: HazeState? = null) {
         var activeRef: com.google.firebase.database.DatabaseReference? = null
         var activeListener: com.google.firebase.database.ValueEventListener? = null
 
-        if (branchId != null) {
+        val currentBranchId = branchId
+        if (currentBranchId != null) {
             val db = com.google.firebase.database.FirebaseDatabase.getInstance().reference
-            val ref = db.child("BRANCHES").child(branchId).child("SETTING/WALLPAPER").child("imageUrl")
+            val ref = db.child("BRANCHES").child(currentBranchId).child("SETTING/WALLPAPER").child("imageUrl")
             
             val listener = object : com.google.firebase.database.ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     val url = snapshot.getValue(String::class.java)
                     imageUrl = url
                     if (!url.isNullOrEmpty()) {
-                        val fileName = "wallpaper_${branchId}.jpg"
+                        val fileName = "wallpaper_${currentBranchId}.jpg"
                         val file = File(context.cacheDir, fileName)
                         if (!file.exists() || sharedPreferences.getString("cached_wallpaper_url", null) != url) {
                             CoroutineScope(Dispatchers.IO).launch {

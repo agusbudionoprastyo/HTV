@@ -30,6 +30,7 @@ import com.dafamsemarang.dhtv.ui.components.UpdateProgress
 import com.dafamsemarang.dhtv.ui.theme.dhtvTheme
 import kotlinx.coroutines.launch
 
+
 class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
     private var deviceManager: DeviceManager? = null
     private var shouldShowPairing by mutableStateOf(false)
@@ -44,6 +45,8 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         
         // Keep screen on and prevent sleep
         keepScreenAwake()
+        
+
         
         // ULTIMATE OS-LEVEL PERFORMANCE OVERRIDE:
         // This instructs the Android Window Manager that our entire application window is exempt 
