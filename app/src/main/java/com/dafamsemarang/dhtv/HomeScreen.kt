@@ -137,7 +137,9 @@ data class Flight(
     val scheduledTime: String = "",
     val revisedTime: String = "",
     val status: String = "",
-    val direction: String = ""
+    val direction: String = "",
+    val gate: String = "",
+    val terminal: String = ""
 )
 
 // Helper to fetch installed apps
@@ -395,7 +397,7 @@ fun FlightInfoSection(
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            // Column Header Row (7 columns)
+            // Column Header Row (9 columns)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -415,42 +417,56 @@ fun FlightInfoSection(
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.22f)
+                    modifier = Modifier.weight(0.18f)
                 )
                 Text(
                     text = if (isArrival) "DARI" else "KE",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.13f)
+                    modifier = Modifier.weight(0.10f)
                 )
                 Text(
                     text = "IATA",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.09f)
+                    modifier = Modifier.weight(0.07f)
                 )
                 Text(
                     text = "BANDARA",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.24f)
+                    modifier = Modifier.weight(0.16f)
                 )
                 Text(
                     text = "JAM",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.10f)
+                    modifier = Modifier.weight(0.09f)
+                )
+                Text(
+                    text = "GATE",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.08f)
+                )
+                Text(
+                    text = "TERM",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.08f)
                 )
                 Text(
                     text = "STATUS",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.5.sp,
-                    modifier = Modifier.weight(0.10f),
+                    modifier = Modifier.weight(0.12f),
                     textAlign = TextAlign.End
                 )
             }
@@ -576,7 +592,7 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             modifier = Modifier.weight(0.12f)
         )
 
-        // Column 2: Airline Name (Text Only, weight = 0.22f)
+        // Column 2: Airline Name (weight = 0.18f)
         Text(
             text = flight.airline,
             color = Color.White.copy(alpha = 0.9f),
@@ -584,48 +600,80 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             fontSize = 8.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(0.22f)
+            modifier = Modifier.weight(0.18f)
         )
 
-        // Column 3: Destination/Origin City Name (weight = 0.13f)
+        // Column 3: Destination/Origin City Name (weight = 0.10f)
         Text(
             text = cityName,
             color = Color.White.copy(alpha = 0.6f),
             fontSize = 8.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(0.13f)
+            modifier = Modifier.weight(0.10f)
         )
 
-        // Column 4: Airport Code (weight = 0.09f)
+        // Column 4: Airport Code (weight = 0.07f)
         Text(
             text = flight.otherAirport.uppercase(Locale.US),
             color = Color.White.copy(alpha = 0.5f),
             fontSize = 8.5.sp,
             maxLines = 1,
-            modifier = Modifier.weight(0.09f)
+            modifier = Modifier.weight(0.07f)
         )
 
-        // Column 5: Mapped Airport Long Name (weight = 0.24f)
+        // Column 5: Mapped Airport Long Name (weight = 0.16f)
         Text(
             text = airportNameLong,
             color = Color.White.copy(alpha = 0.6f),
             fontSize = 8.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(0.24f)
+            modifier = Modifier.weight(0.16f)
         )
 
-        // Column 6: Time (weight = 0.10f)
+        // Column 6: Time (weight = 0.09f)
         Text(
             text = timeStr,
             color = Color.White.copy(alpha = 0.8f),
             fontWeight = FontWeight.Medium,
             fontSize = 8.5.sp,
-            modifier = Modifier.weight(0.10f)
+            modifier = Modifier.weight(0.09f)
         )
 
-        // Column 7: Status (weight = 0.10f)
+        // Column 7: Gate (weight = 0.08f)
+        val gateText = remember(flight.gate) {
+            if (flight.gate.trim().isEmpty() || flight.gate.trim() == "-") {
+                "-"
+            } else {
+                flight.gate
+            }
+        }
+        Text(
+            text = gateText,
+            color = Color.White.copy(alpha = 0.8f),
+            fontSize = 8.5.sp,
+            maxLines = 1,
+            modifier = Modifier.weight(0.08f)
+        )
+
+        // Column 8: Terminal (weight = 0.08f)
+        val terminalText = remember(flight.terminal) {
+            if (flight.terminal.trim().isEmpty() || flight.terminal.trim() == "-") {
+                "-"
+            } else {
+                flight.terminal
+            }
+        }
+        Text(
+            text = terminalText,
+            color = Color.White.copy(alpha = 0.8f),
+            fontSize = 8.5.sp,
+            maxLines = 1,
+            modifier = Modifier.weight(0.08f)
+        )
+
+        // Column 9: Status (weight = 0.12f)
         Text(
             text = statusText,
             color = statusColor,
@@ -633,7 +681,7 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             fontSize = 7.5.sp,
             maxLines = 1,
             textAlign = TextAlign.End,
-            modifier = Modifier.weight(0.10f)
+            modifier = Modifier.weight(0.12f)
         )
     }
 }
@@ -1151,6 +1199,7 @@ fun VideoAndSlideshowSection(
                             .fillMaxSize()
                     )
                 } else if (imageList.isNotEmpty()) {
+                    // 1. Sliding Content (Images and Flight Rows)
                     AnimatedContent(
                         targetState = currentImageIndex,
                         transitionSpec = {
@@ -1173,38 +1222,95 @@ fun VideoAndSlideshowSection(
                             }
                         }, label = ""
                     ) { targetIndex ->
-                        if (fidsActive && targetIndex >= imageList.size && targetIndex < imageList.size + arrivalsPagesCount) {
-                            val pageIndex = targetIndex - imageList.size
+                        if (fidsActive && targetIndex >= imageList.size) {
+                            val isArrival = targetIndex < imageList.size + arrivalsPagesCount
+                            val flightsList = if (isArrival) flightArrivals else flightDepartures
+                            val pageIndex = if (isArrival) (targetIndex - imageList.size) else (targetIndex - imageList.size - arrivalsPagesCount)
                             val startIdx = pageIndex * 4
-                            val endIdx = minOf(startIdx + 4, flightArrivals.size)
-                            val pageFlights = if (startIdx in flightArrivals.indices) {
-                                flightArrivals.subList(startIdx, endIdx)
+                            val endIdx = minOf(startIdx + 4, flightsList.size)
+                            val pageFlights = if (startIdx in flightsList.indices) {
+                                flightsList.subList(startIdx, endIdx)
                             } else {
                                 emptyList()
                             }
-                            FlightInfoSection(
-                                title = "ARRIVALS",
-                                airportName = flightAirportName,
-                                flights = pageFlights,
-                                isArrival = true,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else if (fidsActive && targetIndex >= imageList.size + arrivalsPagesCount && targetIndex < totalSlidesCount) {
-                            val pageIndex = targetIndex - imageList.size - arrivalsPagesCount
-                            val startIdx = pageIndex * 4
-                            val endIdx = minOf(startIdx + 4, flightDepartures.size)
-                            val pageFlights = if (startIdx in flightDepartures.indices) {
-                                flightDepartures.subList(startIdx, endIdx)
-                            } else {
-                                emptyList()
+
+                            // Flight data slide layout (with invisible header placeholders for perfect layout alignment)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.3f))
+                                    .padding(top = 6.dp, bottom = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    // INVISIBLE HEADERS (Alpha = 0f) to reserve pixel-perfect layout height!
+                                    Column(modifier = Modifier.fillMaxWidth().alpha(0f)) {
+                                        // Header Row Placeholder
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 10.dp, end = 10.dp, bottom = 2.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    painter = painterResource(id = if (isArrival) R.drawable.flight_land else R.drawable.flight_takeoff),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = if (isArrival) "ARRIVALS" else "DEPARTURES",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 1.sp
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+
+                                        // Column Headers Row Placeholder
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color.White.copy(alpha = 0.12f))
+                                                .padding(horizontal = 10.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(text = "KODE", fontSize = 7.sp, modifier = Modifier.weight(0.12f))
+                                            Text(text = "MASKAPAI", fontSize = 7.sp, modifier = Modifier.weight(0.18f))
+                                            Text(text = if (isArrival) "DARI" else "KE", fontSize = 7.sp, modifier = Modifier.weight(0.10f))
+                                            Text(text = "IATA", fontSize = 7.sp, modifier = Modifier.weight(0.07f))
+                                            Text(text = "BANDARA", fontSize = 7.sp, modifier = Modifier.weight(0.16f))
+                                            Text(text = "JAM", fontSize = 7.sp, modifier = Modifier.weight(0.09f))
+                                            Text(text = "GATE", fontSize = 7.sp, modifier = Modifier.weight(0.08f))
+                                            Text(text = "TERM", fontSize = 7.sp, modifier = Modifier.weight(0.08f))
+                                            Text(text = "STATUS", fontSize = 7.5.sp, modifier = Modifier.weight(0.12f), textAlign = TextAlign.End)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    // Flight rows that SLIDE!
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        if (pageFlights.isEmpty()) {
+                                            Box(
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "No flights scheduled",
+                                                    color = Color.White.copy(alpha = 0.4f),
+                                                    fontSize = 9.sp
+                                                )
+                                            }
+                                        } else {
+                                            pageFlights.forEach { flight ->
+                                                FlightRow(flight = flight, isArrival = isArrival)
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            FlightInfoSection(
-                                title = "DEPARTURES",
-                                airportName = flightAirportName,
-                                flights = pageFlights,
-                                isArrival = false,
-                                modifier = Modifier.fillMaxSize()
-                            )
                         } else {
                             val imageUrl = imageList.getOrNull(targetIndex) ?: ""
                             Image(
@@ -1216,6 +1322,120 @@ fun VideoAndSlideshowSection(
                         }
                     }
 
+                    // 2. Dynamic FIDS Header (Slides in/out on category change, stays completely still on page change!)
+                    val fidsCategory = when {
+                        !fidsActive -> null
+                        currentImageIndex < imageList.size -> null
+                        currentImageIndex < imageList.size + arrivalsPagesCount -> "ARRIVALS"
+                        else -> "DEPARTURES"
+                    }
+
+                    AnimatedContent(
+                        targetState = fidsCategory,
+                        transitionSpec = {
+                            val initialRank = when (initialState) {
+                                null -> 0
+                                "ARRIVALS" -> 1
+                                "DEPARTURES" -> 2
+                                else -> 0
+                            }
+                            val targetRank = when (targetState) {
+                                null -> 0
+                                "ARRIVALS" -> 1
+                                "DEPARTURES" -> 2
+                                else -> 0
+                            }
+                            
+                            val isForward = if (initialState == "DEPARTURES" && targetState == null) {
+                                true
+                            } else if (initialState == null && targetState == "DEPARTURES") {
+                                false
+                            } else {
+                                targetRank > initialRank
+                            }
+                            
+                            if (isForward) {
+                                slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }) togetherWith
+                                        slideOutHorizontally(targetOffsetX = { fullWidth -> -fullWidth })
+                            } else {
+                                slideInHorizontally(initialOffsetX = { fullWidth -> -fullWidth }) togetherWith
+                                        slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth })
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        label = ""
+                    ) { targetCategory ->
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (targetCategory != null) {
+                                val isArrival = targetCategory == "ARRIVALS"
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(top = 6.dp, bottom = 4.dp)
+                                ) {
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        // Title & Airport Header Row
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 10.dp, end = 10.dp, bottom = 2.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.align(Alignment.CenterStart)
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = if (isArrival) R.drawable.flight_land else R.drawable.flight_takeoff),
+                                                    contentDescription = null,
+                                                    tint = if (isArrival) Color(0xFF29B6F6) else Color(0xFFFF9800),
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = if (isArrival) "ARRIVALS" else "DEPARTURES",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isArrival) Color(0xFF29B6F6) else Color(0xFFFF9800),
+                                                    letterSpacing = 1.sp
+                                                )
+                                            }
+
+                                            Text(
+                                                text = flightAirportName.uppercase(Locale.US),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White.copy(alpha = 0.9f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.align(Alignment.Center)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(2.dp))
+
+                                        // Table Column Headers Row
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color.White.copy(alpha = 0.12f))
+                                                .padding(horizontal = 10.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(text = "KODE", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.12f))
+                                            Text(text = "MASKAPAI", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.18f))
+                                            Text(text = if (isArrival) "DARI" else "KE", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.10f))
+                                            Text(text = "IATA", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.07f))
+                                            Text(text = "BANDARA", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.16f))
+                                            Text(text = "JAM", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.09f))
+                                            Text(text = "GATE", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.08f))
+                                            Text(text = "TERM", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.08f))
+                                            Text(text = "STATUS", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.5.sp, modifier = Modifier.weight(0.12f), textAlign = TextAlign.End)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Dynamic dot carousel indicators at the bottom
                     Row(
@@ -1239,7 +1459,7 @@ fun VideoAndSlideshowSection(
                                 }
                                 Icon(
                                     painter = painterResource(
-                                        id = if (isArrivalFirstPage) R.drawable.ic_flight_land else R.drawable.ic_flight_takeoff
+                                        id = if (isArrivalFirstPage) R.drawable.flight_land else R.drawable.flight_takeoff
                                     ),
                                     contentDescription = null,
                                     tint = tintColor,
@@ -1490,18 +1710,20 @@ fun HomeScreen(navController: NavHostController) {
                                         scheduledTime = scheduled,
                                         revisedTime = revised,
                                         status = flightSnap.child("status").getValue(String::class.java) ?: "",
-                                        direction = "arrival"
+                                        direction = "arrival",
+                                        gate = flightSnap.child("gate").getValue(String::class.java) ?: "",
+                                        terminal = flightSnap.child("terminal").getValue(String::class.java) ?: ""
                                     )
                                     arrivalsList.add(f)
                                 }
                             } catch (e: Exception) {}
                         }
-                        // Sort by time and take top 12 (up to 3 pages of 4 flights each)
+                        // Sort by time
                         arrivalsList.sortBy { 
                             val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
                             parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
                         }
-                        flightArrivals = arrivalsList.take(12)
+                        flightArrivals = arrivalsList
 
                         // Parse Departures
                         val departuresList = mutableListOf<Flight>()
@@ -1521,18 +1743,20 @@ fun HomeScreen(navController: NavHostController) {
                                         scheduledTime = scheduled,
                                         revisedTime = revised,
                                         status = flightSnap.child("status").getValue(String::class.java) ?: "",
-                                        direction = "departure"
+                                        direction = "departure",
+                                        gate = flightSnap.child("gate").getValue(String::class.java) ?: "",
+                                        terminal = flightSnap.child("terminal").getValue(String::class.java) ?: ""
                                     )
                                     departuresList.add(f)
                                 }
                             } catch (e: Exception) {}
                         }
-                        // Sort by time and take top 12 (up to 3 pages of 4 flights each)
+                        // Sort by time
                         departuresList.sortBy { 
                             val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
                             parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
                         }
-                        flightDepartures = departuresList.take(12)
+                        flightDepartures = departuresList
 
                         Log.d("HomeScreen", "FlightInfo parsed successfully for $fidsIcaoCode: ${flightArrivals.size} arrivals, ${flightDepartures.size} departures")
                     } catch (e: Exception) {
