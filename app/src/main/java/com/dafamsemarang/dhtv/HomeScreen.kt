@@ -16,6 +16,8 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -654,7 +656,8 @@ fun VideoAndSlideshowSection(
     onImageIndexChanged: (Int) -> Unit = {},
     flightArrivals: List<Flight> = emptyList(),
     flightDepartures: List<Flight> = emptyList(),
-    flightAirportName: String = ""
+    flightAirportName: String = "",
+    fidsActive: Boolean = true
 ) {
     // Use shared MediaPlayer if provided, otherwise create local one
     var localMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -1068,6 +1071,10 @@ fun VideoAndSlideshowSection(
 
     // Slideshow Images with shimmer (Widescreen landscape banner on the left)
     if (isLoadingSlideshow || imageList.isNotEmpty()) {
+        val arrivalsPagesCount = if (flightArrivals.isEmpty()) 1 else ((flightArrivals.size + 3) / 4)
+        val departuresPagesCount = if (flightDepartures.isEmpty()) 1 else ((flightDepartures.size + 3) / 4)
+        val fidsSlidesCount = if (fidsActive) (arrivalsPagesCount + departuresPagesCount) else 0
+        val totalSlidesCount = imageList.size + fidsSlidesCount
         var isBannerFocused by remember { mutableStateOf(false) }
         val bannerFocusPulseAlpha = remember { Animatable(0.4f) }
         LaunchedEffect(isBannerFocused) {
@@ -1094,15 +1101,15 @@ fun VideoAndSlideshowSection(
                     if (keyEvent.type == KeyEventType.KeyDown) {
                         when (keyEvent.key) {
                             Key.DirectionRight -> {
-                                if (imageList.isNotEmpty()) {
-                                    val nextIndex = (currentImageIndex + 1) % (imageList.size + 2)
+                                if (imageList.isNotEmpty() && totalSlidesCount > 0) {
+                                    val nextIndex = (currentImageIndex + 1) % totalSlidesCount
                                     onImageIndexChanged(nextIndex)
                                     true
                                 } else false
                             }
                             Key.DirectionLeft -> {
-                                if (imageList.isNotEmpty()) {
-                                    val prevIndex = (currentImageIndex - 1 + imageList.size + 2) % (imageList.size + 2)
+                                if (imageList.isNotEmpty() && totalSlidesCount > 0) {
+                                    val prevIndex = (currentImageIndex - 1 + totalSlidesCount) % totalSlidesCount
                                     onImageIndexChanged(prevIndex)
                                     true
                                 } else false
@@ -1147,9 +1154,11 @@ fun VideoAndSlideshowSection(
                     AnimatedContent(
                         targetState = currentImageIndex,
                         transitionSpec = {
-                            val isForward = if (initialState >= imageList.size && targetState == 0) {
+                            val lastIndex = totalSlidesCount - 1
+                            // Always use standard horizontal slide in/out
+                            val isForward = if (lastIndex > 0 && initialState >= lastIndex && targetState == 0) {
                                 true
-                            } else if (initialState == 0 && targetState >= imageList.size) {
+                            } else if (lastIndex > 0 && initialState == 0 && targetState >= lastIndex) {
                                 false
                             } else {
                                 targetState > initialState
@@ -1164,19 +1173,35 @@ fun VideoAndSlideshowSection(
                             }
                         }, label = ""
                     ) { targetIndex ->
-                        if (targetIndex == imageList.size) {
+                        if (fidsActive && targetIndex >= imageList.size && targetIndex < imageList.size + arrivalsPagesCount) {
+                            val pageIndex = targetIndex - imageList.size
+                            val startIdx = pageIndex * 4
+                            val endIdx = minOf(startIdx + 4, flightArrivals.size)
+                            val pageFlights = if (startIdx in flightArrivals.indices) {
+                                flightArrivals.subList(startIdx, endIdx)
+                            } else {
+                                emptyList()
+                            }
                             FlightInfoSection(
                                 title = "ARRIVALS",
                                 airportName = flightAirportName,
-                                flights = flightArrivals,
+                                flights = pageFlights,
                                 isArrival = true,
                                 modifier = Modifier.fillMaxSize()
                             )
-                        } else if (targetIndex == imageList.size + 1) {
+                        } else if (fidsActive && targetIndex >= imageList.size + arrivalsPagesCount && targetIndex < totalSlidesCount) {
+                            val pageIndex = targetIndex - imageList.size - arrivalsPagesCount
+                            val startIdx = pageIndex * 4
+                            val endIdx = minOf(startIdx + 4, flightDepartures.size)
+                            val pageFlights = if (startIdx in flightDepartures.indices) {
+                                flightDepartures.subList(startIdx, endIdx)
+                            } else {
+                                emptyList()
+                            }
                             FlightInfoSection(
                                 title = "DEPARTURES",
                                 airportName = flightAirportName,
-                                flights = flightDepartures,
+                                flights = pageFlights,
                                 isArrival = false,
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -1200,12 +1225,13 @@ fun VideoAndSlideshowSection(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        repeat(imageList.size + 2) { idx ->
+                        repeat(totalSlidesCount) { idx ->
                             val isActive = idx == currentImageIndex
-                            val isArrivalDot = idx == imageList.size
-                            val isDepartureDot = idx == imageList.size + 1
+                            // Plane icons only represent the first page of Arrivals and Departures
+                            val isArrivalFirstPage = fidsActive && idx == imageList.size
+                            val isDepartureFirstPage = fidsActive && idx == imageList.size + arrivalsPagesCount
                             
-                            if (isArrivalDot || isDepartureDot) {
+                            if (isArrivalFirstPage || isDepartureFirstPage) {
                                 val tintColor = if (isActive) {
                                     Color.White
                                 } else {
@@ -1213,7 +1239,7 @@ fun VideoAndSlideshowSection(
                                 }
                                 Icon(
                                     painter = painterResource(
-                                        id = if (isArrivalDot) R.drawable.ic_flight_land else R.drawable.ic_flight_takeoff
+                                        id = if (isArrivalFirstPage) R.drawable.ic_flight_land else R.drawable.ic_flight_takeoff
                                     ),
                                     contentDescription = null,
                                     tint = tintColor,
@@ -1364,109 +1390,164 @@ fun HomeScreen(navController: NavHostController) {
     val roomTypeText = "${guestInfo?.roomtype ?: "Unavailable"}  "
     var currentTime by remember { mutableStateOf(getCurrentTime()) }
 
+    var fidsActive by remember { mutableStateOf(true) }
+    var fidsIcaoCode by remember { mutableStateOf("WARS") }
+
+    // Set up Firebase listener for FIDS settings under BRANCHES/[branchId]/SETTING/FIDS
+    DisposableEffect(branchId) {
+        var fidsSettingRef: com.google.firebase.database.DatabaseReference? = null
+        var fidsSettingListener: ValueEventListener? = null
+
+        if (branchId != null) {
+            val path = "BRANCHES/$branchId/SETTING/FIDS"
+            Log.d("HomeScreen", "Setting up listener for FIDS config: $path")
+            fidsSettingRef = database.child(path)
+            fidsSettingListener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    if (snapshot.exists()) {
+                        val activeVal = snapshot.child("ACTIVE").value
+                        val active = when (activeVal) {
+                            is Boolean -> activeVal
+                            is String -> activeVal.toBoolean()
+                            else -> true
+                        }
+                        val icaoVal = snapshot.child("ICAO_CODE").getValue(String::class.java)
+                        
+                        fidsActive = active
+                        fidsIcaoCode = icaoVal ?: "WARS"
+                        Log.d("HomeScreen", "FIDS Config loaded: ACTIVE=$fidsActive, ICAO_CODE=$fidsIcaoCode")
+                    } else {
+                        fidsActive = true
+                        fidsIcaoCode = "WARS"
+                        Log.d("HomeScreen", "FIDS Config path not found, using defaults: ACTIVE=true, ICAO_CODE=WARS")
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e("HomeScreen", "FIDS Config listener cancelled: ${error.message}")
+                }
+            }
+            fidsSettingRef.addValueEventListener(fidsSettingListener)
+        }
+
+        onDispose {
+            if (fidsSettingRef != null && fidsSettingListener != null) {
+                fidsSettingRef.removeEventListener(fidsSettingListener)
+                Log.d("HomeScreen", "FIDS Config listener released.")
+            }
+        }
+    }
+
     var flightArrivals by remember { mutableStateOf<List<Flight>>(emptyList()) }
     var flightDepartures by remember { mutableStateOf<List<Flight>>(emptyList()) }
     var flightAirportName by remember { mutableStateOf("Ahmad Yani Airport") }
 
     // Set up Firebase listener for Flight Information
-    DisposableEffect(Unit) {
-        val flightRef = database.child("FlightInfo")
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                try {
-                    val airportSnapshot = snapshot.children.firstOrNull { 
-                        it.hasChild("arrivals") || it.hasChild("departures") 
-                    } ?: snapshot.child("WARS")
-                    
-                    val airportCode = airportSnapshot.key ?: "WARS"
-                    
-                    // Try to get airport name from config
-                    var name = "Ahmad Yani Airport"
-                    val configAirports = snapshot.child("config").child("Airports")
-                    for (airportConfig in configAirports.children) {
-                        val icao = airportConfig.child("ICAO_Code").getValue(String::class.java)
-                        if (icao == airportCode) {
-                            name = airportConfig.child("airpotName").getValue(String::class.java) ?: name
-                            break
+    DisposableEffect(fidsIcaoCode, fidsActive) {
+        if (!fidsActive) {
+            flightArrivals = emptyList()
+            flightDepartures = emptyList()
+            onDispose {}
+        } else {
+            val flightRef = database.child("FlightInfo")
+            val listener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    try {
+                        val airportSnapshot = snapshot.child(fidsIcaoCode)
+                        val airportCode = airportSnapshot.key ?: fidsIcaoCode
+                        
+                        // Try to get airport name from config
+                        var name = when (fidsIcaoCode.uppercase(Locale.US)) {
+                            "WARS" -> "Ahmad Yani Airport"
+                            "WARR" -> "Juanda Airport"
+                            else -> "$fidsIcaoCode Airport"
                         }
-                    }
-                    flightAirportName = name
-
-                    // Parse Arrivals
-                    val arrivalsList = mutableListOf<Flight>()
-                    val arrivalsSnap = airportSnapshot.child("arrivals")
-                    for (flightSnap in arrivalsSnap.children) {
-                        try {
-                            val scheduled = flightSnap.child("scheduledTime").getValue(String::class.java) ?: ""
-                            val revised = flightSnap.child("revisedTime").getValue(String::class.java) ?: ""
-                            val timeStr = revised.ifEmpty { scheduled }
-                            
-                            val flightDate = parseUtcToWib(timeStr)
-                            if (flightDate != null && isSameDayInWib(flightDate)) {
-                                val f = Flight(
-                                    flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
-                                    airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
-                                    otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
-                                    scheduledTime = scheduled,
-                                    revisedTime = revised,
-                                    status = flightSnap.child("status").getValue(String::class.java) ?: "",
-                                    direction = "arrival"
-                                )
-                                arrivalsList.add(f)
+                        val configAirports = snapshot.child("config").child("Airports")
+                        for (airportConfig in configAirports.children) {
+                            val icao = airportConfig.child("ICAO_Code").getValue(String::class.java)
+                            if (icao != null && icao.equals(airportCode, ignoreCase = true)) {
+                                name = airportConfig.child("airpotName").getValue(String::class.java) ?: name
+                                break
                             }
-                        } catch (e: Exception) {}
-                    }
-                    // Sort by time and take top 5
-                    arrivalsList.sortBy { 
-                        val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
-                        parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
-                    }
-                    flightArrivals = arrivalsList.take(5)
+                        }
+                        flightAirportName = name
 
-                    // Parse Departures
-                    val departuresList = mutableListOf<Flight>()
-                    val departuresSnap = airportSnapshot.child("departures")
-                    for (flightSnap in departuresSnap.children) {
-                        try {
-                            val scheduled = flightSnap.child("scheduledTime").getValue(String::class.java) ?: ""
-                            val revised = flightSnap.child("revisedTime").getValue(String::class.java) ?: ""
-                            val timeStr = revised.ifEmpty { scheduled }
-                            
-                            val flightDate = parseUtcToWib(timeStr)
-                            if (flightDate != null && isSameDayInWib(flightDate)) {
-                                val f = Flight(
-                                    flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
-                                    airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
-                                    otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
-                                    scheduledTime = scheduled,
-                                    revisedTime = revised,
-                                    status = flightSnap.child("status").getValue(String::class.java) ?: "",
-                                    direction = "departure"
-                                )
-                                departuresList.add(f)
-                            }
-                        } catch (e: Exception) {}
-                    }
-                    // Sort by time and take top 5
-                    departuresList.sortBy { 
-                        val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
-                        parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
-                    }
-                    flightDepartures = departuresList.take(5)
+                        // Parse Arrivals
+                        val arrivalsList = mutableListOf<Flight>()
+                        val arrivalsSnap = airportSnapshot.child("arrivals")
+                        for (flightSnap in arrivalsSnap.children) {
+                            try {
+                                val scheduled = flightSnap.child("scheduledTime").getValue(String::class.java) ?: ""
+                                val revised = flightSnap.child("revisedTime").getValue(String::class.java) ?: ""
+                                val timeStr = revised.ifEmpty { scheduled }
+                                
+                                val flightDate = parseUtcToWib(timeStr)
+                                if (flightDate != null && isSameDayInWib(flightDate)) {
+                                    val f = Flight(
+                                        flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
+                                        airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
+                                        otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
+                                        scheduledTime = scheduled,
+                                        revisedTime = revised,
+                                        status = flightSnap.child("status").getValue(String::class.java) ?: "",
+                                        direction = "arrival"
+                                    )
+                                    arrivalsList.add(f)
+                                }
+                            } catch (e: Exception) {}
+                        }
+                        // Sort by time and take top 12 (up to 3 pages of 4 flights each)
+                        arrivalsList.sortBy { 
+                            val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
+                            parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
+                        }
+                        flightArrivals = arrivalsList.take(12)
 
-                    Log.d("HomeScreen", "FlightInfo parsed successfully: ${flightArrivals.size} arrivals, ${flightDepartures.size} departures")
-                } catch (e: Exception) {
-                    Log.e("HomeScreen", "Error parsing FlightInfo: ${e.message}", e)
+                        // Parse Departures
+                        val departuresList = mutableListOf<Flight>()
+                        val departuresSnap = airportSnapshot.child("departures")
+                        for (flightSnap in departuresSnap.children) {
+                            try {
+                                val scheduled = flightSnap.child("scheduledTime").getValue(String::class.java) ?: ""
+                                val revised = flightSnap.child("revisedTime").getValue(String::class.java) ?: ""
+                                val timeStr = revised.ifEmpty { scheduled }
+                                
+                                val flightDate = parseUtcToWib(timeStr)
+                                if (flightDate != null && isSameDayInWib(flightDate)) {
+                                    val f = Flight(
+                                        flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
+                                        airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
+                                        otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
+                                        scheduledTime = scheduled,
+                                        revisedTime = revised,
+                                        status = flightSnap.child("status").getValue(String::class.java) ?: "",
+                                        direction = "departure"
+                                    )
+                                    departuresList.add(f)
+                                }
+                            } catch (e: Exception) {}
+                        }
+                        // Sort by time and take top 12 (up to 3 pages of 4 flights each)
+                        departuresList.sortBy { 
+                            val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
+                            parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
+                        }
+                        flightDepartures = departuresList.take(12)
+
+                        Log.d("HomeScreen", "FlightInfo parsed successfully for $fidsIcaoCode: ${flightArrivals.size} arrivals, ${flightDepartures.size} departures")
+                    } catch (e: Exception) {
+                        Log.e("HomeScreen", "Error parsing FlightInfo: ${e.message}", e)
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e("HomeScreen", "FlightInfo listener cancelled: ${error.message}")
                 }
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("HomeScreen", "FlightInfo listener cancelled: ${error.message}")
+            flightRef.addValueEventListener(listener)
+            onDispose {
+                flightRef.removeEventListener(listener)
             }
-        }
-        flightRef.addValueEventListener(listener)
-        onDispose {
-            flightRef.removeEventListener(listener)
         }
     }
 
@@ -1613,22 +1694,36 @@ fun HomeScreen(navController: NavHostController) {
 
     // Firebase listeners are now handled globally in DataRepository during preload
 
+    // Dynamic FIDS page counts calculation
+    val arrivalsPagesCount = if (flightArrivals.isEmpty()) 1 else ((flightArrivals.size + 3) / 4)
+    val departuresPagesCount = if (flightDepartures.isEmpty()) 1 else ((flightDepartures.size + 3) / 4)
+    val totalSlidesCount = imageList.size + (if (fidsActive) (arrivalsPagesCount + departuresPagesCount) else 0)
+
+    // Safe index clamping to prevent out-of-bounds errors on FIDS configuration changes
+    LaunchedEffect(fidsActive, imageList.size, arrivalsPagesCount, departuresPagesCount) {
+        if (totalSlidesCount > 0 && currentImageIndex >= totalSlidesCount) {
+            currentImageIndex = 0
+        }
+    }
+
     // Timer for changing image based on slide duration (restarts on manual D-pad changes for jank-free transition timing)
-    LaunchedEffect(isSlideshowActive, imageList, slideDurations, currentImageIndex) {
-        if (isSlideshowActive && imageList.isNotEmpty() && slideDurations.isNotEmpty()) {
-            try {
-                // If it is the last slides (Arrivals or Departures), duration is 30 seconds as requested!
-                val duration = if (currentImageIndex >= imageList.size) {
-                    30
-                } else {
-                    slideDurations.getOrNull(currentImageIndex) ?: 5
+    LaunchedEffect(isSlideshowActive, imageList, slideDurations, currentImageIndex, fidsActive, arrivalsPagesCount, departuresPagesCount) {
+        if (isSlideshowActive && imageList.isNotEmpty()) {
+            if (totalSlidesCount > 0) {
+                try {
+                    // If it is the last slides (Arrivals or Departures), duration is 30 seconds as requested!
+                    val duration = if (fidsActive && currentImageIndex >= imageList.size) {
+                        30
+                    } else {
+                        slideDurations.getOrNull(currentImageIndex) ?: 5
+                    }
+                    delay(duration * 1000L)
+                    if (isSlideshowActive && imageList.isNotEmpty()) {
+                        currentImageIndex = (currentImageIndex + 1) % totalSlidesCount
+                    }
+                } catch (e: Exception) {
+                    Log.e("HomeScreen", "Error in slideshow timer: ${e.message}")
                 }
-                delay(duration * 1000L)
-                if (isSlideshowActive && imageList.isNotEmpty()) {
-                    currentImageIndex = (currentImageIndex + 1) % (imageList.size + 2)
-                }
-            } catch (e: Exception) {
-                Log.e("HomeScreen", "Error in slideshow timer: ${e.message}")
             }
         }
     }
@@ -1708,7 +1803,8 @@ fun HomeScreen(navController: NavHostController) {
                         onImageIndexChanged = { currentImageIndex = it },
                         flightArrivals = flightArrivals,
                         flightDepartures = flightDepartures,
-                        flightAirportName = flightAirportName
+                        flightAirportName = flightAirportName,
+                        fidsActive = fidsActive
                     )
 
                     // Large white 20% opacity DND Active Indicator (Icon Only)
