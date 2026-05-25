@@ -1830,8 +1830,14 @@ fun MyRequestsDrawer(onDismiss: () -> Unit, requests: List<Request>, onSelectReq
                         }
 
                         if (requests.isEmpty()) {
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Column(
+                                    modifier = Modifier.fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.request))
@@ -4026,8 +4032,14 @@ fun CartDrawer(
                         }
 
                         if (selectedItems.isEmpty()) {
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Column(
+                                    modifier = Modifier.fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.empty_cart))
@@ -4563,8 +4575,14 @@ fun OrderDrawer(
                         }
 
                         if (orders.isEmpty()) {
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Column(
+                                    modifier = Modifier.fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.food_carousel))
