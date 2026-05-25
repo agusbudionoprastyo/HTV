@@ -79,23 +79,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-
 @Composable
-fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) {
+fun HeaderSection(currentRoute: String? = "home") {
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     val branchId = sharedPreferences.getString("branchId", null)
-    var iconUrl by remember { mutableStateOf<String?>(null) }
-    val database = Firebase.database.reference
-
-    var configuredCity by remember { mutableStateOf<String?>(null) }
-    var liveWeather by remember { mutableStateOf<LiveWeather?>(null) }
-    var forecastData by remember { mutableStateOf<ForecastData?>(null) }
-
+    val iconUrl by DataRepository.companyIconUrl
+    val configuredCity by DataRepository.configuredCity
+    val liveWeather by DataRepository.liveWeather
+    val forecastData by DataRepository.forecastData
+ 
     val weatherData = remember(configuredCity, liveWeather, forecastData) {
         if (configuredCity != null && (liveWeather != null || forecastData != null)) {
             FirebaseWeatherData(
@@ -107,6 +100,7 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
             null
         }
     }
+
     var isFocused by remember { mutableStateOf(false) }
     var viewMode by remember { mutableStateOf(0) } // 0 = Current Weather, 1 = Hourly Forecast, 2 = 7 Days Forecast
     var currentTimeString by remember { mutableStateOf("") }
@@ -130,153 +124,6 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
         while (isActive) {
             delay(60000)
             currentTimeString = sdfDate.format(Date())
-        }
-    }
-
-    // Fetch company icon URL from Firebase
-    DisposableEffect(branchId) {
-        var iconRef: com.google.firebase.database.DatabaseReference? = null
-        var iconListener: ValueEventListener? = null
-
-        if (branchId != null) {
-            iconRef = database.child("BRANCHES").child(branchId).child("SETTING").child("COMPANY_ICON")
-            val listener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    iconUrl = snapshot.child("iconUrl").getValue(String::class.java)
-                }
-                override fun onCancelled(error: DatabaseError) { }
-            }
-            iconListener = listener
-            iconRef.addValueEventListener(listener)
-        }
-
-        onDispose {
-            if (iconRef != null && iconListener != null) {
-                iconRef.removeEventListener(iconListener)
-            }
-        }
-    }
-
-    // Fetch configured city from Firebase Realtime Database
-    DisposableEffect(branchId) {
-        var cityRef: com.google.firebase.database.DatabaseReference? = null
-        var cityListener: ValueEventListener? = null
-
-        if (branchId != null) {
-            cityRef = database.child("BRANCHES").child(branchId).child("SETTING").child("WEATHER")
-            val listener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    configuredCity = snapshot.child("CITY").getValue(String::class.java)
-                        ?: snapshot.child("city").getValue(String::class.java)
-                    Log.d("HeaderSection", "Configured city updated to: $configuredCity")
-                }
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e("HeaderSection", "City config listener cancelled: ${error.message}")
-                }
-            }
-            cityListener = listener
-            cityRef.addValueEventListener(listener)
-        }
-
-        onDispose {
-            if (cityRef != null && cityListener != null) {
-                cityRef.removeEventListener(cityListener)
-            }
-        }
-    }
-
-    // Fetch live weather and forecast when configured city changes
-    DisposableEffect(configuredCity) {
-        var liveRef: com.google.firebase.database.DatabaseReference? = null
-        var liveListener: ValueEventListener? = null
-        var forecastRef: com.google.firebase.database.DatabaseReference? = null
-        var forecastListener: ValueEventListener? = null
-
-        val currentCity = configuredCity
-        if (!currentCity.isNullOrEmpty()) {
-            // 1. Live Weather Listener
-            liveRef = database.child("weather").child("liveWeather")
-            val lListener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    try {
-                        val matchingNode = if (snapshot.child(currentCity).exists()) {
-                            snapshot.child(currentCity)
-                        } else {
-                            snapshot.children.find { 
-                                it.child("city").getValue(String::class.java)?.equals(currentCity, ignoreCase = true) == true 
-                            }
-                        }
-
-                        if (matchingNode != null) {
-                            liveWeather = FirebaseWeatherData.parseLiveWeather(matchingNode)
-                            Log.d("HeaderSection", "Parsed live weather for $currentCity")
-                        } else {
-                            if (snapshot.child("city").getValue(String::class.java)?.equals(currentCity, ignoreCase = true) == true) {
-                                liveWeather = FirebaseWeatherData.parseLiveWeather(snapshot)
-                                Log.d("HeaderSection", "Parsed single live weather node for $currentCity")
-                            } else {
-                                Log.w("HeaderSection", "No live weather data found matching city: $currentCity")
-                                liveWeather = null
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.e("HeaderSection", "Error parsing live weather: ${e.message}", e)
-                    }
-                }
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e("HeaderSection", "Live weather listener cancelled: ${error.message}")
-                }
-            }
-            liveListener = lListener
-            liveRef.addValueEventListener(lListener)
-
-            // 2. Forecast Listener
-            forecastRef = database.child("weather").child("forecast")
-            val fListener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    try {
-                        val matchingNode = if (snapshot.child(currentCity).exists()) {
-                            snapshot.child(currentCity)
-                        } else {
-                            snapshot.children.find { 
-                                it.child("city").getValue(String::class.java)?.equals(currentCity, ignoreCase = true) == true 
-                            }
-                        }
-
-                        if (matchingNode != null) {
-                            forecastData = FirebaseWeatherData.parseForecastData(matchingNode)
-                            Log.d("HeaderSection", "Parsed forecast data for $currentCity")
-                        } else {
-                            if (snapshot.child("city").getValue(String::class.java)?.equals(currentCity, ignoreCase = true) == true) {
-                                forecastData = FirebaseWeatherData.parseForecastData(snapshot)
-                                Log.d("HeaderSection", "Parsed single forecast node for $currentCity")
-                            } else {
-                                Log.w("HeaderSection", "No forecast data found matching city: $currentCity")
-                                forecastData = null
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.e("HeaderSection", "Error parsing forecast data: ${e.message}", e)
-                    }
-                }
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e("HeaderSection", "Forecast listener cancelled: ${error.message}")
-                }
-            }
-            forecastListener = fListener
-            forecastRef.addValueEventListener(fListener)
-        } else {
-            liveWeather = null
-            forecastData = null
-        }
-
-        onDispose {
-            if (liveRef != null && liveListener != null) {
-                liveRef.removeEventListener(liveListener)
-            }
-            if (forecastRef != null && forecastListener != null) {
-                forecastRef.removeEventListener(forecastListener)
-            }
         }
     }
 
@@ -411,21 +258,6 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
                             .width(448.dp)
                             .height(80.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .then(
-                                if (hazeState != null) {
-                                    val trigger = redrawTrigger
-                                    Modifier.hazeChild(
-                                        state = hazeState,
-                                        shape = RoundedCornerShape(16.dp),
-                                        style = HazeStyle(
-                                            tint = HazeTint(Color.Transparent),
-                                            blurRadius = 24.dp
-                                        )
-                                    )
-                                } else {
-                                    Modifier
-                                }
-                            )
                             .background(
                                 color = Color(207, 223, 237).copy(alpha = baseAlpha),
                                 shape = RoundedCornerShape(16.dp)

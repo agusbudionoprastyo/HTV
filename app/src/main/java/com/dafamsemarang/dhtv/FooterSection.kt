@@ -54,6 +54,10 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Brush
@@ -137,10 +141,7 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
+
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.draw.drawBehind
 
@@ -221,7 +222,7 @@ fun setSystemVolume(context: Context, isMuted: Boolean) {
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-fun FooterSection(navController: androidx.navigation.NavHostController? = null, hazeState: HazeState? = null)  {
+fun FooterSection(navController: androidx.navigation.NavHostController? = null)  {
     val navBackStackEntry = navController?.currentBackStackEntryAsState()?.value
     val currentRoute = navBackStackEntry?.destination?.route
 
@@ -248,8 +249,8 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
     val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     val deviceID = sharedPreferences.getString("deviceID", null)
     val branchId = sharedPreferences.getString("branchId", null)
-    var guestInfo by remember { mutableStateOf<GuestInfo?>(null) }
-    var folioId by remember { mutableStateOf<Int?>(null) }
+    val guestInfo by DataRepository.guestInfo
+    val folioId = guestInfo?.folio
 
     Log.d("FooterSection", "Initializing FooterSection with deviceID: $deviceID, branchId: $branchId")
 
@@ -260,7 +261,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
     var showWaDialog by remember { mutableStateOf(false) }
     var showNotificationButtonDialog by remember { mutableStateOf(false) }
     var showNotificationDialog by remember { mutableStateOf(false) }
-    var isDndActive by remember { mutableStateOf(false) }
+    val isDndActive by DataRepository.isDndActive
     var notificationCount by remember { mutableIntStateOf(0) }
     var myRequests by remember { mutableStateOf<List<Request>>(emptyList()) }
     var selectedRequestForDetail by remember { mutableStateOf<Request?>(null) }
@@ -274,6 +275,56 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
     var showCartDrawer by remember { mutableStateOf(false) }
     var showOrderDrawer by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
+
+    var orders by remember { mutableStateOf<List<Order>>(emptyList()) }
+    val database: DatabaseReference = Firebase.database.reference
+
+    DisposableEffect(folioId, branchId) {
+        var activeQuery: com.google.firebase.database.Query? = null
+        var activeListener: com.google.firebase.database.ValueEventListener? = null
+
+        if (folioId != null && branchId != null) {
+            val orderRef = database.child("BRANCHES").child(branchId).child("ORDERS")
+            val query = orderRef.orderByChild("folioId").equalTo(folioId.toDouble())
+            val listener = object : com.google.firebase.database.ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    val list = mutableListOf<Order>()
+                    for (dataSnapshot in snapshot.children) {
+                        val order = dataSnapshot.getValue(Order::class.java)
+                        if (order?.branchId == branchId) {
+                            order.let { list.add(it) }
+                        }
+                    }
+                    orders = list.sortedByDescending { it.timestamp }
+                }
+                override fun onCancelled(error: DatabaseError) {}
+            }
+            activeQuery = query
+            activeListener = listener
+            query.addValueEventListener(listener)
+        }
+
+        onDispose {
+            if (activeQuery != null && activeListener != null) {
+                activeQuery.removeEventListener(activeListener)
+            }
+        }
+    }
+
+    // Floating Cart/My Order state – hoisted here so outer Box can draw them
+    var isCartFocused by remember { mutableStateOf(false) }
+    var isOrderFocused by remember { mutableStateOf(false) }
+    var fnbButtonBoundsInRoot by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+
+    // Floating My Request state – hoisted here
+    var isMyRequestFocused by remember { mutableStateOf(false) }
+    var requestButtonBoundsInRoot by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+
+    val cartFocusRequester = remember { FocusRequester() }
+    val orderFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(cartFocusRequester) {
+        GlobalCartState.cartFocusRequester = cartFocusRequester
+    }
 
     val homeFocusRequester = remember { FocusRequester() }
     val foodFocusRequester = remember { FocusRequester() }
@@ -322,7 +373,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
         setSystemVolume(context, isMuted)
     }
 
-    val database: DatabaseReference = Firebase.database.reference
     val mediaPlayer = remember { MediaPlayer.create(context, R.raw.notif) }
 
     var storedPin by remember { mutableStateOf<String?>(null) }
@@ -360,52 +410,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
         }
     }
 
-    DisposableEffect(deviceID) {
-        var activeGuestRef: com.google.firebase.database.DatabaseReference? = null
-        var activeGuestListener: com.google.firebase.database.ValueEventListener? = null
-
-        if (deviceID != null) {
-            val deviceRef = database.child("DEVICES").child(deviceID)
-            deviceRef.addListenerForSingleValueEvent(object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(deviceSnapshot: DataSnapshot) {
-                    if (deviceSnapshot.exists()) {
-                        val roomNumber = deviceSnapshot.child("room").getValue(String::class.java)
-                        val bId = deviceSnapshot.child("branchId").getValue(String::class.java)
-                        
-                        if (roomNumber != null && bId != null) {
-                            activeGuestRef = database.child("BRANCHES").child(bId).child("FOGUEST").child(roomNumber)
-                            val innerListener = object : com.google.firebase.database.ValueEventListener {
-                                override fun onDataChange(guestSnapshot: DataSnapshot) {
-                                    if (guestSnapshot.exists()) {
-                                        val info = guestSnapshot.getValue(GuestInfo::class.java)
-                                        guestInfo = info
-                                        folioId = info?.folio
-                                    } else {
-                                        guestInfo = null
-                                        folioId = null
-                                    }
-                                }
-                                override fun onCancelled(error: DatabaseError) {
-                                    guestInfo = null
-                                    folioId = null
-                                }
-                            }
-                            activeGuestListener = innerListener
-                            activeGuestRef?.addValueEventListener(innerListener)
-                        }
-                    }
-                }
-                override fun onCancelled(error: com.google.firebase.database.DatabaseError) { }
-            })
-        }
-
-        onDispose {
-            if (activeGuestRef != null && activeGuestListener != null) {
-                activeGuestRef?.removeEventListener(activeGuestListener!!)
-                Log.d("FooterSection", "Deep guest info listener disconnected successfully.")
-            }
-        }
-    }
+    // Guest info is preloaded globally in DataRepository
 
     DisposableEffect(folioId) {
         var countRef: com.google.firebase.database.DatabaseReference? = null
@@ -464,45 +469,17 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
 
     var isFirstDndLoad by remember { mutableStateOf(true) }
     
-    DisposableEffect(folioId) {
-        var dndRef: com.google.firebase.database.DatabaseReference? = null
-        var dndListener: com.google.firebase.database.ValueEventListener? = null
-
-        if (folioId != null) {
-            Log.d("FooterSection", "Attaching managed DND listener for folioId: $folioId")
-            dndRef = database.child("BRANCHES").child(branchId ?: "").child("DND_STATUS").child(folioId.toString())
-            
-            val listener = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(dataSnapshot: DataSnapshot) {
-                    val dndStatus = dataSnapshot.getValue(Boolean::class.java) == true
-                    if (!isFirstDndLoad || dndStatus) {
-                        isDndActive = dndStatus
-                        setAudioVolume(isDndActive)
-                    } else {
-                        isDndActive = dndStatus
-                        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                        if (currentVolume > 0) {
-                            sharedPreferences.edit().putInt("last_volume", currentVolume).apply()
-                        }
-                    }
-                    isFirstDndLoad = false
-                }
-
-                override fun onCancelled(databaseError: DatabaseError) {
-                    Log.e("FooterSection", "DND error: ${databaseError.message}")
-                }
-            }
-            dndListener = listener
-            dndRef.addValueEventListener(listener)
-        }
-
-        onDispose {
-            if (dndRef != null && dndListener != null) {
-                dndRef.removeEventListener(dndListener)
-                Log.d("FooterSection", "DND listener disposed.")
+    LaunchedEffect(isDndActive) {
+        if (!isFirstDndLoad || isDndActive) {
+            setAudioVolume(isDndActive)
+        } else {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            if (currentVolume > 0) {
+                sharedPreferences.edit().putInt("last_volume", currentVolume).apply()
             }
         }
+        isFirstDndLoad = false
     }
 
     DisposableEffect(folioId) {
@@ -582,21 +559,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
                     modifier = Modifier
                         .matchParentSize()
                         .clip(RoundedCornerShape(50.dp))
-                        .then(
-                            if (hazeState != null) {
-                                val trigger = redrawTrigger
-                                Modifier.hazeChild(
-                                    state = hazeState,
-                                    shape = RoundedCornerShape(50.dp),
-                                    style = HazeStyle(
-                                        tint = HazeTint(Color.Transparent),
-                                        blurRadius = 24.dp
-                                    )
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
                         .background(
                             color = Color(207, 223, 237).copy(alpha = baseAlpha),
                             shape = RoundedCornerShape(50.dp)
@@ -640,21 +602,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
                     modifier = Modifier
                         .matchParentSize()
                         .clip(RoundedCornerShape(50.dp))
-                        .then(
-                            if (hazeState != null) {
-                                val trigger = redrawTrigger
-                                Modifier.hazeChild(
-                                    state = hazeState,
-                                    shape = RoundedCornerShape(50.dp),
-                                    style = HazeStyle(
-                                        tint = HazeTint(Color.Transparent),
-                                        blurRadius = 24.dp
-                                    )
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
                         .background(
                             color = Color(207, 223, 237).copy(alpha = baseAlpha),
                             shape = RoundedCornerShape(50.dp)
@@ -697,21 +644,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
                     modifier = Modifier
                         .matchParentSize()
                         .clip(RoundedCornerShape(50.dp))
-                        .then(
-                            if (hazeState != null) {
-                                val trigger = redrawTrigger
-                                Modifier.hazeChild(
-                                    state = hazeState,
-                                    shape = RoundedCornerShape(50.dp),
-                                    style = HazeStyle(
-                                        tint = HazeTint(Color.Transparent),
-                                        blurRadius = 24.dp
-                                    )
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
                         .background(
                             color = Color(207, 223, 237).copy(alpha = baseAlpha),
                             shape = RoundedCornerShape(50.dp)
@@ -785,21 +717,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
                     modifier = Modifier
                         .matchParentSize()
                         .clip(CircleShape)
-                        .then(
-                            if (hazeState != null) {
-                                val trigger = redrawTrigger
-                                Modifier.hazeChild(
-                                    state = hazeState,
-                                    shape = CircleShape,
-                                    style = HazeStyle(
-                                        tint = HazeTint(Color.Transparent),
-                                        blurRadius = 24.dp
-                                    )
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
                         .background(
                             color = Color(207, 223, 237).copy(alpha = baseAlpha),
                             shape = CircleShape
@@ -849,237 +766,62 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    SmallServiceButton(
-                        iconRes = R.drawable.room_service_3_svgrepo_com,
-                        onClick = {
-                            if (currentRoute != "cantingfood") navController?.navigate("cantingfood") {
-                                popUpTo("home") { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                    // F&B button – NOT wrapped, track its position via onGloballyPositioned
+                    Box(
+                        modifier = Modifier
+                            .onGloballyPositioned { coords ->
+                                fnbButtonBoundsInRoot = coords.boundsInRoot()
                             }
-                        },
-                        title = null,
-                        onFocusAction = {
-                            if (currentRoute != "cantingfood") navController?.navigate("cantingfood") {
-                                launchSingleTop = true
-                            }
-                        },
-                        isActive = currentRoute == "cantingfood",
-                        focusRequester = foodFocusRequester
-                    )
-
-                    val isFnBActive = currentRoute == "cantingfood"
-                    var isCartFocused by remember { mutableStateOf(false) }
-                    var isOrderFocused by remember { mutableStateOf(false) }
-                    val showCartOrderCapsule = isFnBActive || isCartFocused || isOrderFocused
-
-                    val isRequestActive = currentRoute == "contact"
-                    var isMyRequestFocused by remember { mutableStateOf(false) }
-                    val showRequestCapsule = isRequestActive || isMyRequestFocused
-
-                    val capsuleWidth by animateDpAsState(
-                        targetValue = if (showCartOrderCapsule) 165.dp else 0.dp,
-                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
-                        label = "capsuleWidth"
-                    )
-
-                    if (capsuleWidth > 0.dp) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Spacer(
-                                modifier = Modifier.width(
-                                    animateDpAsState(
-                                        targetValue = if (showCartOrderCapsule) 8.dp else 0.dp,
-                                        animationSpec = tween(350)
-                                    ).value
-                                )
-                            )
-                            
-                            // Combined single capsule container next to F&B
-                            CompositionLocalProvider(LocalIndication provides NoIndication) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(width = capsuleWidth, height = 36.dp)
-                                        .clip(RoundedCornerShape(18.dp))
-                                        .background(
-                                            color = Color.White.copy(alpha = 0.15f),
-                                            shape = RoundedCornerShape(18.dp)
-                                        )
-                                        .padding(horizontal = 4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        modifier = Modifier.fillMaxSize()
-                                    ) {
-                                        // 1. Cart Button Segment
-                                        Box(
-                                            contentAlignment = Alignment.TopEnd
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(width = 64.dp, height = 28.dp)
-                                                    .clip(RoundedCornerShape(14.dp))
-                                                    .onFocusChanged { 
-                                                        isCartFocused = it.isFocused
-                                                    }
-                                                    .background(
-                                                        color = if (isCartFocused) Color(0xFFCFDFED) else Color.Transparent,
-                                                        shape = RoundedCornerShape(14.dp)
-                                                    )
-                                                    .clickable(
-                                                        onClick = { showCartDrawer = true },
-                                                        indication = null, // Disable default focus indication box
-                                                        interactionSource = remember { MutableInteractionSource() }
-                                                    ),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = "Cart",
-                                                    color = if (isCartFocused) Color(0xFF1C1D24) else Color.White,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-
-                                            if (GlobalCartState.selectedItems.isNotEmpty()) {
-                                                FooterPulsingBadge(
-                                                    modifier = Modifier.offset(x = 4.dp, y = (-4).dp)
-                                                )
-                                            }
-                                        }
-
-                                        // Thin Divider
-                                        Box(
-                                            modifier = Modifier
-                                                .width(1.dp)
-                                                .height(14.dp)
-                                                .background(Color.White.copy(alpha = 0.2f))
-                                        )
-
-                                        // 2. My Order Button Segment
-                                        Box(
-                                            modifier = Modifier
-                                                .size(width = 88.dp, height = 28.dp)
-                                                .clip(RoundedCornerShape(14.dp))
-                                                .onFocusChanged { 
-                                                    isOrderFocused = it.isFocused
-                                                }
-                                                .background(
-                                                    color = if (isOrderFocused) Color(0xFFCFDFED) else Color.Transparent,
-                                                    shape = RoundedCornerShape(14.dp)
-                                                )
-                                                .clickable(
-                                                    onClick = { showOrderDrawer = true },
-                                                    indication = null, // Disable default focus indication box
-                                                    interactionSource = remember { MutableInteractionSource() }
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = "My Order",
-                                                color = if (isOrderFocused) Color(0xFF1C1D24) else Color.White,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
+                            .wrapContentSize()
+                    ) {
+                        SmallServiceButton(
+                            iconRes = R.drawable.room_service_3_svgrepo_com,
+                            onClick = {
+                                if (currentRoute != "cantingfood") navController?.navigate("cantingfood") {
+                                    popUpTo("home") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                            }
-                        }
+                            },
+                            title = null,
+                            onFocusAction = {
+                                if (currentRoute != "cantingfood") navController?.navigate("cantingfood") {
+                                    launchSingleTop = true
+                                }
+                            },
+                            isActive = currentRoute == "cantingfood",
+                            focusRequester = foodFocusRequester
+                        )
                     }
+
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    SmallServiceButton(
-                        iconRes = R.drawable.service_request_svgrepo_com,
-                        onClick = {
-                            if (currentRoute != "contact") navController?.navigate("contact") {
-                                popUpTo("home") { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                    Box(
+                        modifier = Modifier
+                            .onGloballyPositioned { coords ->
+                                requestButtonBoundsInRoot = coords.boundsInRoot()
                             }
-                        },
-                        title = null,
-                        onFocusAction = {
-                            if (currentRoute != "contact") navController?.navigate("contact") {
-                                launchSingleTop = true
-                            }
-                        },
-                        isActive = currentRoute == "contact",
-                        focusRequester = requestFocusRequester
-                    )
-
-                    val requestCapsuleWidth by animateDpAsState(
-                        targetValue = if (showRequestCapsule) 98.dp else 0.dp,
-                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
-                        label = "requestCapsuleWidth"
-                    )
-
-                    if (requestCapsuleWidth > 0.dp) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Spacer(
-                                modifier = Modifier.width(
-                                    animateDpAsState(
-                                        targetValue = if (showRequestCapsule) 8.dp else 0.dp,
-                                        animationSpec = tween(350)
-                                    ).value
-                                )
-                            )
-
-                            CompositionLocalProvider(LocalIndication provides NoIndication) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(width = requestCapsuleWidth, height = 36.dp)
-                                        .clip(RoundedCornerShape(18.dp))
-                                        .background(
-                                            color = Color.White.copy(alpha = 0.15f),
-                                            shape = RoundedCornerShape(18.dp)
-                                        )
-                                        .padding(horizontal = 4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (requestCapsuleWidth >= 80.dp) {
-                                        Box(
-                                            contentAlignment = Alignment.TopEnd
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(width = 90.dp, height = 28.dp)
-                                                    .clip(RoundedCornerShape(14.dp))
-                                                    .focusRequester(myRequestFocusRequester)
-                                                    .onFocusChanged { 
-                                                        isMyRequestFocused = it.isFocused
-                                                    }
-                                                    .background(
-                                                        color = if (isMyRequestFocused) Color(0xFFCFDFED) else Color.Transparent,
-                                                        shape = RoundedCornerShape(14.dp)
-                                                    )
-                                                    .clickable(
-                                                        onClick = { showMyRequestsDrawer = true },
-                                                        indication = null, // Disable default focus indication box
-                                                        interactionSource = remember { MutableInteractionSource() }
-                                                    ),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = "My Request",
-                                                    color = if (isMyRequestFocused) Color(0xFF1C1D24) else Color.White,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-
-                                            if (myRequests.isNotEmpty()) {
-                                                FooterPulsingBadge(
-                                                    modifier = Modifier.offset(x = 4.dp, y = (-4).dp)
-                                                )
-                                            }
-                                        }
-                                    }
+                            .wrapContentSize()
+                    ) {
+                        SmallServiceButton(
+                            iconRes = R.drawable.service_request_svgrepo_com,
+                            onClick = {
+                                if (currentRoute != "contact") navController?.navigate("contact") {
+                                    popUpTo("home") { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                            }
-                        }
+                            },
+                            title = null,
+                            onFocusAction = {
+                                if (currentRoute != "contact") navController?.navigate("contact") {
+                                    launchSingleTop = true
+                                }
+                            },
+                            isActive = currentRoute == "contact",
+                            focusRequester = requestFocusRequester
+                        )
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -1130,7 +872,254 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
                 fontWeight = FontWeight.Bold
             )
         }
+
+        // ── Floating Cart & My Order ──────────────────────────────────────────────
+        // Direct children of outer fillMaxSize Box → zero impact on Row layout
+        val isFnBActive = currentRoute == "cantingfood"
+        val showCartOrder = isFnBActive || isCartFocused || isOrderFocused
+        val floatingAlpha by animateFloatAsState(
+            targetValue = if (showCartOrder) 1f else 0f,
+            animationSpec = tween(durationMillis = 250),
+            label = "floatingBtnAlpha"
+        )
+        val density = androidx.compose.ui.platform.LocalDensity.current
+
+        // Slide offset: saat hidden Y = 0 (di posisi F&B), saat visible Y = -46dp (naik ke atas)
+        val slideOffsetYPx by animateFloatAsState(
+            targetValue = if (showCartOrder) with(density) { -46.dp.toPx() } else 0f,
+            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            label = "floatingSlideY"
+        )
+
+        fnbButtonBoundsInRoot?.let { bounds ->
+            val btnCenterX = bounds.left + bounds.width / 2
+            val btnTop = bounds.top
+            val btnSize = with(density) { 36.dp.toPx() }
+            val gap = with(density) { 8.dp.toPx() }
+
+            // Cart – kiri dari center F&B
+            Box(
+                modifier = Modifier
+                    .absoluteOffset {
+                        IntOffset(
+                            x = (btnCenterX - btnSize - gap / 2).toInt(),
+                            y = (btnTop + slideOffsetYPx).toInt()
+                        )
+                    }
+                    .alpha(floatingAlpha)
+                    .size(36.dp)
+            ) {
+                // Button
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(
+                            color = if (isCartFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.15f)
+                        )
+                        .focusRequester(cartFocusRequester)
+                        .onFocusChanged { isCartFocused = it.isFocused }
+                        .focusable(enabled = isFnBActive)
+                        .clickable(
+                            enabled = isFnBActive,
+                            onClick = { showCartDrawer = true },
+                            indication = ripple(color = Color(0xFF88B4D4)),
+                            interactionSource = remember { MutableInteractionSource() }
+                        )
+                        .onGloballyPositioned { coords ->
+                            GlobalCartState.cartBoundsInRoot.value = coords.boundsInRoot()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_cart),
+                        contentDescription = "Cart",
+                        modifier = Modifier.size(20.dp),
+                        tint = if (isCartFocused) Color(0xFF1C1D24) else Color.White
+                    )
+                }
+
+                // Badge jika ada item di cart (angka bertambah realtime setelah dot masuk ke keranjang)
+                val actualCartCount = GlobalCartState.selectedItems.sumOf { it.quantity }
+                var displayedCartCount by remember { mutableStateOf(actualCartCount) }
+                val animateTrigger = GlobalCartState.animateTrigger.value
+
+                LaunchedEffect(actualCartCount) {
+                    if (actualCartCount < displayedCartCount) {
+                        displayedCartCount = actualCartCount
+                    } else if (actualCartCount > displayedCartCount) {
+                        if (animateTrigger > 0) {
+                            delay(650) // Wait exactly for the 650ms flying dot animation to enter the cart
+                        }
+                        displayedCartCount = actualCartCount
+                    }
+                }
+
+                DisposableEffect(actualCartCount) {
+                    if (animateTrigger == 0) {
+                        displayedCartCount = actualCartCount
+                    }
+                    onDispose {}
+                }
+
+                if (displayedCartCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 4.dp, y = (-4).dp)
+                            .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                            .size(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "$displayedCartCount",
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(
+                                    includeFontPadding = false
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+
+            // My Order – kanan dari center F&B
+            Box(
+                modifier = Modifier
+                    .absoluteOffset {
+                        IntOffset(
+                            x = (btnCenterX + gap / 2).toInt(),
+                            y = (btnTop + slideOffsetYPx).toInt()
+                        )
+                    }
+                    .alpha(floatingAlpha)
+                    .size(36.dp)
+            ) {
+                // Button
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(
+                            color = if (isOrderFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.15f)
+                        )
+                        .focusRequester(orderFocusRequester)
+                        .onFocusChanged { isOrderFocused = it.isFocused }
+                        .focusable(enabled = isFnBActive)
+                        .clickable(
+                            enabled = isFnBActive,
+                            onClick = { showOrderDrawer = true },
+                            indication = ripple(color = Color(0xFF88B4D4)),
+                            interactionSource = remember { MutableInteractionSource() }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_order),
+                        contentDescription = "My Order",
+                        modifier = Modifier.size(20.dp),
+                        tint = if (isOrderFocused) Color(0xFF1C1D24) else Color.White
+                    )
+                }
+
+                // Badge jika ada order
+                val orderCount = orders.size
+                if (orderCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 4.dp, y = (-4).dp)
+                            .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                            .size(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "$orderCount",
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(
+                                    includeFontPadding = false
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────────
+
+        // ── Floating My Request ──────────────────────────────────────────────────
+        val isRequestActive = currentRoute == "contact"
+        val showRequestCapsule = isRequestActive || isMyRequestFocused
+        val requestAlpha by animateFloatAsState(
+            targetValue = if (showRequestCapsule) 1f else 0f,
+            animationSpec = tween(durationMillis = 250),
+            label = "requestBtnAlpha"
+        )
+        val requestSlideOffsetYPx by animateFloatAsState(
+            targetValue = if (showRequestCapsule) with(density) { -46.dp.toPx() } else 0f,
+            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            label = "requestSlideY"
+        )
+
+        requestButtonBoundsInRoot?.let { bounds ->
+            val btnCenterX = bounds.left + bounds.width / 2
+            val btnTop = bounds.top
+
+            Box(
+                modifier = Modifier
+                    .absoluteOffset {
+                        IntOffset(
+                            x = (btnCenterX - with(density) { 18.dp.toPx() }).toInt(),
+                            y = (btnTop + requestSlideOffsetYPx).toInt()
+                        )
+                    }
+                    .alpha(requestAlpha)
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(
+                        color = if (isMyRequestFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.15f),
+                        shape = CircleShape
+                    )
+                    .focusRequester(myRequestFocusRequester)
+                    .onFocusChanged { isMyRequestFocused = it.isFocused }
+                    .focusable(enabled = isRequestActive)
+                    .clickable(
+                        enabled = isRequestActive,
+                        onClick = { showMyRequestsDrawer = true },
+                        indication = ripple(color = Color(0xFF88B4D4)),
+                        interactionSource = remember { MutableInteractionSource() }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_request),
+                    contentDescription = "My Request",
+                    modifier = Modifier.size(20.dp),
+                    tint = if (isMyRequestFocused) Color(0xFF1C1D24) else Color.White
+                )
+                // Badge jika ada requests
+                if (myRequests.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = 2.dp, y = (-2).dp)
+                            .background(Color(0xFFFF5722), CircleShape)
+                    )
+                }
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────────
     }
+
 
     if (showConfirmDialog) {
         val sliderFocusRequester = remember { FocusRequester() }
@@ -1533,7 +1522,14 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
 
     if (showMyRequestsDrawer) {
         MyRequestsDrawer(
-            onDismiss = { showMyRequestsDrawer = false }, 
+            onDismiss = { 
+                showMyRequestsDrawer = false 
+                try {
+                    myRequestFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, 
             requests = myRequests,
             onSelectRequest = { req ->
                 selectedRequestForDetail = req
@@ -1544,15 +1540,30 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
 
     if (showCartDrawer) {
         CartDrawer(
-            onDismiss = { showCartDrawer = false },
+            onDismiss = { 
+                showCartDrawer = false 
+                try {
+                    cartFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            },
             context = context
         )
     }
 
     if (showOrderDrawer) {
         OrderDrawer(
-            onDismiss = { showOrderDrawer = false },
-            context = context
+            onDismiss = { 
+                showOrderDrawer = false 
+                try {
+                    orderFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            },
+            context = context,
+            orders = orders
         )
     }
     
@@ -1561,6 +1572,72 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null, 
             request = selectedRequestForDetail!!,
             onDismiss = { showRequestDetailDialog = false }
         )
+    }
+    
+    FlyingDotOverlay()
+}
+
+@Composable
+fun FlyingDotOverlay() {
+    val trigger = GlobalCartState.animateTrigger.value
+    val startOffset = GlobalCartState.animStartOffset.value
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    
+    if (trigger > 0 && startOffset != androidx.compose.ui.geometry.Offset.Zero) {
+        var animProgress by remember(trigger) { androidx.compose.runtime.mutableFloatStateOf(0f) }
+        val bounds = GlobalCartState.cartBoundsInRoot.value
+        
+        if (bounds != null) {
+            val destination = remember(bounds) {
+                androidx.compose.ui.geometry.Offset(
+                    x = bounds.left + bounds.width / 2,
+                    y = bounds.top + bounds.height / 2
+                )
+            }
+            
+            LaunchedEffect(trigger) {
+                androidx.compose.animation.core.animate(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = androidx.compose.animation.core.tween(
+                        durationMillis = 650,
+                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                    )
+                ) { value, _ ->
+                    animProgress = value
+                }
+            }
+            
+            if (animProgress < 1f) {
+                val currentX = startOffset.x + (destination.x - startOffset.x) * animProgress
+                val linearY = startOffset.y + (destination.y - startOffset.y) * animProgress
+                val arcHeight = with(density) { -120.dp.toPx() }
+                val currentY = linearY + arcHeight * 4 * animProgress * (1f - animProgress)
+                
+                val scale = 1.3f - animProgress * 0.5f
+                val alpha = if (animProgress > 0.8f) (1f - animProgress) / 0.2f else 1f
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(9999f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .absoluteOffset {
+                                IntOffset(
+                                    x = (currentX - with(density) { 6.dp.toPx() }).toInt(),
+                                    y = (currentY - with(density) { 6.dp.toPx() }).toInt()
+                                )
+                            }
+                            .size(12.dp)
+                            .alpha(alpha)
+                            .scale(scale)
+                            .background(Color(0xFFE91E63), CircleShape)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1754,11 +1831,26 @@ fun MyRequestsDrawer(onDismiss: () -> Unit, requests: List<Request>, onSelectReq
 
                         if (requests.isEmpty()) {
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                Text(
-                                    "No active requests", 
-                                    color = Color.White.copy(alpha = 0.4f),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.request))
+                                    val progress by animateLottieCompositionAsState(
+                                        composition = composition,
+                                        iterations = LottieConstants.IterateForever
+                                    )
+                                    LottieAnimation(
+                                        composition = composition,
+                                        progress = { progress },
+                                        modifier = Modifier.size(180.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        "No active requests", 
+                                        color = Color.White.copy(alpha = 0.4f),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
                             }
                         } else {
                             LazyColumn(
@@ -3935,11 +4027,26 @@ fun CartDrawer(
 
                         if (selectedItems.isEmpty()) {
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                Text(
-                                    "Cart empty",
-                                    color = Color.White.copy(alpha = 0.4f),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.empty_cart))
+                                    val progress by animateLottieCompositionAsState(
+                                        composition = composition,
+                                        iterations = LottieConstants.IterateForever
+                                    )
+                                    LottieAnimation(
+                                        composition = composition,
+                                        progress = { progress },
+                                        modifier = Modifier.size(180.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        "Cart empty",
+                                        color = Color.White.copy(alpha = 0.4f),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
                             }
                         } else {
                             LazyColumn(
@@ -4108,7 +4215,6 @@ fun CartDrawer(
                                                             } else {
                                                                 selectedItems.remove(selectedItem)
                                                                 cartPreferences.saveCart(selectedItems)
-                                                                Toast.makeText(context, "${selectedItem.item.name} removed from cart.", Toast.LENGTH_SHORT).show()
                                                             }
                                                         },
                                                     contentAlignment = Alignment.Center
@@ -4342,7 +4448,8 @@ fun CartDrawer(
 @Composable
 fun OrderDrawer(
     onDismiss: () -> Unit,
-    context: Context
+    context: Context,
+    orders: List<Order>
 ) {
     val firstItemFocusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
@@ -4365,73 +4472,6 @@ fun OrderDrawer(
             currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
             currentDate = SimpleDateFormat("EEE, MMM dd", Locale.getDefault()).format(Date())
             delay(60000)
-        }
-    }
-
-    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-    val roomId = sharedPreferences.getString("room", null)
-    val branchId = sharedPreferences.getString("branchId", null)
-    var guestInfo by remember { mutableStateOf<GuestInfo?>(null) }
-    var folioId by remember { mutableStateOf<Int?>(null) }
-    var orders by remember { mutableStateOf<List<Order>>(emptyList()) }
-
-    val database = Firebase.database.reference
-
-    DisposableEffect(roomId, branchId) {
-        var activeRef: com.google.firebase.database.DatabaseReference? = null
-        var activeListener: com.google.firebase.database.ValueEventListener? = null
-
-        if (roomId != null && branchId != null) {
-            activeRef = database.child("BRANCHES").child(branchId).child("FOGUEST").child(roomId)
-            val listener = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    if (snapshot.exists()) {
-                        val info = snapshot.getValue(GuestInfo::class.java)
-                        guestInfo = info
-                        folioId = info?.folio
-                    }
-                }
-                override fun onCancelled(error: DatabaseError) {}
-            }
-            activeListener = listener
-            activeRef.addValueEventListener(listener)
-        }
-        onDispose {
-            if (activeRef != null && activeListener != null) {
-                activeRef.removeEventListener(activeListener)
-            }
-        }
-    }
-
-    DisposableEffect(folioId, branchId) {
-        var activeQuery: com.google.firebase.database.Query? = null
-        var activeListener: com.google.firebase.database.ValueEventListener? = null
-
-        if (folioId != null && branchId != null) {
-            val orderRef = database.child("BRANCHES").child(branchId).child("ORDERS")
-            val query = orderRef.orderByChild("folioId").equalTo(folioId!!.toDouble())
-            val listener = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    val list = mutableListOf<Order>()
-                    for (dataSnapshot in snapshot.children) {
-                        val order = dataSnapshot.getValue(Order::class.java)
-                        if (order?.branchId == branchId) {
-                            order.let { list.add(it) }
-                        }
-                    }
-                    orders = list.sortedByDescending { it.timestamp }
-                }
-                override fun onCancelled(error: DatabaseError) {}
-            }
-            activeQuery = query
-            activeListener = listener
-            query.addValueEventListener(listener)
-        }
-
-        onDispose {
-            if (activeQuery != null && activeListener != null) {
-                activeQuery.removeEventListener(activeListener)
-            }
         }
     }
 
@@ -4524,11 +4564,26 @@ fun OrderDrawer(
 
                         if (orders.isEmpty()) {
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                Text(
-                                    "No orders placed",
-                                    color = Color.White.copy(alpha = 0.4f),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.food_carousel))
+                                    val progress by animateLottieCompositionAsState(
+                                        composition = composition,
+                                        iterations = LottieConstants.IterateForever
+                                    )
+                                    LottieAnimation(
+                                        composition = composition,
+                                        progress = { progress },
+                                        modifier = Modifier.size(180.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        "No orders placed",
+                                        color = Color.White.copy(alpha = 0.4f),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
                             }
                         } else {
                             LazyColumn(

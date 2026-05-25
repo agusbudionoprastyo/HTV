@@ -134,6 +134,8 @@ import androidx.compose.ui.zIndex
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import com.google.gson.Gson
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
@@ -212,7 +214,7 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var focusedCategoryForSelection by remember { mutableStateOf<String?>(null) }
 
-    val categories = derivedStateOf { menuItems.map { it.category }.distinct() }
+    val categories = remember(menuItems) { derivedStateOf { menuItems.map { it.category }.distinct() } }
     
     // Loading state for shimmer
     var isLoadingMenuItems by remember { mutableStateOf(true) }
@@ -288,101 +290,87 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
         selectedCategory = focusedCategoryForSelection
     }
 
+    // Unified with HomeScreen: Root 8.dp padding removed to allow edge-to-edge scrolling!
+    Box(
+        modifier = Modifier 
+            .fillMaxSize()
+    ) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val startPaddingPx = with(density) { 58.dp.toPx() }
+        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+        val screenWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+        val categorySlideDistance = (screenWidthPx * 0.15f).toInt()
+        val defaultSpec = LocalBringIntoViewSpec.current
 
-
-    Scaffold(containerColor = Color.Transparent) { paddingValues ->
-        // Unified with HomeScreen: Root 8.dp padding removed to allow edge-to-edge scrolling!
-        Box(
-            modifier = Modifier 
-                .fillMaxSize()
-        ) {
-            val density = androidx.compose.ui.platform.LocalDensity.current
-            val startPaddingPx = with(density) { 58.dp.toPx() }
-            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-            val screenWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
-            val categorySlideDistance = (screenWidthPx * 0.15f).toInt()
-            val defaultSpec = LocalBringIntoViewSpec.current
-
-            val categoryBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
-                object : BringIntoViewSpec {
-                    override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
-                        get() {
-                            val duration = if (android.os.Build.VERSION.SDK_INT < 31) 60 else 100
-                            return androidx.compose.animation.core.tween(
-                                durationMillis = duration,
-                                easing = androidx.compose.animation.core.FastOutSlowInEasing
-                            )
-                        }
-
-                    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-                        return offset - startPaddingPx
+        val categoryBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
+            object : BringIntoViewSpec {
+                override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
+                    get() {
+                        val duration = if (android.os.Build.VERSION.SDK_INT < 31) 60 else 100
+                        return androidx.compose.animation.core.tween(
+                            durationMillis = duration,
+                            easing = androidx.compose.animation.core.FastOutSlowInEasing
+                        )
                     }
+
+                override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+                    return offset - startPaddingPx
                 }
             }
+        }
 
-            val itemBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
-                object : BringIntoViewSpec {
-                    override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
-                        get() {
-                            val duration = if (android.os.Build.VERSION.SDK_INT < 31) 90 else 150
-                            return androidx.compose.animation.core.tween(
-                                durationMillis = duration,
-                                easing = androidx.compose.animation.core.FastOutSlowInEasing
-                            )
-                        }
-
-                    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-                        return offset - startPaddingPx
+        val itemBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
+            object : BringIntoViewSpec {
+                override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
+                    get() {
+                        val duration = if (android.os.Build.VERSION.SDK_INT < 31) 90 else 150
+                        return androidx.compose.animation.core.tween(
+                            durationMillis = duration,
+                            easing = androidx.compose.animation.core.FastOutSlowInEasing
+                        )
                     }
+
+                override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+                    return offset - startPaddingPx
                 }
             }
-            CompositionLocalProvider(LocalBringIntoViewSpec provides defaultSpec) {
-                Column(
+        }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides defaultSpec) {
+            CompositionLocalProvider(LocalBringIntoViewSpec provides categoryBringIntoViewSpec) {
+                LazyRow(
+                    state = categoryListState,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(top = 90.dp, bottom = 16.dp)
-                        .padding(paddingValues), // Apply paddingValues here too
-                    horizontalAlignment = Alignment.Start
+                        .fillMaxWidth()
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                when (keyEvent.key) {
+                                    androidx.compose.ui.input.key.Key.DirectionLeft,
+                                    androidx.compose.ui.input.key.Key.DirectionRight -> {
+                                        isNavigatingHorizontally = true
+                                    }
+                                    androidx.compose.ui.input.key.Key.DirectionUp,
+                                    androidx.compose.ui.input.key.Key.DirectionDown -> {
+                                        isNavigatingHorizontally = false
+                                    }
+                                }
+                            }
+                            false
+                        }
+                        .focusProperties { 
+                            enter = { 
+                                val firstVisible = focusedCategoryIndex
+                                if (firstVisible < categoryRequesters.size) {
+                                    categoryRequesters[firstVisible]
+                                } else {
+                                    FocusRequester.Default
+                                }
+                            }
+                        }
+                        .padding(top = 110.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    contentPadding = PaddingValues(start = 58.dp, end = 58.dp)
                 ) {
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(top = 20.dp, bottom = 40.dp)
-                            .fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CompositionLocalProvider(LocalBringIntoViewSpec provides categoryBringIntoViewSpec) {
-                            LazyRow(
-                            state = categoryListState,
-                             modifier = Modifier
-                                 .padding(bottom = 12.dp)
-                                 .fillMaxWidth()
-                                 .onPreviewKeyEvent { keyEvent ->
-                                     if (keyEvent.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
-                                         when (keyEvent.key) {
-                                             androidx.compose.ui.input.key.Key.DirectionLeft,
-                                             androidx.compose.ui.input.key.Key.DirectionRight -> {
-                                                 isNavigatingHorizontally = true
-                                             }
-                                             androidx.compose.ui.input.key.Key.DirectionUp,
-                                             androidx.compose.ui.input.key.Key.DirectionDown -> {
-                                                 isNavigatingHorizontally = false
-                                             }
-                                         }
-                                     }
-                                     false
-                                 }
-                                 .focusProperties { 
-                                     enter = { 
-                                         categoryRequesters.getOrNull(focusedCategoryIndex) ?: FocusRequester.Default
-                                     }
-                                 },
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            contentPadding = PaddingValues(start = 58.dp, end = 58.dp)
-                        ) {
                              item {
                                  val isSelected = selectedCategory == null
                                  var isFocused by remember { mutableStateOf(false) }
@@ -581,6 +569,7 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .padding(top = 158.dp)
                                 .height(300.dp),
                             label = "MenuItemTransition"
                         ) { (_, isFiltering, itemsList) ->
@@ -597,7 +586,7 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                                         }
                                     },
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                                verticalAlignment = Alignment.Top,
                                 contentPadding = PaddingValues(start = 58.dp, end = 58.dp)
                             ) {
                                 if ((isLoadingMenuItems && shimmerVisible) || isFiltering) {
@@ -625,64 +614,59 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                                                 selectedItemDetail = item
                                                 showDialog = true
                                             },
-                                            onAddClick = {
-                                                // Direct Add to Cart Logic!
-                                                val existingItem = selectedItems.find { 
-                                                    it.item.name == item.name && 
-                                                    it.selectedVariant == null && 
-                                                    it.specialInstruction.isEmpty() 
-                                                }
-                                                if (existingItem != null) {
-                                                    existingItem.quantity += 1
-                                                } else {
-                                                    selectedItems.add(SelectedItem(item, 1, "", null))
-                                                }
-                                                
-                                                // Save to persistent preferences and inform user
-                                                CartPreferences(context).saveCart(selectedItems)
-                                                Toast.makeText(context, "${item.name} added to cart.", Toast.LENGTH_SHORT).show()
-                                            }
+                                            onAddClick = { clickOffset ->
+                                                 // Direct Add to Cart Logic!
+                                                 val existingItem = selectedItems.find { 
+                                                     it.item.name == item.name && 
+                                                     it.selectedVariant == null && 
+                                                     it.specialInstruction.isEmpty() 
+                                                 }
+                                                 if (existingItem != null) {
+                                                     existingItem.quantity += 1
+                                                 } else {
+                                                     selectedItems.add(SelectedItem(item, 1, "", null))
+                                                 }
+                                                 
+                                                 // Save to persistent preferences
+                                                 CartPreferences(context).saveCart(selectedItems)
+                                                 
+                                                 // Trigger flying dot animation!
+                                                 GlobalCartState.animStartOffset.value = clickOffset
+                                                 GlobalCartState.animateTrigger.value++
+                                             }
                                         )
                                     }
                                 }
                             }
                         }
                     }
+            }
+        }
+
+        if (showDialog && selectedItemDetail != null) {
+            val cartPreferences = CartPreferences(context)
+            ItemDialog(
+                item = selectedItemDetail!!,
+                onAddToCart = { item, quantity, specialInstruction, selectedVariant ->
+                    val existingItem = selectedItems.find {
+                        it.item.name == item.name &&
+                                it.selectedVariant == selectedVariant &&
+                                (it.specialInstruction == specialInstruction ||
+                                        (specialInstruction.isEmpty() && it.specialInstruction.isEmpty()))
                     }
-                }
-            }
 
-            if (showDialog && selectedItemDetail != null) {
-                    val cartPreferences = CartPreferences(context)
-                    ItemDialog(
-                        item = selectedItemDetail!!,
-                        onAddToCart = { item, quantity, specialInstruction, selectedVariant ->
-                            val existingItem = selectedItems.find {
-                                it.item.name == item.name &&
-                                        it.selectedVariant == selectedVariant &&  // Check if the selected variant matches
-                                        (it.specialInstruction == specialInstruction ||
-                                                (specialInstruction.isEmpty() && it.specialInstruction.isEmpty()))
-                            }
+                    if (existingItem != null) {
+                        existingItem.quantity += quantity
+                    } else {
+                        selectedItems.add(SelectedItem(item, quantity, specialInstruction, selectedVariant))
+                    }
 
-                            if (existingItem != null) {
-                                existingItem.quantity += quantity
-                            } else {
-                                selectedItems.add(SelectedItem(item, quantity, specialInstruction, selectedVariant))
-                            }
-
-                            cartPreferences.saveCart(selectedItems)
-
-                            Toast.makeText(context, "${item.name} added to cart.", Toast.LENGTH_SHORT).show()
-                        },
-                        onDismiss = { showDialog = false }
-                    )
-
-                }
-            }
-
+                    cartPreferences.saveCart(selectedItems)
+                },
+                onDismiss = { showDialog = false }
+            )
         }
     }
-}
 
 fun formatIDR(amount: Int?): String {
     val formatter = DecimalFormat("Rp#,###")
@@ -1006,7 +990,7 @@ Terima kasih, semoga banyak orderan!
 fun MenuItem(
     item: MenuItemData, 
     onCardClick: () -> Unit,
-    onAddClick: () -> Unit,
+    onAddClick: (androidx.compose.ui.geometry.Offset) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Tracks overall remote focus on the card itself
@@ -1014,6 +998,8 @@ fun MenuItem(
     
     // Manages sub-focus state machine internally
     var isAddActive by remember { mutableStateOf(false) }
+
+    var addButtonCoords by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
 
     // Reset state machine to top content body whenever this card loses focus
     LaunchedEffect(isFocused) {
@@ -1083,7 +1069,17 @@ fun MenuItem(
                                 isAddActive = true
                                 true // Consume event to stay inside the card!
                             } else {
-                                false // Pass-through to Footer below LazyRow
+                                val cartRequester = GlobalCartState.cartFocusRequester
+                                if (cartRequester != null) {
+                                    try {
+                                        cartRequester.requestFocus()
+                                        true // Consume event
+                                    } catch (e: Exception) {
+                                        false // Pass-through fallback
+                                    }
+                                } else {
+                                    false // Pass-through fallback
+                                }
                             }
                         }
                         Key.DirectionUp -> {
@@ -1103,7 +1099,13 @@ fun MenuItem(
             .clickable(
                 onClick = {
                     if (isAddActive) {
-                        onAddClick()
+                        val offset = addButtonCoords?.let {
+                            androidx.compose.ui.geometry.Offset(
+                                x = it.left + it.width / 2,
+                                y = it.top + it.height / 2
+                            )
+                        } ?: androidx.compose.ui.geometry.Offset.Zero
+                        onAddClick(offset)
                     } else {
                         onCardClick()
                     }
@@ -1187,6 +1189,9 @@ fun MenuItem(
                     // Passive visual Add Button (Appearance driven by parent focus state)
                     Box(
                         modifier = Modifier
+                            .onGloballyPositioned { coords ->
+                                addButtonCoords = coords.boundsInRoot()
+                            }
                             .clip(RoundedCornerShape(50))
                             .background(
                                 color = btnBg,

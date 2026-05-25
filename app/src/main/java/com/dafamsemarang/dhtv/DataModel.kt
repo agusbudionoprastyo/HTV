@@ -46,6 +46,19 @@ data class GuestInfo(
     val isSmoking: Boolean = false
 )
 
+data class Flight(
+    val flightNumber: String = "",
+    val airline: String = "",
+    val otherAirport: String = "",
+    val scheduledTime: String = "",
+    val revisedTime: String = "",
+    val status: String = "",
+    val direction: String = "",
+    val gate: String = "",
+    val terminal: String = ""
+)
+
+
 data class Item(
     val name: String = "",
     val description: String = "",
@@ -81,6 +94,10 @@ data class SelectedItem(
 
 object GlobalCartState {
     val selectedItems = androidx.compose.runtime.mutableStateListOf<SelectedItem>()
+    var cartFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
+    val animateTrigger = androidx.compose.runtime.mutableStateOf(0)
+    val animStartOffset = androidx.compose.runtime.mutableStateOf(androidx.compose.ui.geometry.Offset.Zero)
+    val cartBoundsInRoot = androidx.compose.runtime.mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
 }
 
 data class OrderItem(

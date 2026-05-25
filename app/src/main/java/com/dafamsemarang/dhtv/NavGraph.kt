@@ -15,8 +15,12 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -29,8 +33,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.core.content.edit
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
 
 
 import androidx.compose.ui.unit.dp
@@ -74,7 +76,6 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainExitTransition
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    val hazeState = remember { HazeState() }
 
     // Akses SharedPreferences langsung menggunakan LocalContext
     val sharedPreferences = LocalContext.current.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
@@ -112,7 +113,7 @@ fun AppNavigation() {
 
     Box(modifier = Modifier.fillMaxSize()) {
         // ── Persistent wallpaper — sits behind everything, never animates ──
-        WallpaperSection(hazeState)
+        WallpaperSection()
 
         // Navigasi berdasarkan status savedDeviceId
         NavHost(
@@ -240,18 +241,29 @@ fun AppNavigation() {
             }
         } // end NavHost
 
-        // Persistent Header and Footer (Hoisted)
-        // Only show on main screens (Home, Hotel Info, Contact, F&B)
-        // Use AnimatedVisibility with a delay to prevent them from appearing
-        // on the previous screen (Welcome) before the new screen (Home) has loaded.
+        // Hoisted Persistent Header and Footer - Immediately ready when entering from Welcome Screen.
+        // Retains full persistence and buttery-smooth rendering without Haze GPU shader overhead.
+        val showHeaderFooter = currentRoute in listOf("welcome", "home", "hotel_guide", "contact", "cantingfood")
         AnimatedVisibility(
-            visible = currentRoute in listOf("home", "hotel_guide", "contact", "cantingfood"),
-            enter = fadeIn(animationSpec = tween(durationMillis = 500, delayMillis = 300)),
+            visible = showHeaderFooter,
+            enter = fadeIn(animationSpec = tween(durationMillis = 500)),
             exit = fadeOut(animationSpec = tween(durationMillis = 500))
         ) {
-             Box(modifier = Modifier.zIndex(1f).fillMaxSize()) {
-                 HeaderSection(currentRoute, hazeState)
-                 FooterSection(navController, hazeState)
+             val isWelcome = currentRoute == "welcome"
+             val targetAlpha = if (isWelcome) 0f else 1f
+             val animatedAlpha by animateFloatAsState(
+                 targetValue = targetAlpha,
+                 animationSpec = tween(durationMillis = 500),
+                 label = "HeaderFooterAlpha"
+             )
+             Box(
+                 modifier = Modifier
+                     .zIndex(1f)
+                     .fillMaxSize()
+                     .graphicsLayer { alpha = animatedAlpha }
+             ) {
+                  HeaderSection(currentRoute)
+                  FooterSection(navController)
              }
         }
     }

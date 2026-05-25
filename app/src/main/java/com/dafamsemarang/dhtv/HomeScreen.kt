@@ -130,18 +130,6 @@ data class SupportedApp(
     val banner: android.graphics.drawable.Drawable? = null
 )
 
-data class Flight(
-    val flightNumber: String = "",
-    val airline: String = "",
-    val otherAirport: String = "",
-    val scheduledTime: String = "",
-    val revisedTime: String = "",
-    val status: String = "",
-    val direction: String = "",
-    val gate: String = "",
-    val terminal: String = ""
-)
-
 // Helper to fetch installed apps
 fun getInstalledApps(context: Context): List<SupportedApp> {
     val pm = context.packageManager
@@ -1126,6 +1114,9 @@ fun VideoAndSlideshowSection(
 
     
 
+    // Tracks last manual navigation direction – hoisted so the auto-scroll timer can reset it
+    var isNavigatingLeft by remember { mutableStateOf(false) }
+
     // Slideshow Images with shimmer (Widescreen landscape banner on the left)
     if (isLoadingSlideshow || imageList.isNotEmpty()) {
         val arrivalsPagesCount = if (flightArrivals.isEmpty()) 1 else ((flightArrivals.size + 3) / 4)
@@ -1133,6 +1124,13 @@ fun VideoAndSlideshowSection(
         val fidsSlidesCount = if (fidsActive) (arrivalsPagesCount + departuresPagesCount) else 0
         val totalSlidesCount = imageList.size + fidsSlidesCount
         var isBannerFocused by remember { mutableStateOf(false) }
+
+        // Reset arah navigasi ke kanan setelah index berubah (termasuk auto-scroll)
+        LaunchedEffect(currentImageIndex) {
+            delay(400) // Beri waktu animasi transisi selesai dulu
+            isNavigatingLeft = false
+        }
+
         val bannerFocusPulseAlpha = remember { Animatable(0.4f) }
         LaunchedEffect(isBannerFocused) {
             if (isBannerFocused) {
@@ -1159,6 +1157,7 @@ fun VideoAndSlideshowSection(
                         when (keyEvent.key) {
                             Key.DirectionRight -> {
                                 if (imageList.isNotEmpty() && totalSlidesCount > 0) {
+                                    isNavigatingLeft = false
                                     val nextIndex = (currentImageIndex + 1) % totalSlidesCount
                                     onImageIndexChanged(nextIndex)
                                     true
@@ -1166,6 +1165,7 @@ fun VideoAndSlideshowSection(
                             }
                             Key.DirectionLeft -> {
                                 if (imageList.isNotEmpty() && totalSlidesCount > 0) {
+                                    isNavigatingLeft = true
                                     val prevIndex = (currentImageIndex - 1 + totalSlidesCount) % totalSlidesCount
                                     onImageIndexChanged(prevIndex)
                                     true
@@ -1509,12 +1509,14 @@ fun VideoAndSlideshowSection(
                             val isActive = actualIdx == currentImageIndex
                             
                             if (isActive) {
-                                // Active Flight Page: Show flight icon for both categories
+                                // Active Flight Page: Show flight icon, flip horizontally when navigating left
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_flight),
                                     contentDescription = null,
                                     tint = Color.White,
-                                    modifier = Modifier.size(8.dp)
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .graphicsLayer { scaleX = if (isNavigatingLeft) -1f else 1f }
                                 )
                             } else {
                                 // Inactive Flight Page: Show dash (-)
@@ -1545,7 +1547,7 @@ fun HomeScreen(navController: NavHostController) {
     Log.d("HomeScreen", "HomeScreen composition started")
     
     val imageList by DataRepository.slideshowImages
-    var currentImageIndex by remember { mutableIntStateOf(0) }
+    var currentImageIndex by DataRepository.currentImageIndex
     val videoUrlsState by DataRepository.videoUrls
     val slideDurations by DataRepository.slideshowDurations
     val isSlideshowActive by DataRepository.isSlideshowActive
@@ -1652,252 +1654,17 @@ fun HomeScreen(navController: NavHostController) {
     val branchId = sharedPreferences.getString("branchId", null)
     
     val roomId = sharedPreferences.getString("room", null)
-    var guestInfo by remember { mutableStateOf<GuestInfo?>(null) }
+    val guestInfo by DataRepository.guestInfo
     val roomTypeText = "${guestInfo?.roomtype ?: "Unavailable"}  "
     var currentTime by remember { mutableStateOf(getCurrentTime()) }
 
-    var fidsActive by remember { mutableStateOf(true) }
-    var fidsIcaoCode by remember { mutableStateOf("WARS") }
+    val fidsActive by DataRepository.fidsActive
+    val fidsIcaoCode by DataRepository.fidsIcaoCode
 
-    // Set up Firebase listener for FIDS settings under BRANCHES/[branchId]/SETTING/FIDS
-    DisposableEffect(branchId) {
-        var fidsSettingRef: com.google.firebase.database.DatabaseReference? = null
-        var fidsSettingListener: ValueEventListener? = null
-
-        if (branchId != null) {
-            val path = "BRANCHES/$branchId/SETTING/FIDS"
-            Log.d("HomeScreen", "Setting up listener for FIDS config: $path")
-            fidsSettingRef = database.child(path)
-            fidsSettingListener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    if (snapshot.exists()) {
-                        val activeVal = snapshot.child("ACTIVE").value
-                        val active = when (activeVal) {
-                            is Boolean -> activeVal
-                            is String -> activeVal.toBoolean()
-                            else -> true
-                        }
-                        val icaoVal = snapshot.child("ICAO_CODE").getValue(String::class.java)
-                        
-                        fidsActive = active
-                        fidsIcaoCode = icaoVal ?: "WARS"
-                        Log.d("HomeScreen", "FIDS Config loaded: ACTIVE=$fidsActive, ICAO_CODE=$fidsIcaoCode")
-                    } else {
-                        fidsActive = true
-                        fidsIcaoCode = "WARS"
-                        Log.d("HomeScreen", "FIDS Config path not found, using defaults: ACTIVE=true, ICAO_CODE=WARS")
-                    }
-                }
-
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e("HomeScreen", "FIDS Config listener cancelled: ${error.message}")
-                }
-            }
-            fidsSettingRef.addValueEventListener(fidsSettingListener)
-        }
-
-        onDispose {
-            if (fidsSettingRef != null && fidsSettingListener != null) {
-                fidsSettingRef.removeEventListener(fidsSettingListener)
-                Log.d("HomeScreen", "FIDS Config listener released.")
-            }
-        }
-    }
-
-    var flightArrivals by remember { mutableStateOf<List<Flight>>(emptyList()) }
-    var flightDepartures by remember { mutableStateOf<List<Flight>>(emptyList()) }
-    var flightAirportName by remember { mutableStateOf("Ahmad Yani Airport") }
-
-    // Set up Firebase listener for Flight Information
-    DisposableEffect(fidsIcaoCode, fidsActive) {
-        if (!fidsActive) {
-            flightArrivals = emptyList()
-            flightDepartures = emptyList()
-            onDispose {}
-        } else {
-            val flightRef = database.child("FlightInfo")
-            val listener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    try {
-                        val airportSnapshot = snapshot.child(fidsIcaoCode)
-                        val airportCode = airportSnapshot.key ?: fidsIcaoCode
-                        
-                        // Try to get airport name from config
-                        var name = when (fidsIcaoCode.uppercase(Locale.US)) {
-                            "WARS" -> "Ahmad Yani Airport"
-                            "WARR" -> "Juanda Airport"
-                            else -> "$fidsIcaoCode Airport"
-                        }
-                        val configAirports = snapshot.child("config").child("Airports")
-                        for (airportConfig in configAirports.children) {
-                            val icao = airportConfig.child("ICAO_Code").getValue(String::class.java)
-                            if (icao != null && icao.equals(airportCode, ignoreCase = true)) {
-                                name = airportConfig.child("airpotName").getValue(String::class.java) ?: name
-                                break
-                            }
-                        }
-                        flightAirportName = name
-
-                        // Parse Arrivals
-                        val arrivalsList = mutableListOf<Flight>()
-                        val arrivalsSnap = airportSnapshot.child("arrivals")
-                        for (flightSnap in arrivalsSnap.children) {
-                            try {
-                                val scheduled = flightSnap.child("scheduledTime").getValue(String::class.java) ?: ""
-                                val revised = flightSnap.child("revisedTime").getValue(String::class.java) ?: ""
-                                val timeStr = revised.ifEmpty { scheduled }
-                                
-                                val flightDate = parseUtcToWib(timeStr)
-                                if (flightDate != null && isSameDayInWib(flightDate)) {
-                                    val f = Flight(
-                                        flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
-                                        airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
-                                        otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
-                                        scheduledTime = scheduled,
-                                        revisedTime = revised,
-                                        status = flightSnap.child("status").getValue(String::class.java) ?: "",
-                                        direction = "arrival",
-                                        gate = flightSnap.child("gate").getValue(String::class.java) ?: "",
-                                        terminal = flightSnap.child("terminal").getValue(String::class.java) ?: ""
-                                    )
-                                    arrivalsList.add(f)
-                                }
-                            } catch (e: Exception) {}
-                        }
-                        // Sort by time
-                        arrivalsList.sortBy { 
-                            val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
-                            parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
-                        }
-                        flightArrivals = arrivalsList
-
-                        // Parse Departures
-                        val departuresList = mutableListOf<Flight>()
-                        val departuresSnap = airportSnapshot.child("departures")
-                        for (flightSnap in departuresSnap.children) {
-                            try {
-                                val scheduled = flightSnap.child("scheduledTime").getValue(String::class.java) ?: ""
-                                val revised = flightSnap.child("revisedTime").getValue(String::class.java) ?: ""
-                                val timeStr = revised.ifEmpty { scheduled }
-                                
-                                val flightDate = parseUtcToWib(timeStr)
-                                if (flightDate != null && isSameDayInWib(flightDate)) {
-                                    val f = Flight(
-                                        flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
-                                        airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
-                                        otherAirport = flightSnap.child("otherAirport").getValue(String::class.java) ?: "",
-                                        scheduledTime = scheduled,
-                                        revisedTime = revised,
-                                        status = flightSnap.child("status").getValue(String::class.java) ?: "",
-                                        direction = "departure",
-                                        gate = flightSnap.child("gate").getValue(String::class.java) ?: "",
-                                        terminal = flightSnap.child("terminal").getValue(String::class.java) ?: ""
-                                    )
-                                    departuresList.add(f)
-                                }
-                            } catch (e: Exception) {}
-                        }
-                        // Sort by time
-                        departuresList.sortBy { 
-                            val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
-                            parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
-                        }
-                        flightDepartures = departuresList
-
-                        Log.d("HomeScreen", "FlightInfo parsed successfully for $fidsIcaoCode: ${flightArrivals.size} arrivals, ${flightDepartures.size} departures")
-                    } catch (e: Exception) {
-                        Log.e("HomeScreen", "Error parsing FlightInfo: ${e.message}", e)
-                    }
-                }
-
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e("HomeScreen", "FlightInfo listener cancelled: ${error.message}")
-                }
-            }
-            flightRef.addValueEventListener(listener)
-            onDispose {
-                flightRef.removeEventListener(listener)
-            }
-        }
-    }
-
-    // Set up Firebase listener for guest info
-    DisposableEffect(roomId, branchId) {
-        var guestRef: com.google.firebase.database.DatabaseReference? = null
-        var guestListener: ValueEventListener? = null
-
-        if (roomId != null && branchId != null) {
-            val path = "BRANCHES/$branchId/FOGUEST/$roomId"
-            Log.d("HomeScreen", "Setting up safe listener for: $path")
-            
-            guestRef = database.child(path)
-            val listener = object : ValueEventListener {
-                override fun onDataChange(dataSnapshot: DataSnapshot) {
-                    if (dataSnapshot.exists()) {
-                        val info = GuestInfo(
-                            folio = dataSnapshot.child("folio").getValue(Int::class.java) ?: 0,
-                            dateci = dataSnapshot.child("dateci").getValue(String::class.java) ?: "",
-                            dateco = dataSnapshot.child("dateco").getValue(String::class.java) ?: "",
-                            datecreate = dataSnapshot.child("datecreate").getValue(String::class.java) ?: "",
-                            fname = dataSnapshot.child("fname").getValue(String::class.java) ?: "",
-                            foliostatus = dataSnapshot.child("foliostatus").getValue(String::class.java) ?: "",
-                            email = dataSnapshot.child("email").getValue(String::class.java) ?: "",
-                            phone = dataSnapshot.child("phone").getValue(String::class.java) ?: "",
-                            room = dataSnapshot.child("room").getValue(String::class.java) ?: "",
-                            roomnight = dataSnapshot.child("roomnight").getValue(Int::class.java) ?: 0,
-                            roomtype = dataSnapshot.child("roomtype").getValue(String::class.java) ?: "",
-                            guestImageUrl = dataSnapshot.child("guestImageUrl").getValue(String::class.java) ?: "",
-                            isSmoking = dataSnapshot.child("isSmoking").getValue(Boolean::class.java) == true
-                        )
-                        guestInfo = info
-                    } else {
-                        guestInfo = null
-                    }
-                }
-                override fun onCancelled(databaseError: DatabaseError) {
-                    guestInfo = null
-                }
-            }
-            guestListener = listener
-            guestRef.addValueEventListener(listener)
-        }
-
-        onDispose {
-            if (guestRef != null && guestListener != null) {
-                guestRef.removeEventListener(guestListener)
-                Log.d("HomeScreen", "Guest info listener released.")
-            }
-        }
-    }
-
-    // Set up DND active state listener
-    var isDndActive by remember { mutableStateOf(false) }
-    DisposableEffect(guestInfo?.folio, branchId) {
-        var dndRef: com.google.firebase.database.DatabaseReference? = null
-        var dndListener: com.google.firebase.database.ValueEventListener? = null
-
-        val folioId = guestInfo?.folio
-        if (folioId != null && branchId != null) {
-            dndRef = database.child("BRANCHES").child(branchId).child("DND_STATUS").child(folioId.toString())
-            val listener = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(dataSnapshot: DataSnapshot) {
-                    isDndActive = dataSnapshot.getValue(Boolean::class.java) == true
-                    Log.d("HomeScreen", "DND Status updated: $isDndActive")
-                }
-                override fun onCancelled(databaseError: DatabaseError) {
-                    // Ignore
-                }
-            }
-            dndListener = listener
-            dndRef.addValueEventListener(listener)
-        }
-
-        onDispose {
-            if (dndRef != null && dndListener != null) {
-                dndRef.removeEventListener(dndListener)
-            }
-        }
-    }
+    val flightArrivals by DataRepository.flightArrivals
+    val flightDepartures by DataRepository.flightDepartures
+    val flightAirportName by DataRepository.flightAirportName
+    val isDndActive by DataRepository.isDndActive
 
     // Set up clock updates
     LaunchedEffect(Unit) {
@@ -1981,9 +1748,10 @@ fun HomeScreen(navController: NavHostController) {
         if (isSlideshowActive && imageList.isNotEmpty()) {
             if (totalSlidesCount > 0) {
                 try {
-                    // If it is the last slides (Arrivals or Departures), duration is 30 seconds as requested!
+                    // Flight info total = 30 detik, dibagi rata ke semua halaman (arr + dept)
+                    val flightPagesCount = if (fidsActive) (arrivalsPagesCount + departuresPagesCount) else 0
                     val duration = if (fidsActive && currentImageIndex >= imageList.size) {
-                        30
+                        if (flightPagesCount > 0) maxOf(1, 30 / flightPagesCount) else 30
                     } else {
                         slideDurations.getOrNull(currentImageIndex) ?: 5
                     }

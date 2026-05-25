@@ -1,5 +1,5 @@
 package com.dafamsemarang.dhtv
-
+ 
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -30,9 +30,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import android.view.KeyEvent
+ 
 @Composable
 fun SettingsOptionsDialog(
     onDismiss: () -> Unit
@@ -50,6 +54,16 @@ fun SettingsOptionsDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.8f)) // Match PIN dialog overlay
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown) {
+                        val nativeCode = keyEvent.nativeKeyEvent.keyCode
+                        if (nativeCode == KeyEvent.KEYCODE_BACK || keyEvent.key == Key.Back) {
+                            onDismiss()
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                    false
+                }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -120,14 +134,14 @@ fun SettingsOptionsDialog(
         }
     }
 }
-
+ 
 data class SettingsOptionItem(
     val title: String,
     val desc: String,
     val icon: Int,
     val onClick: () -> Unit
 )
-
+ 
 @Composable
 fun SettingsOptionRow(
     item: SettingsOptionItem,
@@ -137,8 +151,6 @@ fun SettingsOptionRow(
     val isFocused by interactionSource.collectIsFocusedAsState()
     
     val bgAlpha = if (isFocused) 0.2f else 0.06f
-    val borderColor = if (isFocused) Color.White.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.1f)
-    val scale = if (isFocused) 1.02f else 1f
     
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -189,21 +201,43 @@ fun SettingsOptionRow(
                 fontSize = 11.sp
             )
         }
-        
-        // Text block removed per user design refinement
     }
 }
-
+ 
 private fun openAccessibilitySettings(context: Context) {
     try {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         context.startActivity(intent)
     } catch (e: Exception) {
-        Toast.makeText(context, "Gagal membuka menu Aksesibilitas", Toast.LENGTH_SHORT).show()
+        try {
+            // Android TV OS fallback
+            val intent = Intent()
+            intent.setClassName("com.android.tv.settings", "com.android.tv.settings.accessibility.AccessibilityActivity")
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            context.startActivity(intent)
+        } catch (e2: Exception) {
+            try {
+                // TV settings package fallback with standard action
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                intent.setPackage("com.android.tv.settings")
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                context.startActivity(intent)
+            } catch (e3: Exception) {
+                try {
+                    // System Settings fallback
+                    val intent = Intent(Settings.ACTION_SETTINGS)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    context.startActivity(intent)
+                    Toast.makeText(context, "Cari menu 'Aksesibilitas' di Pengaturan", Toast.LENGTH_LONG).show()
+                } catch (e4: Exception) {
+                    Toast.makeText(context, "Gagal membuka menu Aksesibilitas", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 }
-
+ 
 private fun openHomeSettings(context: Context) {
     try {
         val intent = Intent(Settings.ACTION_HOME_SETTINGS)
@@ -220,7 +254,7 @@ private fun openHomeSettings(context: Context) {
         }
     }
 }
-
+ 
 private fun openAndroidSettings(context: Context) {
     try {
         val intent = Intent(Settings.ACTION_SETTINGS)

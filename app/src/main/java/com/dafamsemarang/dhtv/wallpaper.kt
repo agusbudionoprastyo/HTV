@@ -31,11 +31,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
 
 @Composable
-fun WallpaperSection(hazeState: HazeState? = null) {
+fun WallpaperSection() {
     var imageUrl by remember { mutableStateOf<String?>(null) }
     var localWallpaperPath by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -125,7 +123,6 @@ fun WallpaperSection(hazeState: HazeState? = null) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (hazeState != null) Modifier.haze(hazeState) else Modifier)
         ) {
             if (useLocal) {
                 val bitmap: ImageBitmap? = remember(wallpaperFilePath) {
