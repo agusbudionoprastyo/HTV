@@ -275,6 +275,8 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     var showCartDrawer by remember { mutableStateOf(false) }
     var showOrderDrawer by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
+    var selectedOrderForDetail by remember { mutableStateOf<Order?>(null) }
+    var showOrderDetailDialog by remember { mutableStateOf(false) }
 
     var orders by remember { mutableStateOf<List<Order>>(emptyList()) }
     val database: DatabaseReference = Firebase.database.reference
@@ -1587,7 +1589,18 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 }
             },
             context = context,
-            orders = orders
+            orders = orders,
+            onSelectOrder = { order ->
+                selectedOrderForDetail = order
+                showOrderDetailDialog = true
+            }
+        )
+    }
+    
+    if (showOrderDetailDialog && selectedOrderForDetail != null) {
+        OrderDetailDialog(
+            order = selectedOrderForDetail!!,
+            onDismiss = { showOrderDetailDialog = false }
         )
     }
     
@@ -4646,7 +4659,7 @@ fun OrderDrawer(
                                         )
                                     },
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                                contentPadding = PaddingValues(vertical = 16.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp) // Ruang sela samping agar border focus pulsing & zoom scale tidak terpotong
                             ) {
                                 items(orders.size) { index ->
                                     val order = orders[index]
