@@ -1624,8 +1624,8 @@ fun FlyingDotOverlay() {
                     initialValue = 0f,
                     targetValue = 1f,
                     animationSpec = androidx.compose.animation.core.tween(
-                        durationMillis = 650,
-                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                        durationMillis = 600, // Sedikit dipercepat untuk feel lemparan yang snappy
+                        easing = androidx.compose.animation.core.FastOutLinearInEasing // Mulai pelan, lalu berakselerasi cepat di akhir
                     )
                 ) { value, _ ->
                     animProgress = value
@@ -1635,11 +1635,11 @@ fun FlyingDotOverlay() {
             if (animProgress < 1f) {
                 val currentX = startOffset.x + (destination.x - startOffset.x) * animProgress
                 val linearY = startOffset.y + (destination.y - startOffset.y) * animProgress
-                val arcHeight = with(density) { -120.dp.toPx() }
+                val arcHeight = with(density) { -140.dp.toPx() } // Parabola sedikit lebih melengkung agar elegan
                 val currentY = linearY + arcHeight * 4 * animProgress * (1f - animProgress)
                 
-                val scale = 1.3f - animProgress * 0.5f
-                val alpha = if (animProgress > 0.8f) (1f - animProgress) / 0.2f else 1f
+                val scale = 1.1f - animProgress * 0.4f // Scale melengkung yang lebih smooth
+                val alpha = if (animProgress > 0.85f) (1f - animProgress) / 0.15f else 1f
                 
                 Box(
                     modifier = Modifier
@@ -1650,11 +1650,11 @@ fun FlyingDotOverlay() {
                         modifier = Modifier
                             .absoluteOffset {
                                 IntOffset(
-                                    x = (currentX - with(density) { 6.dp.toPx() }).toInt(),
-                                    y = (currentY - with(density) { 6.dp.toPx() }).toInt()
+                                    x = (currentX - with(density) { 4.dp.toPx() }).toInt(), // Offset center 8.dp / 2
+                                    y = (currentY - with(density) { 4.dp.toPx() }).toInt()
                                 )
                             }
-                            .size(12.dp)
+                            .size(8.dp) // Dot diperkecil menjadi 8.dp agar elegan
                             .alpha(alpha)
                             .scale(scale)
                             .background(Color(0xFFE91E63), CircleShape)
