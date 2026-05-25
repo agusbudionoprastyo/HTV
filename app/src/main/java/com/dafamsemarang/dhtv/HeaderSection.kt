@@ -895,11 +895,32 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
                                     }
                                 }
                             }
-                        }   }
+                        }
                     }
+                }
 
             } else {
-                // Sleek loading shimmer/placeholder matching widget size
+                // Sleek moving loading shimmer matching the slideshow promo banner shimmer style!
+                val infiniteTransition = rememberInfiniteTransition(label = "weatherShimmer")
+                val shimmerTranslateAnim by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1000f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(
+                            durationMillis = 1200,
+                            easing = LinearEasing
+                        ),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "shimmerTranslate"
+                )
+                
+                val shimmerColors = listOf(
+                    Color.Gray.copy(alpha = 0.2f),
+                    Color.Gray.copy(alpha = 0.4f),
+                    Color.Gray.copy(alpha = 0.2f)
+                )
+                
                 Box(
                     modifier = Modifier
                         .padding(start = 58.dp)
@@ -923,125 +944,23 @@ fun HeaderSection(currentRoute: String? = "home", hazeState: HazeState? = null) 
                         )
                     }
 
-                    val baseAlpha = 0.40f
-
-                    // Card Body (Always exactly 448.dp x 80.dp, no border)
+                    // Card Body with uniform shimmer!
                     Box(
                         modifier = Modifier
                             .width(448.dp)
                             .height(80.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .then(
-                                if (hazeState != null) {
-                                    val trigger = redrawTrigger
-                                    Modifier.hazeChild(
-                                        state = hazeState,
-                                        shape = RoundedCornerShape(16.dp),
-                                        style = HazeStyle(
-                                            tint = HazeTint(Color.Transparent),
-                                            blurRadius = 24.dp
-                                        )
-                                    )
-                                } else {
-                                    Modifier
-                                }
-                            )
                             .background(
-                                color = Color(207, 223, 237).copy(alpha = baseAlpha),
+                                brush = Brush.linearGradient(
+                                    colors = shimmerColors,
+                                    start = Offset(shimmerTranslateAnim - 400f, shimmerTranslateAnim - 400f),
+                                    end = Offset(shimmerTranslateAnim, shimmerTranslateAnim)
+                                ),
                                 shape = RoundedCornerShape(16.dp)
                             )
-                            .drawBehind {
-                                // 2. Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
-                                drawRoundRect(
-                                    brush = Brush.linearGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = 0.35f),
-                                            Color.White.copy(alpha = 0.03f),
-                                            Color.White.copy(alpha = 0.20f)
-                                        ),
-                                        start = Offset(0f, 0f),
-                                        end = Offset(size.width, size.height)
-                                    ),
-                                    cornerRadius = CornerRadius(16.dp.toPx()),
-                                    style = Stroke(width = 1.2.dp.toPx())
-                                )
-                            }
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            // Left Column Placeholder (City Info)
-                            Column(
-                                modifier = Modifier.weight(0.45f),
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .width(40.dp)
-                                        .height(8.dp)
-                                        .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(2.dp))
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .width(80.dp)
-                                        .height(16.dp)
-                                        .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .width(100.dp)
-                                        .height(8.dp)
-                                        .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(2.dp))
-                                )
-                            }
-
-                            // Right Column Placeholder (Temp, Label, Metrics)
-                            Column(
-                                modifier = Modifier.weight(0.55f),
-                                horizontalAlignment = Alignment.End,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color.White.copy(alpha = 0.1f))
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .width(50.dp)
-                                            .height(16.dp)
-                                            .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .width(70.dp)
-                                        .height(8.dp)
-                                        .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(2.dp))
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .width(90.dp)
-                                        .height(8.dp)
-                                        .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(2.dp))
-                                )
-                            }
-                        }
+                    )
                 }
             }
-        }
     } else {
             // Replacement container for non-home screens
             val headerReplacement = when (targetRoute) {

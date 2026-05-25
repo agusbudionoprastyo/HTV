@@ -397,7 +397,7 @@ fun FlightInfoSection(
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            // Column Header Row (9 columns)
+            // Column Header Row (9 columns, with flight number using empty header)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -406,60 +406,64 @@ fun FlightInfoSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "KODE",
-                    color = Color.White.copy(alpha = 0.75f),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 7.sp,
-                    modifier = Modifier.weight(0.12f)
-                )
-                Text(
                     text = "MASKAPAI",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.18f)
+                    modifier = Modifier.weight(0.15f)
+                )
+                Text(
+                    text = "NOMOR",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.08f)
                 )
                 Text(
                     text = if (isArrival) "DARI" else "KE",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.10f)
-                )
-                Text(
-                    text = "IATA",
-                    color = Color.White.copy(alpha = 0.75f),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 7.sp,
-                    modifier = Modifier.weight(0.07f)
+                    modifier = Modifier.weight(0.17f)
                 )
                 Text(
                     text = "BANDARA",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.16f)
+                    modifier = Modifier.weight(0.21f)
                 )
                 Text(
-                    text = "JAM",
+                    text = "IATA",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.09f)
+                    modifier = Modifier.weight(0.07f),
+                    textAlign = TextAlign.Center
                 )
                 Text(
                     text = "GATE",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.08f)
+                    modifier = Modifier.weight(0.06f),
+                    textAlign = TextAlign.Center
                 )
                 Text(
                     text = "TERM",
                     color = Color.White.copy(alpha = 0.75f),
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.sp,
-                    modifier = Modifier.weight(0.08f)
+                    modifier = Modifier.weight(0.06f),
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "JAM",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.sp,
+                    modifier = Modifier.weight(0.08f),
+                    textAlign = TextAlign.Center
                 )
                 Text(
                     text = "STATUS",
@@ -467,7 +471,7 @@ fun FlightInfoSection(
                     fontWeight = FontWeight.Bold,
                     fontSize = 7.5.sp,
                     modifier = Modifier.weight(0.12f),
-                    textAlign = TextAlign.End
+                    textAlign = TextAlign.Center
                 )
             }
 
@@ -582,66 +586,59 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Column 1: Flight Number (weight = 0.12f)
+        // Column 1: Airline Name (weight = 0.15f)
         Text(
-            text = flight.flightNumber,
+            text = flight.airline,
             color = Color.White,
             fontWeight = FontWeight.Bold,
             fontSize = 8.5.sp,
             maxLines = 1,
-            modifier = Modifier.weight(0.12f)
-        )
-
-        // Column 2: Airline Name (weight = 0.18f)
-        Text(
-            text = flight.airline,
-            color = Color.White.copy(alpha = 0.9f),
-            fontWeight = FontWeight.Medium,
-            fontSize = 8.5.sp,
-            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(0.18f)
+            modifier = Modifier.weight(0.15f)
         )
 
-        // Column 3: Destination/Origin City Name (weight = 0.10f)
+        // Column 2: Flight Number (weight = 0.08f, soft style, aligned Left)
+        Text(
+            text = flight.flightNumber,
+            color = Color.White.copy(alpha = 0.55f),
+            fontWeight = FontWeight.Normal,
+            fontSize = 8.sp,
+            maxLines = 1,
+            textAlign = TextAlign.Left,
+            modifier = Modifier.weight(0.08f)
+        )
+
+        // Column 3: Destination/Origin City Name (weight = 0.17f, shifted left, increased area)
         Text(
             text = cityName,
             color = Color.White.copy(alpha = 0.6f),
             fontSize = 8.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(0.10f)
+            modifier = Modifier.weight(0.17f)
         )
 
-        // Column 4: Airport Code (weight = 0.07f)
-        Text(
-            text = flight.otherAirport.uppercase(Locale.US),
-            color = Color.White.copy(alpha = 0.5f),
-            fontSize = 8.5.sp,
-            maxLines = 1,
-            modifier = Modifier.weight(0.07f)
-        )
-
-        // Column 5: Mapped Airport Long Name (weight = 0.16f)
+        // Column 4: Mapped Airport Long Name (weight = 0.21f)
         Text(
             text = airportNameLong,
             color = Color.White.copy(alpha = 0.6f),
             fontSize = 8.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(0.16f)
+            modifier = Modifier.weight(0.21f)
         )
 
-        // Column 6: Time (weight = 0.09f)
+        // Column 5: Airport Code (weight = 0.07f, IATA)
         Text(
-            text = timeStr,
-            color = Color.White.copy(alpha = 0.8f),
-            fontWeight = FontWeight.Medium,
+            text = flight.otherAirport.uppercase(Locale.US),
+            color = Color.White.copy(alpha = 0.5f),
             fontSize = 8.5.sp,
-            modifier = Modifier.weight(0.09f)
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(0.07f)
         )
 
-        // Column 7: Gate (weight = 0.08f)
+        // Column 6: Gate (weight = 0.06f)
         val gateText = remember(flight.gate) {
             if (flight.gate.trim().isEmpty() || flight.gate.trim() == "-") {
                 "-"
@@ -654,10 +651,11 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             color = Color.White.copy(alpha = 0.8f),
             fontSize = 8.5.sp,
             maxLines = 1,
-            modifier = Modifier.weight(0.08f)
+            modifier = Modifier.weight(0.06f),
+            textAlign = TextAlign.Center
         )
 
-        // Column 8: Terminal (weight = 0.08f)
+        // Column 7: Terminal (weight = 0.06f)
         val terminalText = remember(flight.terminal) {
             if (flight.terminal.trim().isEmpty() || flight.terminal.trim() == "-") {
                 "-"
@@ -670,7 +668,18 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             color = Color.White.copy(alpha = 0.8f),
             fontSize = 8.5.sp,
             maxLines = 1,
-            modifier = Modifier.weight(0.08f)
+            modifier = Modifier.weight(0.06f),
+            textAlign = TextAlign.Center
+        )
+
+        // Column 8: Time (weight = 0.08f)
+        Text(
+            text = timeStr,
+            color = Color.White.copy(alpha = 0.8f),
+            fontWeight = FontWeight.Medium,
+            fontSize = 8.5.sp,
+            modifier = Modifier.weight(0.08f),
+            textAlign = TextAlign.Center
         )
 
         // Column 9: Status (weight = 0.12f)
@@ -680,7 +689,7 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
             fontWeight = FontWeight.Bold,
             fontSize = 7.5.sp,
             maxLines = 1,
-            textAlign = TextAlign.End,
+            textAlign = TextAlign.Center,
             modifier = Modifier.weight(0.12f)
         )
     }
@@ -1250,7 +1259,10 @@ fun VideoAndSlideshowSection(
                                                 .fillMaxWidth()
                                                 .padding(start = 10.dp, end = 10.dp, bottom = 2.dp)
                                         ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.align(Alignment.CenterStart)
+                                            ) {
                                                 Icon(
                                                     painter = painterResource(id = if (isArrival) R.drawable.flight_land else R.drawable.flight_takeoff),
                                                     contentDescription = null,
@@ -1258,12 +1270,22 @@ fun VideoAndSlideshowSection(
                                                 )
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
-                                                    text = if (isArrival) "ARRIVALS" else "DEPARTURES",
+                                                    text = if (isArrival) "Arrivals" else "Departures",
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     letterSpacing = 1.sp
                                                 )
                                             }
+
+                                            Text(
+                                                text = flightAirportName.uppercase(Locale.US),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White.copy(alpha = 0.9f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.align(Alignment.Center)
+                                            )
                                         }
 
                                         Spacer(modifier = Modifier.height(2.dp))
@@ -1276,15 +1298,15 @@ fun VideoAndSlideshowSection(
                                                 .padding(horizontal = 10.dp, vertical = 3.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(text = "KODE", fontSize = 7.sp, modifier = Modifier.weight(0.12f))
-                                            Text(text = "MASKAPAI", fontSize = 7.sp, modifier = Modifier.weight(0.18f))
-                                            Text(text = if (isArrival) "DARI" else "KE", fontSize = 7.sp, modifier = Modifier.weight(0.10f))
-                                            Text(text = "IATA", fontSize = 7.sp, modifier = Modifier.weight(0.07f))
-                                            Text(text = "BANDARA", fontSize = 7.sp, modifier = Modifier.weight(0.16f))
-                                            Text(text = "JAM", fontSize = 7.sp, modifier = Modifier.weight(0.09f))
-                                            Text(text = "GATE", fontSize = 7.sp, modifier = Modifier.weight(0.08f))
-                                            Text(text = "TERM", fontSize = 7.sp, modifier = Modifier.weight(0.08f))
-                                            Text(text = "STATUS", fontSize = 7.5.sp, modifier = Modifier.weight(0.12f), textAlign = TextAlign.End)
+                                            Text(text = "MASKAPAI", fontSize = 7.sp, modifier = Modifier.weight(0.15f))
+                                            Text(text = "NOMOR", fontSize = 7.sp, modifier = Modifier.weight(0.08f))
+                                            Text(text = if (isArrival) "DARI" else "KE", fontSize = 7.sp, modifier = Modifier.weight(0.17f))
+                                            Text(text = "BANDARA", fontSize = 7.sp, modifier = Modifier.weight(0.21f))
+                                            Text(text = "IATA", fontSize = 7.sp, modifier = Modifier.weight(0.07f), textAlign = TextAlign.Center)
+                                            Text(text = "GATE", fontSize = 7.sp, modifier = Modifier.weight(0.06f), textAlign = TextAlign.Center)
+                                            Text(text = "TERM", fontSize = 7.sp, modifier = Modifier.weight(0.06f), textAlign = TextAlign.Center)
+                                            Text(text = "JAM", fontSize = 7.sp, modifier = Modifier.weight(0.08f), textAlign = TextAlign.Center)
+                                            Text(text = "STATUS", fontSize = 7.5.sp, modifier = Modifier.weight(0.12f), textAlign = TextAlign.Center)
                                         }
                                     }
 
@@ -1392,7 +1414,7 @@ fun VideoAndSlideshowSection(
                                                 )
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
-                                                    text = if (isArrival) "ARRIVALS" else "DEPARTURES",
+                                                    text = if (isArrival) "Arrivals" else "Departures",
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = if (isArrival) Color(0xFF29B6F6) else Color(0xFFFF9800),
@@ -1421,66 +1443,90 @@ fun VideoAndSlideshowSection(
                                                 .padding(horizontal = 10.dp, vertical = 3.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(text = "KODE", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.12f))
-                                            Text(text = "MASKAPAI", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.18f))
-                                            Text(text = if (isArrival) "DARI" else "KE", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.10f))
-                                            Text(text = "IATA", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.07f))
-                                            Text(text = "BANDARA", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.16f))
-                                            Text(text = "JAM", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.09f))
-                                            Text(text = "GATE", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.08f))
-                                            Text(text = "TERM", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.08f))
-                                            Text(text = "STATUS", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.5.sp, modifier = Modifier.weight(0.12f), textAlign = TextAlign.End)
+                                            Text(text = "MASKAPAI", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.15f))
+                                            Text(text = "NOMOR", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.08f))
+                                            Text(text = if (isArrival) "DARI" else "KE", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.17f))
+                                            Text(text = "BANDARA", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.21f))
+                                            Text(text = "IATA", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.07f), textAlign = TextAlign.Center)
+                                            Text(text = "GATE", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.06f), textAlign = TextAlign.Center)
+                                            Text(text = "TERM", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.06f), textAlign = TextAlign.Center)
+                                            Text(text = "JAM", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.sp, modifier = Modifier.weight(0.08f), textAlign = TextAlign.Center)
+                                            Text(text = "STATUS", color = Color.White.copy(alpha = 0.75f), fontWeight = FontWeight.Bold, fontSize = 7.5.sp, modifier = Modifier.weight(0.12f), textAlign = TextAlign.Center)
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                } // Closes Card Body Box
 
-                    // Dynamic dot carousel indicators at the bottom
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        repeat(totalSlidesCount) { idx ->
-                            val isActive = idx == currentImageIndex
-                            // Plane icons only represent the first page of Arrivals and Departures
-                            val isArrivalFirstPage = fidsActive && idx == imageList.size
-                            val isDepartureFirstPage = fidsActive && idx == imageList.size + arrivalsPagesCount
+                // Dynamic dot and flight/dash carousel indicators (unwrapped Row outside Card Body to go lower!)
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 0.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 1. Slideshow Image DOT Indicators
+                    repeat(imageList.size) { idx ->
+                        val isActive = idx == currentImageIndex
+                        val widthCoeff by animateDpAsState(
+                            targetValue = if (isActive) 14.dp else 6.dp,
+                            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                            label = "dot_width"
+                        )
+                        val alphaCoeff by animateFloatAsState(
+                            targetValue = if (isActive) 1.0f else 0.4f,
+                            animationSpec = tween(durationMillis = 300),
+                            label = "dot_alpha"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(width = widthCoeff, height = 6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color.White.copy(alpha = alphaCoeff))
+                        )
+                    }
+
+                    // 2. Separator Label "FLIGHT INFO" between slideshow and flights (simplified, smaller, tighter bottom margin)
+                    if (fidsActive && imageList.isNotEmpty() && fidsSlidesCount > 0) {
+                        Spacer(modifier = Modifier.width(1.dp))
+                        Text(
+                            text = "FLIGHT INFO",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 6.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
+
+                    // 3. Flight/FIDS Dash/Icon Indicators
+                    if (fidsActive) {
+                        repeat(fidsSlidesCount) { fidsIdx ->
+                            val actualIdx = imageList.size + fidsIdx
+                            val isActive = actualIdx == currentImageIndex
                             
-                            if (isArrivalFirstPage || isDepartureFirstPage) {
-                                val tintColor = if (isActive) {
-                                    Color.White
-                                } else {
-                                    Color.White.copy(alpha = 0.4f)
-                                }
+                            if (isActive) {
+                                // Active Flight Page: Show flight icon for both categories
                                 Icon(
-                                    painter = painterResource(
-                                        id = if (isArrivalFirstPage) R.drawable.flight_land else R.drawable.flight_takeoff
-                                    ),
+                                    painter = painterResource(id = R.drawable.ic_flight),
                                     contentDescription = null,
-                                    tint = tintColor,
-                                    modifier = Modifier.size(10.dp)
+                                    tint = Color.White,
+                                    modifier = Modifier.size(8.dp)
                                 )
                             } else {
-                                val widthCoeff by animateDpAsState(
-                                    targetValue = if (isActive) 14.dp else 6.dp,
-                                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-                                    label = "dot_width"
-                                )
+                                // Inactive Flight Page: Show dash (-)
                                 val alphaCoeff by animateFloatAsState(
-                                    targetValue = if (isActive) 1.0f else 0.4f,
+                                    targetValue = 0.4f,
                                     animationSpec = tween(durationMillis = 300),
-                                    label = "dot_alpha"
+                                    label = "flight_dash_alpha"
                                 )
                                 Box(
                                     modifier = Modifier
-                                        .size(width = widthCoeff, height = 6.dp)
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(Color.White.copy(alpha = alphaCoeff))
+                                        .size(width = 6.dp, height = 2.dp)
+                                        .background(Color.White.copy(alpha = alphaCoeff), shape = RoundedCornerShape(1.dp))
                                 )
                             }
                         }
@@ -2006,7 +2052,7 @@ fun HomeScreen(navController: NavHostController) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp), // Perfect alignment matching the height of the banner!
+                        .height(168.dp), // Perfect alignment matching the height of the banner!
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -3029,8 +3075,8 @@ fun ServiceButtonWithPackageBanner(
                     try {
                         val pm = context.packageManager
                         val appInfo = pm.getApplicationInfo(packageName, 0)
-                        // Try to load banner
-                        val banner = appInfo.loadBanner(pm)
+                        // Try to load banner, fallback to icon
+                        val banner = appInfo.loadBanner(pm) ?: appInfo.loadIcon(pm)
                         if (banner != null) {
                             bannerDrawable = banner
                             ShortcutIconCache.put(packageName, banner)
@@ -3386,31 +3432,39 @@ fun ServiceButtonWithPackageBanner(
                       contentScale = ContentScale.Crop
                   )
              } else {
-                 // Fallback Content
-                  Column(
+                  // Uniform loading shimmer matching the slideshow banner shimmer style!
+                  val infiniteTransition = rememberInfiniteTransition(label = "shortcutShimmer")
+                  val shimmerTranslateAnim by infiniteTransition.animateFloat(
+                      initialValue = 0f,
+                      targetValue = 1000f,
+                      animationSpec = infiniteRepeatable(
+                          animation = tween(
+                              durationMillis = 1200,
+                              easing = LinearEasing
+                          ),
+                          repeatMode = RepeatMode.Restart
+                      ),
+                      label = "shimmerTranslate"
+                  )
+                  
+                  val shimmerColors = listOf(
+                      Color.Gray.copy(alpha = 0.2f),
+                      Color.Gray.copy(alpha = 0.4f),
+                      Color.Gray.copy(alpha = 0.2f)
+                  )
+                  
+                  Box(
                       modifier = Modifier
                           .fillMaxSize()
-                          .alpha(if (isOptionsActive) 0.05f else 1f),
-                      horizontalAlignment = Alignment.CenterHorizontally,
-                      verticalArrangement = Arrangement.Center
-                  ) {
-                     Icon(
-                         painter = painterResource(id = fallbackIconRes),
-                         contentDescription = label,
-                         modifier = Modifier.size(32.dp),
-                         tint = HomeIcon
-                     )
-                     Spacer(modifier = Modifier.height(2.dp))
-                     Text(
-                         text = label,
-                         color = HomeText,
-                         textAlign = TextAlign.Center,
-                         fontWeight = FontWeight.Bold,
-                         fontSize = 12.sp,
-                         maxLines = 1,
-                         overflow = TextOverflow.Ellipsis
-                     )
-                  }
+                          .background(
+                              brush = Brush.linearGradient(
+                                  colors = shimmerColors,
+                                  start = Offset(shimmerTranslateAnim - 400f, shimmerTranslateAnim - 400f),
+                                  end = Offset(shimmerTranslateAnim, shimmerTranslateAnim)
+                              ),
+                              shape = RoundedCornerShape(12.dp)
+                          )
+                  )
              }
              
              // --- Move Mode Overlay Icon ---

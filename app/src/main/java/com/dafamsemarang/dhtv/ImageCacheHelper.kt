@@ -287,14 +287,16 @@ fun rememberCachedPainter(url: String, errorPlaceholder: Int? = null): coil.comp
         }
     }
 
-    return rememberAsyncImagePainter(
-        model = ImageRequest.Builder(LocalContext.current)
+    val request = remember(model, errorPlaceholder) {
+        ImageRequest.Builder(context)
             .data(model)
             .apply {
                 if (errorPlaceholder != null) error(errorPlaceholder)
             }
             .crossfade(false)
             .build()
-    )
+    }
+
+    return rememberAsyncImagePainter(model = request)
 }
 

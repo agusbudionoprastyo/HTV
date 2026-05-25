@@ -565,14 +565,14 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
         }
     }
 
-    // Room Image
-    val roomImage = rememberCachedPainter(welcomeData.roomImageUrl, R.drawable.err)
+    // Room Image (No error placeholder to prevent generic error images)
+    val roomImage = rememberCachedPainter(welcomeData.roomImageUrl, null)
     
-    // Sign Image
-    val signImage = rememberCachedPainter(welcomeData.signUrl, R.drawable.err)
+    // Sign Image (No error placeholder to prevent generic error images)
+    val signImage = rememberCachedPainter(welcomeData.signUrl, null)
 
-    // Welcome Background Image from CMS
-    val welcomeBackground = rememberCachedPainter(welcomeData.backgroundUrl, R.drawable.err)
+    // Welcome Background Image from CMS (No error placeholder to prevent generic error images)
+    val welcomeBackground = rememberCachedPainter(welcomeData.backgroundUrl, null)
     val hasBackgroundImage = remember(welcomeData.backgroundUrl) { isValidImageUrl(welcomeData.backgroundUrl) }
 
     // Local path state for guest image
@@ -627,7 +627,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 onSuccess = { request, metadata -> Log.d("WelcomeScreen", "Coil: Success loading $guestImageModel") },
                 onError = { request, result -> Log.e("WelcomeScreen", "Coil: Error loading $guestImageModel", result.throwable) }
             )
-            .error(R.drawable.err)
+            // No error placeholder to prevent generic error image overlays
             .crossfade(false)
             .build()
     }
@@ -992,17 +992,31 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                             )
                         }
 
-                        // Signature image with higher z-index
-                        Image(
-                            painter = signImage,
-                            contentDescription = "sign",
+                        // Signature image / status with higher z-index (Ensures painter is composed during loading so Coil triggers the load)
+                        Box(
                             modifier = Modifier
                                 .width(200.dp)
                                 .height(144.dp)
                                 .align(Alignment.Center)
                                 .zIndex(1f),
-                            contentScale = ContentScale.Fit
-                        )
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (welcomeData.signUrl.isBlank() || signImage.state is AsyncImagePainter.State.Error) {
+                                Text(
+                                    text = "Signature Not found",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                )
+                            } else {
+                                Image(
+                                    painter = signImage,
+                                    contentDescription = "sign",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                        }
                     }
                 }
             }

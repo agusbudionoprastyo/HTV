@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.io.File
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
@@ -34,7 +35,7 @@ android {
                 keyPassword = keystoreProperties["keyPassword"] as? String
                 val storePath = keystoreProperties["storeFile"] as? String
                 storeFile = storePath?.let {
-                    if (file(it).isAbsolute) file(it) else rootProject.file(it)
+                    if (File(it).isAbsolute) file(it) else rootProject.file(it)
                 }
                 storePassword = keystoreProperties["storePassword"] as? String
             }
