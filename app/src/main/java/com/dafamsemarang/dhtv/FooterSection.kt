@@ -877,8 +877,20 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         // Direct children of outer fillMaxSize Box → zero impact on Row layout
         val isFnBActive = currentRoute == "cantingfood"
         val showCartOrder = isFnBActive || isCartFocused || isOrderFocused
+        
+        // Debounce showCartOrder state to smooth out transition animations and prevent stuttering
+        var debouncedShowCartOrder by remember { mutableStateOf(showCartOrder) }
+        LaunchedEffect(showCartOrder) {
+            if (showCartOrder) {
+                debouncedShowCartOrder = true
+            } else {
+                delay(150) // 150ms debounce delay
+                debouncedShowCartOrder = isCartFocused || isOrderFocused || isFnBActive
+            }
+        }
+
         val floatingAlpha by animateFloatAsState(
-            targetValue = if (showCartOrder) 1f else 0f,
+            targetValue = if (debouncedShowCartOrder) 1f else 0f,
             animationSpec = tween(durationMillis = 250),
             label = "floatingBtnAlpha"
         )
@@ -886,7 +898,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
 
         // Slide offset: saat hidden Y = 0 (di posisi F&B), saat visible Y = -46dp (naik ke atas)
         val slideOffsetYPx by animateFloatAsState(
-            targetValue = if (showCartOrder) with(density) { -46.dp.toPx() } else 0f,
+            targetValue = if (debouncedShowCartOrder) with(density) { -46.dp.toPx() } else 0f,
             animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
             label = "floatingSlideY"
         )
@@ -1058,13 +1070,25 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         // ── Floating My Request ──────────────────────────────────────────────────
         val isRequestActive = currentRoute == "contact"
         val showRequestCapsule = isRequestActive || isMyRequestFocused
+
+        // Debounce showRequestCapsule state to smooth out transition animations and prevent stuttering
+        var debouncedShowRequestCapsule by remember { mutableStateOf(showRequestCapsule) }
+        LaunchedEffect(showRequestCapsule) {
+            if (showRequestCapsule) {
+                debouncedShowRequestCapsule = true
+            } else {
+                delay(150) // 150ms debounce delay
+                debouncedShowRequestCapsule = isMyRequestFocused || isRequestActive
+            }
+        }
+
         val requestAlpha by animateFloatAsState(
-            targetValue = if (showRequestCapsule) 1f else 0f,
+            targetValue = if (debouncedShowRequestCapsule) 1f else 0f,
             animationSpec = tween(durationMillis = 250),
             label = "requestBtnAlpha"
         )
         val requestSlideOffsetYPx by animateFloatAsState(
-            targetValue = if (showRequestCapsule) with(density) { -46.dp.toPx() } else 0f,
+            targetValue = if (debouncedShowRequestCapsule) with(density) { -46.dp.toPx() } else 0f,
             animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
             label = "requestSlideY"
         )
@@ -4461,7 +4485,8 @@ fun CartDrawer(
 fun OrderDrawer(
     onDismiss: () -> Unit,
     context: Context,
-    orders: List<Order>
+    orders: List<Order>,
+    onSelectOrder: (Order) -> Unit = {}
 ) {
     val firstItemFocusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
@@ -4626,83 +4651,210 @@ fun OrderDrawer(
                                 items(orders.size) { index ->
                                     val order = orders[index]
                                     var isItemFocused by remember { mutableStateOf(false) }
+                                    val itemImages = order.items
+                                        ?.filter { it.imageUrl.isNotEmpty() }
+                                        ?.map { it.imageUrl }
+                                        ?.distinct()
+                                        ?: emptyList()
+                                    val totalQty = order.items?.sumOf { it.quantity ?: 1 } ?: 0
+                                    val statusColor = when (order.status?.lowercase()) {
+                                        "placed" -> Color(0xFFFF9800)
+                                        "confirmed" -> Color(0xFF2196F3)
+                                        "completed" -> Color(0xFF4CAF50)
+                                        else -> Color.White.copy(alpha = 0.6f)
+                                    }
 
-                                    Surface(
+                                    // Snappy Google TV focus zoom scale transition
+                                    val scale by animateFloatAsState(
+                                        targetValue = if (isItemFocused) 1.03f else 1.0f,
+                                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+                                        label = "OrderCardScale"
+                                    )
+
+                                    // Smooth fade in/out transition for focus visibility (LED Glow)
+                                    val focusFadeAlpha by animateFloatAsState(
+                                        targetValue = if (isItemFocused) 1.0f else 0.0f,
+                                        animationSpec = tween(durationMillis = 350),
+                                        label = "OrderFocusFadeAlpha"
+                                    )
+
+                                    val pulseAlpha = remember { androidx.compose.animation.core.Animatable(0.0f) }
+
+                                    LaunchedEffect(isItemFocused) {
+                                        if (isItemFocused) {
+                                            pulseAlpha.animateTo(
+                                                targetValue = 1.0f,
+                                                animationSpec = infiniteRepeatable(
+                                                    animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+                                                    repeatMode = RepeatMode.Reverse
+                                                )
+                                            )
+                                        } else {
+                                            pulseAlpha.snapTo(0.0f)
+                                        }
+                                    }
+
+                                    // 🚀 PERFORMANCE: Apply elegant white border that pulses and fades in smoothly on focus
+                                    val borderModifier = if (isItemFocused) {
+                                        Modifier.border(
+                                            width = 3.dp,
+                                            color = Color.White.copy(alpha = pulseAlpha.value * focusFadeAlpha),
+                                            shape = RoundedCornerShape(24.dp)
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+
+                                    var lastClickTime by remember { mutableStateOf(0L) }
+
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .graphicsLayer {
+                                                scaleX = scale
+                                                scaleY = scale
+                                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
+                                            }
                                             .onFocusChanged { isItemFocused = it.isFocused }
-                                            .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier),
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = if (isItemFocused) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-                                        border = if (isItemFocused) BorderStroke(1.5.dp, Color(0xFFE91E63)) else null
+                                            .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
+                                            .clickable {
+                                                val currentTime = System.currentTimeMillis()
+                                                if (currentTime - lastClickTime > 500L) { // 500ms debounce
+                                                    lastClickTime = currentTime
+                                                    onSelectOrder(order)
+                                                }
+                                            }
                                     ) {
-                                        Column(
+                                        // Inner Card with Floating border & Air Gap! (Zero background addition on focus)
+                                        Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(16.dp)
+                                                .then(borderModifier)
+                                                .padding(6.dp) // The Floating Air Gap
+                                                .clip(RoundedCornerShape(20.dp))
+                                                .background(Color.White.copy(alpha = 0.05f))
+                                                .padding(12.dp)
                                         ) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                                             ) {
-                                                Text(
-                                                    text = "ID: ${order.orderId ?: "N/A"}",
-                                                    color = Color.White,
-                                                    fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.bodyMedium
-                                                )
-                                                
-                                                val statusColor = when (order.status?.lowercase()) {
-                                                    "placed" -> Color(0xFFFF9800)
-                                                    "confirmed" -> Color(0xFF2196F3)
-                                                    "completed" -> Color(0xFF4CAF50)
-                                                    else -> Color.White.copy(alpha = 0.6f)
-                                                }
-
+                                                // Stacked images (mepet ke kiri, offset 12.dp, tanpa border hitam)
                                                 Box(
                                                     modifier = Modifier
-                                                        .background(statusColor.copy(alpha = 0.2f), shape = RoundedCornerShape(8.dp))
-                                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                        .width(if (itemImages.size > 1) (40 + (itemImages.size.coerceAtMost(3) - 1) * 12).dp else 40.dp)
+                                                        .height(40.dp)
                                                 ) {
-                                                    Text(
-                                                        text = (order.status ?: "Pending").uppercase(),
-                                                        color = statusColor,
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 10.sp
-                                                    )
+                                                    itemImages.take(3).forEachIndexed { i, url ->
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(40.dp)
+                                                                .offset(x = (i * 12).dp)
+                                                                .clip(CircleShape)
+                                                        ) {
+                                                            CachedAsyncImage(
+                                                                imageUrl = url,
+                                                                contentDescription = null,
+                                                                modifier = Modifier.fillMaxSize(),
+                                                                contentScale = ContentScale.Crop,
+                                                                error = R.drawable.err
+                                                            )
+                                                        }
+                                                    }
+                                                    if (itemImages.isEmpty()) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(40.dp)
+                                                                .background(Color.White.copy(alpha = 0.08f), CircleShape),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(
+                                                                painter = painterResource(id = R.drawable.room_service_3_svgrepo_com),
+                                                                contentDescription = null,
+                                                                modifier = Modifier.size(20.dp),
+                                                                tint = Color.White.copy(alpha = 0.5f)
+                                                            )
+                                                        }
+                                                    }
                                                 }
-                                            }
 
-                                            Spacer(modifier = Modifier.height(8.dp))
+                                                // Order info
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    // Baris 1: N items dan Rp Total Price (Sejajar)
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "${totalQty} item${if (totalQty > 1) "s" else ""}",
+                                                            color = Color.White,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 15.sp
+                                                        )
+                                                        Text(
+                                                            text = formatIDR(order.total),
+                                                            color = Color.White,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 15.sp
+                                                        )
+                                                    }
+                                                    
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(1.5.dp)
+                                                            .background(Color.White.copy(alpha = 0.12f), CircleShape)
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
 
-                                            order.items?.forEach { item ->
-                                                Text(
-                                                    text = "- ${item.itemName} x${item.quantity ?: 1}${if (!item.variant.isNullOrEmpty()) " (${item.variant})" else ""}",
-                                                    color = Color.White.copy(alpha = 0.8f),
-                                                    style = MaterialTheme.typography.bodySmall
-                                                )
-                                            }
+                                                    // Baris 2: Daftar Item Vertikal Berurutan ke bawah
+                                                    val itemsList = order.items ?: emptyList()
+                                                    itemsList.take(2).forEach { item ->
+                                                        Text(
+                                                            text = item.itemName ?: "",
+                                                            color = Color.White.copy(alpha = 0.9f),
+                                                            fontSize = 13.sp,
+                                                            modifier = Modifier.padding(vertical = 0.dp),
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                    if (itemsList.size > 2) {
+                                                        Text(
+                                                            text = "+${itemsList.size - 2} item lainnya",
+                                                            color = Color.White.copy(alpha = 0.45f),
+                                                            fontSize = 12.sp,
+                                                            modifier = Modifier.padding(vertical = 0.dp)
+                                                        )
+                                                    }
 
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 0.5.dp)
-                                            Spacer(modifier = Modifier.height(8.dp))
+                                                    Spacer(modifier = Modifier.height(2.dp))
 
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Text(
-                                                    text = "Total:",
-                                                    color = Color.White.copy(alpha = 0.6f),
-                                                    style = MaterialTheme.typography.bodySmall
-                                                )
-                                                Text(
-                                                    text = formatIDR(order.total),
-                                                    color = Color.White,
-                                                    fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.bodySmall
-                                                )
+                                                    // Baris 3: Status Badge dan Timestamp sejajar
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.Start,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = (order.status ?: "Pending").uppercase(),
+                                                            color = statusColor,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 10.sp
+                                                        )
+                                                        
+                                                        Spacer(modifier = Modifier.width(10.dp))
+                                                        
+                                                        Text(
+                                                            text = order.timestamp?.let { getTimeAgo(it) } ?: "",
+                                                            color = Color.White.copy(alpha = 0.4f),
+                                                            fontSize = 12.sp
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }

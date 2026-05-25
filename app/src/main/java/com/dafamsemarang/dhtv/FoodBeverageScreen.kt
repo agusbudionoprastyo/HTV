@@ -648,15 +648,17 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
             ItemDialog(
                 item = selectedItemDetail!!,
                 onAddToCart = { item, quantity, specialInstruction, selectedVariant ->
-                    val existingItem = selectedItems.find {
+                    val existingIndex = selectedItems.indexOfFirst {
                         it.item.name == item.name &&
                                 it.selectedVariant == selectedVariant &&
                                 (it.specialInstruction == specialInstruction ||
                                         (specialInstruction.isEmpty() && it.specialInstruction.isEmpty()))
                     }
 
-                    if (existingItem != null) {
-                        existingItem.quantity += quantity
+                    if (existingIndex != -1) {
+                        // Replace item in list to trigger SnapshotStateList notification → Compose recomposes → badge count updates
+                        val existing = selectedItems[existingIndex]
+                        selectedItems[existingIndex] = existing.copy(quantity = existing.quantity + quantity)
                     } else {
                         selectedItems.add(SelectedItem(item, quantity, specialInstruction, selectedVariant))
                     }
@@ -1039,14 +1041,15 @@ fun MenuItem(
     }
 
     // 🚀 PERFORMANCE: Apply elegant white border that pulses and fades in smoothly on focus
-    val borderModifier = if (isFocused) {
+    // Border pulse ONLY when card focused AND add button is NOT active
+    val borderModifier = if (isFocused && !isAddActive) {
         Modifier.border(
             width = 3.dp,
             color = Color.White.copy(alpha = pulseAlpha.value * focusFadeAlpha),
             shape = RoundedCornerShape(30.dp)
         )
     } else {
-        Modifier // Perfectly clean & zero-overhead for non-focused items!
+        Modifier // Clean when not focused OR when add button is active
     }
 
     // The SINGLE focus target for the whole card, containing the state machine
@@ -1183,8 +1186,12 @@ fun MenuItem(
                     )
                     
                     // Compute dynamic button colors based on the state machine
-                    val btnBg = if (isAddActive && isFocused) Color(0xFFE91E63) else Color.White
-                    val btnText = if (isAddActive && isFocused) Color.White else Color(0xFFE91E63)
+                    val btnBg = if (isAddActive && isFocused) {
+                        Color(0xFFE91E63) // Pink padat ketika difokuskan / ditekan DirectionDown
+                    } else {
+                        Color.White.copy(alpha = 0.15f) // Putih transparan tipis saat pasif
+                    }
+                    val btnText = Color.White
                     
                     // Passive visual Add Button (Appearance driven by parent focus state)
                     Box(
@@ -1197,14 +1204,30 @@ fun MenuItem(
                                 color = btnBg,
                                 shape = RoundedCornerShape(50)
                             )
-                            .padding(8.dp, 4.dp, 8.dp, 4.dp)
+                            .then(
+                                if (isAddActive && isFocused) {
+                                    Modifier.border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(50))
+                                } else Modifier
+                            )
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
-                        Text(
-                            text = "Add \uF11F",
-                            fontFamily = FontFamily(Font(R.font.ionicons)),
-                            fontSize = 12.sp,
-                            color = btnText
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_cart),
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = btnText
+                            )
+                            Text(
+                                text = "Add",
+                                fontSize = 11.sp,
+                                color = btnText,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
