@@ -177,35 +177,6 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
     // Focus requester to ensure Box always has focus for key events
     val focusRequester = remember { FocusRequester() }
 
-    // Handle back press to launch the system screensaver (Native OS Screensaver)
-    BackHandler {
-        Log.d("WelcomeScreen", "Back pressed - Launching native OS Screensaver via Somnambulator")
-        try {
-            // Method 1: Use Somnambulator to launch standard AOSP/Google TV Screensaver (100% Native & Safe)
-            val intent = Intent().apply {
-                setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(intent)
-            Log.d("WelcomeScreen", "Somnambulator daydream launched successfully!")
-        } catch (e: Exception) {
-            Log.e("WelcomeScreen", "Somnambulator failed, trying reflection fallback: ${e.message}")
-            try {
-                // Fallback 1: IDreamManager reflection
-                val dreamManagerClass = Class.forName("android.service.dreams.IDreamManager\$Stub")
-                val serviceManagerClass = Class.forName("android.os.ServiceManager")
-                val getServiceMethod = serviceManagerClass.getMethod("getService", String::class.java)
-                val binder = getServiceMethod.invoke(null, "dreams")
-                val asInterfaceMethod = dreamManagerClass.getMethod("asInterface", android.os.IBinder::class.java)
-                val dreamManager = asInterfaceMethod.invoke(null, binder)
-                val dreamMethod = dreamManager.javaClass.getMethod("dream")
-                dreamMethod.invoke(dreamManager)
-                Log.d("WelcomeScreen", "System daydream triggered via reflection fallback")
-            } catch (e2: Exception) {
-                Log.e("WelcomeScreen", "All daydream triggers failed: ${e2.message}")
-            }
-        }
-    }
 
     // Get PIN
     LaunchedEffect(Unit) {

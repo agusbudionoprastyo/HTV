@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
 import android.view.WindowManager
+import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -327,6 +328,23 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
             Log.d("MainActivity", "Handling screen saver external navigation: $navigateTo")
             NavigationTrigger.pendingRoute = navigateTo
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            Log.d("MainActivity", "Global BACK key pressed - Forcing native Screensaver via Somnambulator")
+            try {
+                val intent = Intent().apply {
+                    setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+                return true // Consume key event globally
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to launch native screensaver from global key listener: ${e.message}")
+            }
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onPause() {
