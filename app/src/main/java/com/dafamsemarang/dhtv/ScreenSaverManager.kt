@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,6 +42,9 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.*
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.HorizontalDivider
 
 object ScreenSaverManager {
     var isScreenSaverActive by mutableStateOf(false)
@@ -50,6 +54,12 @@ object ScreenSaverManager {
     var videoUrl by mutableStateOf("")
     var activeImages by mutableStateOf<List<String>>(emptyList())
     var guestName by mutableStateOf("")
+    var guestImageUrl by mutableStateOf("")
+    var isWelcomeScreenActive by mutableStateOf(false)
+    var welcomeMessage by mutableStateOf("")
+    var signUrl by mutableStateOf("")
+    var gmName by mutableStateOf("")
+    var companyIconUrl by mutableStateOf<String?>(null)
     
     // Video Caching States
     private var appContext: Context? = null
@@ -125,6 +135,44 @@ object ScreenSaverManager {
                                 }
                                 Log.d("ScreenSaverManager", "Guest name loaded for screensaver: $guestName")
                             }
+
+                            val rawGuestUrl = snapshot.child("guestImageUrl").getValue(String::class.java) ?: ""
+                            if (rawGuestUrl.isNotEmpty()) {
+                                guestImageUrl = rawGuestUrl
+                                val ctx = appContext
+                                if (ctx != null) {
+                                    val cacheFileName = getImageCacheFileName(rawGuestUrl)
+                                    downloadAndCacheImage(ctx, rawGuestUrl, cacheFileName, { path ->
+                                        Log.d("ScreenSaverManager", "Guest image pre-cached: $path")
+                                    }, { e ->
+                                        Log.e("ScreenSaverManager", "Failed to cache guest image: ${e.message}")
+                                    })
+                                }
+                            }
+
+                            val folioVal = snapshot.child("folio").getValue(Int::class.java) ?: 0
+                            if (folioVal != 0) {
+                                val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folioVal.toString()).child("imageUrl")
+                                imageRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                                    override fun onDataChange(imgSnapshot: DataSnapshot) {
+                                        val url = imgSnapshot.getValue(String::class.java)
+                                        if (!url.isNullOrBlank()) {
+                                            guestImageUrl = url
+                                            val ctx = appContext
+                                            if (ctx != null) {
+                                                val cacheFileName = getImageCacheFileName(url)
+                                                downloadAndCacheImage(ctx, url, cacheFileName, { path ->
+                                                    Log.d("ScreenSaverManager", "Guest image from GUESTIMAGE pre-cached: $path")
+                                                }, { e ->
+                                                    Log.e("ScreenSaverManager", "Failed to cache guest image from GUESTIMAGE: ${e.message}")
+                                                })
+                                            }
+                                        }
+                                        Log.d("ScreenSaverManager", "Guest image loaded for screensaver from GUESTIMAGE: $guestImageUrl")
+                                    }
+                                    override fun onCancelled(error: DatabaseError) {}
+                                })
+                            }
                         } else {
                             guestName = ""
                         }
@@ -135,6 +183,43 @@ object ScreenSaverManager {
                 override fun onCancelled(error: DatabaseError) {}
             })
         }
+        
+        val welcomeRef = database.child("BRANCHES").child(branchId).child("WELCOME_LETTER")
+        Log.d("ScreenSaverManager", "Attaching WELCOME_LETTER listener: BRANCHES/$branchId/WELCOME_LETTER")
+        welcomeRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                try {
+                    if (snapshot.exists()) {
+                        welcomeMessage = snapshot.child("welcomeMessage").getValue(String::class.java) ?: ""
+                        signUrl = snapshot.child("signUrl").getValue(String::class.java) ?: ""
+                        gmName = snapshot.child("gm").getValue(String::class.java) ?: ""
+                        Log.d("ScreenSaverManager", "Welcome letter loaded for screensaver. Message: $welcomeMessage, Sign: $signUrl")
+                    } else {
+                        welcomeMessage = ""
+                        signUrl = ""
+                        gmName = ""
+                    }
+                } catch (e: Exception) {
+                    Log.e("ScreenSaverManager", "Error parsing WELCOME_LETTER: ${e.message}")
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+
+        val iconRef = database.child("BRANCHES").child(branchId).child("SETTING").child("COMPANY_ICON")
+        Log.d("ScreenSaverManager", "Attaching COMPANY_ICON listener: BRANCHES/$branchId/SETTING/COMPANY_ICON")
+        iconRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                try {
+                    companyIconUrl = snapshot.child("iconUrl").getValue(String::class.java)
+                    Log.d("ScreenSaverManager", "Company icon loaded for screensaver: $companyIconUrl")
+                } catch (e: Exception) {
+                    Log.e("ScreenSaverManager", "Error parsing COMPANY_ICON: ${e.message}")
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+
         val screensaverRef = database.child("BRANCHES").child(branchId).child("SETTING").child("SCREEN_SAVER")
         
         Log.d("ScreenSaverManager", "Attaching Firebase listener to path: BRANCHES/$branchId/SETTING/SCREEN_SAVER")
@@ -164,6 +249,10 @@ object ScreenSaverManager {
                         }
                     }
                     
+                    // Parse Welcome Screen Setting
+                    val welcomeSnapshot = snapshot.child("WELCOME_SCREEN")
+                    val newWelcomeActive = welcomeSnapshot.child("ACTIVE").getValue(Boolean::class.java) ?: false
+                    
                     // CRITICAL: Only update states if values have ACTUALLY changed.
                     // This prevents infinite recomposition/rendering loops!
                     if (isVideoActive != newVideoActive) {
@@ -176,8 +265,11 @@ object ScreenSaverManager {
                     if (activeImages != imagesList) {
                         activeImages = imagesList
                     }
+                    if (isWelcomeScreenActive != newWelcomeActive) {
+                        isWelcomeScreenActive = newWelcomeActive
+                    }
                     
-                    Log.d("ScreenSaverManager", "Screensaver settings loaded successfully: isVideoActive=$isVideoActive, videoUrl=$videoUrl, activeImagesCount=${activeImages.size}")
+                    Log.d("ScreenSaverManager", "Screensaver settings loaded: isVideoActive=$isVideoActive, isWelcomeScreenActive=$isWelcomeScreenActive, activeImagesCount=${activeImages.size}")
                 } catch (e: Exception) {
                     Log.e("ScreenSaverManager", "Error parsing Firebase screensaver settings: ${e.message}", e)
                 }
@@ -205,10 +297,11 @@ object ScreenSaverManager {
             
             val hasVideo = isVideoActive && videoUrl.isNotEmpty()
             val hasImages = activeImages.isNotEmpty()
+            val hasWelcome = isWelcomeScreenActive
             
-            if (hasVideo || hasImages) {
+            if (hasVideo || hasImages || hasWelcome) {
                 isScreenSaverActive = true
-                Log.d("ScreenSaverManager", "Screensaver triggered! isVideoActive=$isVideoActive")
+                Log.d("ScreenSaverManager", "Screensaver triggered! isVideoActive=$isVideoActive, isWelcomeActive=$isWelcomeScreenActive")
             } else {
                 Log.d("ScreenSaverManager", "Idle timeout reached, but no screensaver content is active.")
             }
@@ -273,19 +366,12 @@ object ScreenSaverManager {
 @Composable
 fun ScreenSaverOverlay() {
     val context = LocalContext.current
-    var showWelcomeCard by remember { mutableStateOf(false) }
-    val mainFocusRequester = remember { FocusRequester() }
+    val focusRequester = remember { FocusRequester() }
     
-    // Smoothly reveal the welcome navigation card after 10 seconds of uninterrupted screensaver playback
-    LaunchedEffect(Unit) {
-        delay(10000)
-        showWelcomeCard = true
-    }
-    
-    // Request focus on the main Box to ensure key events are captured correctly on TV remote controls
+    // Automatically request focus on screensaver launch to intercept key events cleanly
     LaunchedEffect(Unit) {
         try {
-            mainFocusRequester.requestFocus()
+            focusRequester.requestFocus()
         } catch (e: Exception) {}
     }
     
@@ -293,152 +379,76 @@ fun ScreenSaverOverlay() {
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .focusRequester(mainFocusRequester)
+            .focusRequester(focusRequester)
             .focusable()
             .onPreviewKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     val nativeCode = keyEvent.nativeKeyEvent.keyCode
-                    if (nativeCode == KeyEvent.KEYCODE_BACK || keyEvent.key == Key.Back) {
-                        Log.d("ScreenSaverOverlay", "BACK button pressed - exiting screensaver")
-                        if (context is android.service.dreams.DreamService) {
-                            context.finish()
-                        } else {
-                            ScreenSaverManager.isScreenSaverActive = false
-                        }
-                        return@onPreviewKeyEvent true
+                    Log.d("ScreenSaverOverlay", "Screensaver: Key pressed ($nativeCode) - exiting screensaver instantly!")
+                    if (context is android.service.dreams.DreamService) {
+                        context.finish()
+                    } else {
+                        ScreenSaverManager.isScreenSaverActive = false
                     }
+                    return@onPreviewKeyEvent true
                 }
                 false
             }
     ) {
-        if (ScreenSaverManager.isVideoActive && ScreenSaverManager.videoUrl.isNotEmpty()) {
-            VideoScreenSaver(url = ScreenSaverManager.videoUrl)
-        } else if (ScreenSaverManager.activeImages.isNotEmpty()) {
-            ImageSlideshowScreenSaver(images = ScreenSaverManager.activeImages)
+        var showWelcomeCard by remember { mutableStateOf(false) }
+
+        // Start 5 seconds delay timer when screensaver media starts
+        LaunchedEffect(Unit) {
+            delay(5000)
+            showWelcomeCard = true
         }
-        
-        // Premium glassmorphic card layered perfectly on top, fading in after 10 seconds
-        AnimatedVisibility(
-            visible = showWelcomeCard,
-            enter = fadeIn(animationSpec = tween(1200)),
-            exit = fadeOut(animationSpec = tween(800)),
-            modifier = Modifier.align(Alignment.Center)
-        ) {
-            GlassmorphicWelcomeCard(
-                guestName = ScreenSaverManager.guestName,
-                onNavigate = { destination ->
+
+        if (ScreenSaverManager.isWelcomeScreenActive) {
+            // Option 3: Full-screen Personalized Welcome Screen as Screensaver!
+            WelcomeScreen(
+                onNavigateToHome = {
                     if (context is android.service.dreams.DreamService) {
-                        // Native DreamService flow: launch activity with explicit navigation extras and finish service
+                        // Native DreamService flow: launch activity with home navigation extra and close service
                         val intent = Intent(context, MainActivity::class.java).apply {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                            putExtra("navigate_to", destination)
+                            putExtra("navigate_to", "home")
                         }
                         context.startActivity(intent)
                         context.finish()
                     } else {
-                        // In-app overlay flow: close overlay and navigate via shared trigger
+                        // In-app screensaver flow: close screensaver overlay and navigate to Home Screen
                         ScreenSaverManager.isScreenSaverActive = false
-                        NavigationTrigger.pendingRoute = destination
+                        NavigationTrigger.pendingRoute = "home"
                     }
                 }
             )
-        }
-    }
-}
+        } else {
+            // Options 1 & 2: Pristine, full-screen Media Screensaver (No overlays!)
+            if (ScreenSaverManager.isVideoActive && ScreenSaverManager.videoUrl.isNotEmpty()) {
+                VideoScreenSaver(url = ScreenSaverManager.videoUrl)
+            } else if (ScreenSaverManager.activeImages.isNotEmpty()) {
+                ImageSlideshowScreenSaver(images = ScreenSaverManager.activeImages)
+            }
 
-@Composable
-fun GlassmorphicWelcomeCard(guestName: String, onNavigate: (String) -> Unit) {
-    var isWelcomeFocused by remember { mutableStateOf(false) }
-    var isHomeFocused by remember { mutableStateOf(false) }
-    
-    val focusRequesterWelcome = remember { FocusRequester() }
-    val focusRequesterHome = remember { FocusRequester() }
-
-    LaunchedEffect(Unit) {
-        // Automatically request D-pad focus on the primary action button to yield flawless TV remote usability
-        try {
-            focusRequesterWelcome.requestFocus()
-        } catch (e: Exception) {}
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .width(360.dp) // Much more compact width
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.White.copy(alpha = 0.1f)) // Bright white glass with alpha 0.1
-                .padding(20.dp) // Smaller interior padding
-        ) {
-            // Elegant Welcome Title
-            Text(
-                text = if (guestName.isNotEmpty()) "Welcome, $guestName" else "Welcome Guest",
-                color = Color.White,
-                fontSize = 20.sp, // Compact font size
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp
-            )
-            
-            Spacer(modifier = Modifier.height(6.dp))
-            
-            Text(
-                text = "Enjoy your premium hospitality stay with us. Feel free to explore our services or continue to home.",
-                color = Color.White.copy(alpha = 0.72f),
-                fontSize = 12.sp, // Compact details
-                lineHeight = 16.sp
-            )
-            
-            Spacer(modifier = Modifier.height(18.dp))
-            
-            // Buttons Row
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Button 1: Welcome Screen (Pill shaped, no border, compact height)
+            // Overlay elegant Glassmorphic Welcome Card on top of video or slideshow after 5 seconds delay
+            if (ScreenSaverManager.guestName.isNotEmpty() || ScreenSaverManager.welcomeMessage.isNotEmpty()) {
                 Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(40.dp) // Compact button height
-                        .clip(RoundedCornerShape(20.dp)) // Perfect pill shape (height is 40.dp)
-                        .background(if (isWelcomeFocused) Color.White else Color.White.copy(alpha = 0.15f))
-                        .focusRequester(focusRequesterWelcome)
-                        .onFocusChanged { isWelcomeFocused = it.isFocused }
-                        .focusable()
-                        .clickable { onNavigate("welcome") }
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Welcome",
-                        color = if (isWelcomeFocused) Color.Black else Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp // Smaller font
-                    )
-                }
-                
-                // Button 2: Home Screen (Pill shaped, no border, compact height)
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(40.dp) // Compact button height
-                        .clip(RoundedCornerShape(20.dp)) // Perfect pill shape (height is 40.dp)
-                        .background(if (isHomeFocused) Color.White else Color.White.copy(alpha = 0.15f))
-                        .focusRequester(focusRequesterHome)
-                        .onFocusChanged { isHomeFocused = it.isFocused }
-                        .focusable()
-                        .clickable { onNavigate("home") }
-                ) {
-                    Text(
-                        text = "Home",
-                        color = if (isHomeFocused) Color.Black else Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp // Smaller font
-                    )
+                    AnimatedVisibility(
+                        visible = showWelcomeCard,
+                        enter = fadeIn(animationSpec = tween(1500)),
+                        exit = fadeOut(animationSpec = tween(800))
+                    ) {
+                        GlassmorphicWelcomeCard(
+                            guestName = ScreenSaverManager.guestName,
+                            welcomeMessage = ScreenSaverManager.welcomeMessage,
+                            signUrl = ScreenSaverManager.signUrl,
+                            gmName = ScreenSaverManager.gmName,
+                            guestImageUrl = ScreenSaverManager.guestImageUrl
+                        )
+                    }
                 }
             }
         }
@@ -539,6 +549,132 @@ fun ImageSlideshowScreenSaver(images: List<String>) {
                 contentDescription = "Screensaver Image",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
+            )
+        }
+    }
+}
+
+@Composable
+fun GlassmorphicWelcomeCard(
+    guestName: String,
+    welcomeMessage: String,
+    signUrl: String,
+    gmName: String,
+    guestImageUrl: String
+) {
+    Box(
+        modifier = Modifier
+            .width(480.dp)
+            .wrapContentHeight()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.White.copy(alpha = 0.1f)), // Removed padding from parent Box to allow true overflow!
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.Start, // Set card contents alignment start
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp) // Applied padding internally to Column to keep text aligned safely!
+        ) {
+            Text(
+                text = "Welcome, ${formatName(guestName)}",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Row containing left-aligned welcome message and circular guest image on the right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = welcomeMessage.replace("\\n", "\n"),
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Start, // Left aligned
+                    lineHeight = 18.sp,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (guestImageUrl.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(20.dp))
+                    Image(
+                        painter = rememberCachedPainter(url = guestImageUrl),
+                        contentDescription = "Guest Photo",
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(CircleShape)
+                            .border(1.5.dp, Color.White.copy(alpha = 0.3f), CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(20.dp))
+            
+            // Clean left-aligned closing column containing the vertical space gap for the overlay signature
+            Column(
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = "Warm Regards,",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Start
+                )
+                
+                Spacer(modifier = Modifier.height(44.dp)) // The signature gap
+
+                Text(
+                    text = "General Manager",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Start
+                )
+                if (gmName.isNotEmpty()) {
+                    Text(
+                        text = gmName,
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.offset(y = (-4).dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(20.dp))
+            
+            Text(
+                text = "Press any key to continue",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // Render signature image OUTSIDE the main column, as a direct child of the card Box.
+        // This allows it to ignore card padding boundaries and overflow beautifully while staying centered/aligned!
+        if (signUrl.isNotEmpty()) {
+            Image(
+                painter = rememberCachedPainter(url = signUrl),
+                contentDescription = "Signature",
+                modifier = Modifier
+                    .width(130.dp)
+                    .height(75.dp)
+                    .align(Alignment.BottomStart)
+                    .offset(x = (-10).dp, y = (-67).dp),
+                contentScale = ContentScale.Fit,
+                colorFilter = ColorFilter.tint(Color.White)
             )
         }
     }

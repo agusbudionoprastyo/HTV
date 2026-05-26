@@ -112,13 +112,13 @@ fun AppNavigation() {
         }
     }
 
-    // Tentukan tampilan awal
+    // Tentukan tampilan awal (Direct to HomeScreen, skipping WelcomeScreen in main flow)
     val startDestination = if (savedDeviceId == null) {
         "pairing"  // Jika perangkat belum dipairing, mulai dengan Pairing Screen
     } else if (!hasPreloaded) {
         "preload"  // Jika sudah dipairing tapi belum pernah preload sama sekali
     } else {
-        "welcome"  // Jika sudah pernah preload sekali, langsung masuk Welcome Screen
+        "home"     // Beralih langsung ke HomeScreen, WelcomeScreen hanya aktif sebagai screensaver!
     }
 
     // Observe current route to toggle Header visibility
@@ -160,7 +160,9 @@ fun AppNavigation() {
                 PreloadScreen(onPreloadFinished = {
                     // Tandai bahwa satu kali inisiasi resource awal sudah berhasil
                     sharedPreferences.edit { putBoolean("hasPreloaded", true) }
-                    navController.navigate("welcome") {
+                    // Trigger screensaver overlay to display first!
+                    ScreenSaverManager.isScreenSaverActive = true
+                    navController.navigate("home") {
                         popUpTo("preload") { inclusive = true }
                         launchSingleTop = true
                     }

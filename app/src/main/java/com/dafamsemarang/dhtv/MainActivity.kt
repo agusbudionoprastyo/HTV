@@ -138,7 +138,6 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         )
                     }
 
-                    // Check if device is paired
                     LaunchedEffect(Unit) {
                         Log.d("MainActivity", "Checking device pairing status")
                         val tempDeviceManager = DeviceManager(this@MainActivity)
@@ -147,6 +146,8 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         if (isPaired) {
                             deviceManager = tempDeviceManager
                             Log.d("MainActivity", "Device is paired, DeviceManager initialized")
+                            // STB BOOT ONBOARDING: Open screensaver immediately on first boot/launch!
+                            ScreenSaverManager.isScreenSaverActive = true
                         } else {
                             Log.d("MainActivity", "Device is not paired yet")
                             // Log current device information
@@ -181,6 +182,11 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         )
                     } else {
                         AppNavigation()
+                    }
+
+                    // Render screensaver inside the app overlay when active
+                    if (ScreenSaverManager.isScreenSaverActive) {
+                        ScreenSaverOverlay()
                     }
                 }
             }
