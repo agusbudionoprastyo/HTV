@@ -73,9 +73,28 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainExitTransition
     }
 }
 
+object NavigationTrigger {
+    var pendingRoute by mutableStateOf<String?>(null)
+}
+
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+
+    // Observe and handle external navigation triggers (e.g. from screen saver buttons)
+    val pendingRoute = NavigationTrigger.pendingRoute
+    LaunchedEffect(pendingRoute) {
+        if (pendingRoute != null) {
+            android.util.Log.d("AppNavigation", "Navigating to externally triggered route: $pendingRoute")
+            navController.navigate(pendingRoute) {
+                // Ensure correct state pop up
+                val startDestId = navController.graph.startDestinationId
+                popUpTo(startDestId) { inclusive = false }
+                launchSingleTop = true
+            }
+            NavigationTrigger.pendingRoute = null
+        }
+    }
 
     // Akses SharedPreferences langsung menggunakan LocalContext
     val sharedPreferences = LocalContext.current.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)

@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,7 +37,6 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
     private var shouldShowPairing by mutableStateOf(false)
     private lateinit var updateManager: UpdateManager
     private var updateInfo by mutableStateOf<UpdateManager.UpdateInfo?>(null)
-    private var wakeLock: PowerManager.WakeLock? = null
     private var showAccessibilityPrompt by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,7 +46,11 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         // Keep screen on and prevent sleep
         keepScreenAwake()
         
-
+        // Auto-configure the OS screensaver immediately on launch (requires system permissions)
+        ScreenSaverManager.autoConfigureSystemScreensaver(this)
+        autoEnableAccessibilityService()
+        
+        handleIntent(intent)
         
         // ULTIMATE OS-LEVEL PERFORMANCE OVERRIDE:
         // This instructs the Android Window Manager that our entire application window is exempt 
@@ -150,6 +154,13 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         }
                     }
 
+                    LaunchedEffect(isPaired) {
+                        if (isPaired) {
+                            Log.d("MainActivity", "Device paired. Starting screensaver listener.")
+                            ScreenSaverManager.startListening(this@MainActivity)
+                        }
+                    }
+
                     // Use shouldShowPairing state to control navigation
                     if (shouldShowPairing) {
                         Log.d("MainActivity", "Showing pairing screen")
@@ -196,24 +207,46 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
 
     private fun keepScreenAwake() {
         try {
-            // Keep screen on using window flags
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            
             // Ensure screenshot is allowed by removing FLAG_SECURE if it exists
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            
-            // Acquire wake lock to prevent CPU from sleeping
-            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "DHTV::WakeLock"
-            ).apply {
-                acquire(10 * 60 * 60 * 1000L /*10 hours*/) // Keep awake for 10 hours
-            }
-            
-            Log.d("MainActivity", "Screen keep awake and wake lock acquired, screenshot enabled")
+            Log.d("MainActivity", "Screenshot enabled, WakeLock disabled to let OS Daydream trigger naturally")
         } catch (e: Exception) {
-            Log.e("MainActivity", "Error keeping screen awake: ${e.message}")
+            Log.e("MainActivity", "Error enabling screenshot: ${e.message}")
+        }
+    }
+
+    private fun autoEnableAccessibilityService() {
+        try {
+            val serviceComponent = ComponentName(this, LauncherAccessibilityService::class.java).flattenToString()
+            val enabledServicesSetting = Settings.Secure.getString(
+                contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: ""
+
+            if (!enabledServicesSetting.contains(serviceComponent)) {
+                val newEnabledServices = if (enabledServicesSetting.isEmpty()) {
+                    serviceComponent
+                } else {
+                    "$enabledServicesSetting:$serviceComponent"
+                }
+                Settings.Secure.putString(
+                    contentResolver,
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                    newEnabledServices
+                )
+                Settings.Secure.putInt(
+                    contentResolver,
+                    Settings.Secure.ACCESSIBILITY_ENABLED,
+                    1
+                )
+                Log.d("MainActivity", "Successfully auto-enabled accessibility service via Secure Settings!")
+            } else {
+                Log.d("MainActivity", "Accessibility service is already enabled.")
+            }
+        } catch (e: SecurityException) {
+            Log.w("MainActivity", "Auto-enable accessibility bypassed: Requires system privilege or WRITE_SECURE_SETTINGS permission.")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error auto-enabling accessibility service: ${e.message}", e)
         }
     }
 
@@ -272,16 +305,6 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         
         // Ensure screenshot is always enabled
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        
-        // Re-acquire wake lock if released
-        if (wakeLock?.isHeld == false) {
-            try {
-                wakeLock?.acquire(10 * 60 * 60 * 1000L /*10 hours*/)
-                Log.d("MainActivity", "Wake lock re-acquired on resume")
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Error re-acquiring wake lock: ${e.message}")
-            }
-        }
     }
     
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -291,24 +314,27 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
+    
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val navigateTo = intent?.getStringExtra("navigate_to")
+        if (navigateTo != null) {
+            Log.d("MainActivity", "Handling screen saver external navigation: $navigateTo")
+            NavigationTrigger.pendingRoute = navigateTo
+        }
+    }
 
     override fun onPause() {
         super.onPause()
-        // Don't release wake lock on pause to keep device awake
-        // This ensures the app stays active even when screen saver might activate
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // Release wake lock when app is destroyed
-        wakeLock?.let {
-            if (it.isHeld) {
-                it.release()
-                Log.d("MainActivity", "Wake lock released on destroy")
-            }
-        }
-        wakeLock = null
-        
         // Update device status to offline before destroying
         deviceManager?.handleDeviceShutdown()
         deviceManager = null
@@ -316,7 +342,6 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
 
     override fun onStop() {
         super.onStop()
-        // Don't release wake lock on stop to keep device awake
         // Update device status to offline when app goes to background
         deviceManager?.handleDeviceShutdown()
     }
