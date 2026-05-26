@@ -81,9 +81,6 @@ import java.util.Locale
 import java.util.TimeZone
 @Composable
 fun HeaderSection(currentRoute: String? = "home") {
-    val context = LocalContext.current
-    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-    val branchId = sharedPreferences.getString("branchId", null)
     val iconUrl by DataRepository.companyIconUrl
     val configuredCity by DataRepository.configuredCity
     val liveWeather by DataRepository.liveWeather
@@ -105,16 +102,15 @@ fun HeaderSection(currentRoute: String? = "home") {
     var viewMode by remember { mutableStateOf(0) } // 0 = Current Weather, 1 = Hourly Forecast, 2 = 7 Days Forecast
     var currentTimeString by remember { mutableStateOf("") }
 
-    var redrawTrigger by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        delay(500)
-        redrawTrigger++
-        delay(1000)
-        redrawTrigger++
-        delay(2000)
-        redrawTrigger++
-        delay(4000)
-        redrawTrigger++
+    LaunchedEffect(isFocused, currentRoute) {
+        if (!isFocused) {
+            // Jeda 1.5 detik setelah perpindahan layar selesai sebelum memulai siklus auto-scroll pertama
+            delay(1500)
+            while (isActive) {
+                delay(4000) // Auto scroll every 4 seconds
+                viewMode = (viewMode + 1) % 3
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -166,7 +162,7 @@ fun HeaderSection(currentRoute: String? = "home") {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val configuration = androidx.compose.ui.platform.LocalConfiguration.current
             val screenWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
-            val slideDistance = (screenWidthPx * 0.15f).toInt()
+            val slideDistance = (screenWidthPx * 0.20f).toInt()
 
             AnimatedContent(
                 targetState = currentRoute ?: "home",

@@ -127,7 +127,8 @@ data class SupportedApp(
     val packageName: String,
     val label: String,
     val icon: android.graphics.drawable.Drawable? = null,
-    val banner: android.graphics.drawable.Drawable? = null
+    val banner: android.graphics.drawable.Drawable? = null,
+    val installerPackageName: String? = null
 )
 
 // Helper to fetch installed apps
@@ -156,12 +157,19 @@ fun getInstalledApps(context: Context): List<SupportedApp> {
                 banner = resolveInfo.activityInfo.applicationInfo.loadBanner(pm)
             }
 
+            val installer = try {
+                pm.getInstallerPackageName(packageName)
+            } catch (e: Exception) {
+                null
+            }
+
             apps.add(
                 SupportedApp(
                     packageName = packageName,
                     label = resolveInfo.loadLabel(pm).toString(),
                     icon = resolveInfo.loadIcon(pm),
-                    banner = banner
+                    banner = banner,
+                    installerPackageName = installer
                 )
             )
         }
@@ -702,7 +710,9 @@ fun VideoAndSlideshowSection(
     flightArrivals: List<Flight> = emptyList(),
     flightDepartures: List<Flight> = emptyList(),
     flightAirportName: String = "",
-    fidsActive: Boolean = true
+    fidsActive: Boolean = true,
+    onBannerFocusChanged: (Boolean) -> Unit = {},
+    onNavigateDown: () -> Unit = {}
 ) {
     // Use shared MediaPlayer if provided, otherwise create local one
     var localMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -1123,17 +1133,26 @@ fun VideoAndSlideshowSection(
         val departuresPagesCount = if (flightDepartures.isEmpty()) 1 else ((flightDepartures.size + 3) / 4)
         val fidsSlidesCount = if (fidsActive) (arrivalsPagesCount + departuresPagesCount) else 0
         val totalSlidesCount = imageList.size + fidsSlidesCount
-        var isBannerFocused by remember { mutableStateOf(false) }
+        var isBannerFocusedInternal by remember { mutableStateOf(false) }
+        val isBannerFocused = isBannerFocusedInternal
 
-        // Reset arah navigasi ke kanan setelah index berubah (termasuk auto-scroll)
+        // Reset arah navigasi ke kanan setelah index berubah (hanya saat TIDAK sedang di-focus/auto-scroll)
         LaunchedEffect(currentImageIndex) {
             delay(400) // Beri waktu animasi transisi selesai dulu
-            isNavigatingLeft = false
+            if (!isBannerFocusedInternal) {
+                isNavigatingLeft = false
+            }
         }
 
         val bannerFocusPulseAlpha = remember { Animatable(0.4f) }
-        LaunchedEffect(isBannerFocused) {
-            if (isBannerFocused) {
+        LaunchedEffect(isBannerFocusedInternal) {
+            if (!isBannerFocusedInternal) {
+                delay(150) // Filter out temporary focus changes during recomposition/transitions
+                if (!isBannerFocusedInternal) {
+                    isNavigatingLeft = false // Kembalikan arah pesawat ke kanan saat banner benar-benar kehilangan fokus
+                }
+            }
+            if (isBannerFocusedInternal) {
                 bannerFocusPulseAlpha.animateTo(
                     targetValue = 1f,
                     animationSpec = infiniteRepeatable(
@@ -1151,7 +1170,10 @@ fun VideoAndSlideshowSection(
                 .requiredWidth(456.dp)
                 .requiredHeight(168.dp)
                 .offset(x = (-4).dp, y = 0.dp)
-                .onFocusChanged { isBannerFocused = it.isFocused }
+                .onFocusChanged { 
+                    isBannerFocusedInternal = it.isFocused 
+                    onBannerFocusChanged(it.isFocused)
+                }
                 .onPreviewKeyEvent { keyEvent ->
                     if (keyEvent.type == KeyEventType.KeyDown) {
                         when (keyEvent.key) {
@@ -1170,6 +1192,10 @@ fun VideoAndSlideshowSection(
                                     onImageIndexChanged(prevIndex)
                                     true
                                 } else false
+                            }
+                            Key.DirectionDown -> {
+                                onNavigateDown()
+                                true
                             }
                             Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
                                 true // Intercept OK click doing nothing
@@ -1551,6 +1577,7 @@ fun HomeScreen(navController: NavHostController) {
     val videoUrlsState by DataRepository.videoUrls
     val slideDurations by DataRepository.slideshowDurations
     val isSlideshowActive by DataRepository.isSlideshowActive
+    var isBannerFocused by remember { mutableStateOf(false) }
     
     // Customizable Shortcuts State
     val shortcutsPrefs = remember { context.getSharedPreferences("app_shortcuts", Context.MODE_PRIVATE) }
@@ -1569,6 +1596,37 @@ fun HomeScreen(navController: NavHostController) {
     var showDrawer by remember { mutableStateOf(false) }
     var selectedSlotIndex by remember { mutableIntStateOf(-1) }
     var installedApps by remember { mutableStateOf<List<SupportedApp>>(ShortcutIconCache.getInstalledAppsList()) }
+    
+    var allowedPackagesFromFirebase by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(Unit) {
+        val dbRef = FirebaseDatabase.getInstance().reference.child("allowedApps")
+        dbRef.addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val packages = mutableSetOf<String>()
+                for (child in snapshot.children) {
+                    val allowed = child.child("allowed").getValue(Boolean::class.java) ?: false
+                    val pkgName = child.child("packageName").getValue(String::class.java)
+                    if (allowed && !pkgName.isNullOrEmpty()) {
+                        packages.add(pkgName)
+                    }
+                }
+                allowedPackagesFromFirebase = packages
+            }
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                // Ignore or log error
+            }
+        })
+    }
+    
+    val filteredInstalledApps = remember(installedApps, allowedPackagesFromFirebase) {
+        installedApps.filter { app ->
+            app.packageName == "com.dh.iptv" ||
+                    app.installerPackageName == "com.android.vending" ||
+                    app.packageName == "com.android.vending" ||
+                    app.packageName.startsWith("com.google.android.") ||
+                    app.packageName in allowedPackagesFromFirebase
+        }
+    }
     
     // Reorder & Action Dialog State
     var isReorderMode by remember { mutableStateOf(false) }
@@ -1601,11 +1659,13 @@ fun HomeScreen(navController: NavHostController) {
     }
 
     LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            val apps = getInstalledApps(context)
-            withContext(Dispatchers.Main) {
-                installedApps = apps
-                ShortcutIconCache.setInstalledAppsList(apps)
+        if (installedApps.isEmpty()) {
+            withContext(Dispatchers.IO) {
+                val apps = getInstalledApps(context)
+                withContext(Dispatchers.Main) {
+                    installedApps = apps
+                    ShortcutIconCache.setInstalledAppsList(apps)
+                }
             }
         }
     }
@@ -1744,8 +1804,8 @@ fun HomeScreen(navController: NavHostController) {
     }
 
     // Timer for changing image based on slide duration (restarts on manual D-pad changes for jank-free transition timing)
-    LaunchedEffect(isSlideshowActive, imageList, slideDurations, currentImageIndex, fidsActive, arrivalsPagesCount, departuresPagesCount) {
-        if (isSlideshowActive && imageList.isNotEmpty()) {
+    LaunchedEffect(isSlideshowActive, imageList, slideDurations, currentImageIndex, fidsActive, arrivalsPagesCount, departuresPagesCount, isBannerFocused) {
+        if (isSlideshowActive && imageList.isNotEmpty() && !isBannerFocused) {
             if (totalSlidesCount > 0) {
                 try {
                     // Flight info total = 30 detik, dibagi rata ke semua halaman (arr + dept)
@@ -1756,7 +1816,7 @@ fun HomeScreen(navController: NavHostController) {
                         slideDurations.getOrNull(currentImageIndex) ?: 5
                     }
                     delay(duration * 1000L)
-                    if (isSlideshowActive && imageList.isNotEmpty()) {
+                    if (isSlideshowActive && imageList.isNotEmpty() && !isBannerFocused) {
                         currentImageIndex = (currentImageIndex + 1) % totalSlidesCount
                     }
                 } catch (e: Exception) {
@@ -1842,7 +1902,15 @@ fun HomeScreen(navController: NavHostController) {
                         flightArrivals = flightArrivals,
                         flightDepartures = flightDepartures,
                         flightAirportName = flightAirportName,
-                        fidsActive = fidsActive
+                        fidsActive = fidsActive,
+                        onBannerFocusChanged = { isBannerFocused = it },
+                        onNavigateDown = {
+                            try {
+                                shortcutFocusRequesters[0].requestFocus()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
                     )
 
                     // Large white 20% opacity DND Active Indicator (Icon Only)
@@ -1871,7 +1939,7 @@ fun HomeScreen(navController: NavHostController) {
                         context = context,
                         navController = navController,
                         shortcutSlots = shortcutSlots,
-                        installedApps = installedApps,
+                        installedApps = filteredInstalledApps,
                         onSlotClick = { appPackage -> 
                             if (isReorderMode) {
                                  isReorderMode = false
@@ -2093,7 +2161,9 @@ fun HomeScreen(navController: NavHostController) {
                 .zIndex(20f) // Highest zIndex
         ) {
             AppDrawer(
-                installedApps = installedApps.filter { it.packageName !in shortcutSlots },
+                installedApps = remember(filteredInstalledApps, shortcutSlots) {
+                    filteredInstalledApps.filter { it.packageName !in shortcutSlots }
+                },
                 onDismiss = { showDrawer = false },
                 onAppSelected = { app ->
                     if (selectedSlotIndex in shortcutSlots.indices) {
@@ -2588,10 +2658,26 @@ fun AppDrawer(
     onAppSelected: (SupportedApp) -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    var isVisible by remember { mutableStateOf(false) }
 
-    // Wrap in Dialog to ensure it renders on top of everything (including Header)
+
+
+    fun closeWithAnimation() {
+        scope.launch {
+            isVisible = false
+            delay(300)
+            onDismiss()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+
+    // Wrap in Dialog to ensure it renders on top of everything
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { closeWithAnimation() },
         properties = androidx.compose.ui.window.DialogProperties(
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false
@@ -2605,146 +2691,226 @@ fun AppDrawer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f)) // Dim background
-                    .clickable { onDismiss() }
+                    .background(Color.Black.copy(alpha = 0.4f)) // Dim background
+                    .clickable { closeWithAnimation() }
             ) {} // Empty content for Scrim
         
-        // Safety Delay state & Focus Request
-        var isInputReady by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) {
-            delay(100)
-            isInputReady = true
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
-        // Drawer Content
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(400.dp) // Fixed width
-                .background(Color(0xFF222222)) // Dark Grey to match image
-                .onKeyEvent { event ->
-                    // FOCUS TRAP: Prevent navigating LEFT out of the drawer
-                    if (event.key == Key.DirectionLeft && event.type == KeyEventType.KeyDown) {
-                        true // Consume the event
-                    } else {
-                        false
-                    }
+            // Safety Delay state & Focus Request
+            var isInputReady by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                delay(450)
+                isInputReady = true
+                try {
+                    focusRequester.requestFocus()
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-                .pointerInput(Unit) {} // Consume touches
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    // Removed padding(24.dp) here to allow full-width highlight
-            ) {
-                Text(
-                    text = "Select Application",
-                    style = TextStyle(
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    ),
-                    modifier = Modifier.padding(24.dp) // Added padding locally to title
-                )
+            }
 
-                if (installedApps.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color.White)
-                    }
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(0.dp), // No gap for full list feel? Or keep gap? User said "full lebar". Standard lists often join. Keeping 0.dp or small. let's use 2.dp or 0.
-                        contentPadding = PaddingValues(bottom = 24.dp)
-                    ) {
-                        itemsIndexed(installedApps) { index, app ->
-                            var isFocused by remember { mutableStateOf(false) }
-                            
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(72.dp)
-                                    .then(if (index == 0) Modifier.focusRequester(focusRequester) else Modifier)
-                                    // FOCUS TRAPS (Top/Bottom)
-                                    .onKeyEvent { event ->
-                                        if (event.type == KeyEventType.KeyDown) {
-                                            if (index == 0 && event.key == Key.DirectionUp) {
-                                                return@onKeyEvent true // Stop going up
-                                            }
-                                            if (index == installedApps.lastIndex && event.key == Key.DirectionDown) {
-                                                return@onKeyEvent true // Stop going down (Lost Focus Fix)
-                                            }
-                                        }
-                                        false
-                                    }
-                                    .onFocusChanged { isFocused = it.isFocused }
-                                    .background(
-                                        if (isFocused) Color.White.copy(alpha = 0.2f) 
-                                        else Color.Transparent
-                                    )
-                                    .focusable()
-                                    .clickable { 
-                                        if (isInputReady) {
-                                            onAppSelected(app) 
-                                        }
-                                    }
-                                    .padding(horizontal = 24.dp), // Content padding
-                                verticalAlignment = Alignment.CenterVertically
+            AnimatedVisibility(
+                visible = isVisible,
+                enter = slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing)
+                ) + fadeIn(),
+                exit = slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(durationMillis = 300, easing = FastOutLinearInEasing)
+                ) + fadeOut()
+            ) {
+                // Drawer Content Styled like CartDrawer
+                Surface(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(top = 16.dp, bottom = 16.dp, end = 16.dp)
+                        .width(380.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color(0xFF1E2026),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (installedApps.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = Color.White)
+                            }
+                        } else {
+                            val appRows = installedApps.chunked(2)
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(top = 24.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
                             ) {
-                                // Display Banner if available, otherwise Icon
-                                if (app.banner != null) {
-                                    Image(
-                                        painter = rememberAsyncImagePainter(model = app.banner),
-                                        contentDescription = app.label,
-                                        modifier = Modifier
-                                            .width(72.dp)
-                                            .height(40.dp) // Reduced by ~40%
-                                            .clip(RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.Crop
+                                item {
+                                    Text(
+                                        text = "Add Application",
+                                        style = TextStyle(
+                                            fontSize = 22.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        ),
+                                        modifier = Modifier.padding(bottom = 12.dp)
                                     )
-                                } else if (app.icon != null) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(Color(0x1AFFFFFF)),
-                                        contentAlignment = Alignment.Center
+                                }
+
+                                items(appRows.size) { rowIndex ->
+                                    val rowApps = appRows[rowIndex]
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        Image(
-                                            painter = rememberAsyncImagePainter(model = app.icon),
-                                            contentDescription = app.label,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
+                                        rowApps.forEachIndexed { colIndex, app ->
+                                            val flatIndex = rowIndex * 2 + colIndex
+                                            var isFocused by remember { mutableStateOf(false) }
+                                            val focusPulseAlpha = remember { Animatable(0.4f) }
+                                            
+                                            LaunchedEffect(isFocused) {
+                                                if (isFocused) {
+                                                    focusPulseAlpha.animateTo(
+                                                        targetValue = 1f,
+                                                        animationSpec = infiniteRepeatable(
+                                                            animation = tween(1000, easing = LinearEasing),
+                                                            repeatMode = RepeatMode.Reverse
+                                                        )
+                                                    )
+                                                } else {
+                                                    focusPulseAlpha.snapTo(0.4f)
+                                                }
+                                            }
+                                            
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(103.dp)
+                                                    .then(if (flatIndex == 0) Modifier.focusRequester(focusRequester) else Modifier)
+                                                    // FOCUS TRAPS (Top/Bottom)
+                                                    .onKeyEvent { event ->
+                                                        if (event.type == KeyEventType.KeyDown) {
+                                                            if (flatIndex == 0 && event.key == Key.DirectionUp) {
+                                                                return@onKeyEvent true // Stop going up
+                                                            }
+                                                            if (flatIndex == installedApps.lastIndex && event.key == Key.DirectionDown) {
+                                                                return@onKeyEvent true // Stop going down
+                                                            }
+                                                        }
+                                                        false
+                                                    }
+                                                    .onFocusChanged { isFocused = it.isFocused }
+                                                    .focusable()
+                                                    .clickable { 
+                                                        if (isInputReady) {
+                                                            onAppSelected(app) 
+                                                            closeWithAnimation()
+                                                        }
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                // 1. Pulsing Outer Focus Border (drawn with a 4.dp gap)
+                                                if (isFocused) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .border(
+                                                                width = 2.dp,
+                                                                color = Color.White.copy(alpha = focusPulseAlpha.value),
+                                                                shape = RoundedCornerShape(20.dp) // Concentric shape: 16.dp inner + 4.dp gap = 20.dp
+                                                            )
+                                                    )
+                                                }
+
+                                                // 2. Card Body (always padded inside by 4.dp to create the focus gap)
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(4.dp)
+                                                        .clip(RoundedCornerShape(16.dp))
+                                                        .background(
+                                                            if (isFocused) Color.White.copy(alpha = 0.2f) 
+                                                            else Color.White.copy(alpha = 0.05f)
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (app.banner != null) {
+                                                        // Android TV Widescreen Banner
+                                                        Image(
+                                                            painter = rememberAsyncImagePainter(model = app.banner),
+                                                            contentDescription = app.label,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            contentScale = ContentScale.FillBounds
+                                                        )
+                                                    } else {
+                                                        // Fallback UI for apps without a banner
+                                                        Column(
+                                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                                            verticalArrangement = Arrangement.Center,
+                                                            modifier = Modifier.fillMaxSize().padding(8.dp)
+                                                        ) {
+                                                            if (app.icon != null) {
+                                                                Image(
+                                                                    painter = rememberAsyncImagePainter(model = app.icon),
+                                                                    contentDescription = app.label,
+                                                                    modifier = Modifier
+                                                                        .size(36.dp)
+                                                                        .clip(RoundedCornerShape(8.dp)),
+                                                                    contentScale = ContentScale.Crop
+                                                                )
+                                                            }
+                                                            Spacer(modifier = Modifier.height(4.dp))
+                                                            Text(
+                                                                text = app.label,
+                                                                style = TextStyle(
+                                                                    fontSize = 11.sp,
+                                                                    fontWeight = FontWeight.Medium,
+                                                                    color = if (isFocused) Color.White else Color(0xFFDDDDDD)
+                                                                ),
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis,
+                                                                textAlign = TextAlign.Center
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (rowApps.size < 2) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
                                     }
                                 }
-                                
-                                Spacer(modifier = Modifier.width(16.dp))
-                                
-                                Text(
-                                    text = app.label,
-                                    style = TextStyle(
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = if (isFocused) Color.White else Color(0xFFEEEEEE)
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
                             }
                         }
+
+                        // Top fog/fade overlay
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(32.dp)
+                                .align(Alignment.TopCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color(0xFF1E2026), Color.Transparent)
+                                    )
+                                )
+                        )
+
+                        // Bottom fog/fade overlay
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(32.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color(0xFF1E2026))
+                                    )
+                                )
+                        )
                     }
                 }
             }
         }
     }
 }
-}
-
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -2863,18 +3029,9 @@ fun ServiceButtonWithPackageBanner(
     var randomBanner by remember { mutableStateOf<android.graphics.drawable.Drawable?>(null) }
     LaunchedEffect(isEmptySlot, isFocused) {
         if (isEmptySlot && isFocused && installedApps.isNotEmpty()) {
-            // Load a single random banner (Static, no pulsing loop)
+            // Load a single random banner from preloaded in-memory apps (Instant & zero CPU overhead!)
             val randomApp = installedApps.random()
-            withContext(Dispatchers.IO) {
-                try {
-                    val pm = context.packageManager
-                    val appInfo = pm.getApplicationInfo(randomApp.packageName, 0)
-                    val banner = appInfo.loadBanner(pm) ?: appInfo.loadIcon(pm)
-                    randomBanner = banner
-                } catch (e: Exception) {
-                    // Ignore
-                }
-            }
+            randomBanner = randomApp.banner ?: randomApp.icon
         } else {
             randomBanner = null
         }

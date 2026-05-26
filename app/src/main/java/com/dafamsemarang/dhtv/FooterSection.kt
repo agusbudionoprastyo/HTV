@@ -880,14 +880,17 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         val isFnBActive = currentRoute == "cantingfood"
         val showCartOrder = isFnBActive || isCartFocused || isOrderFocused
         
-        // Debounce showCartOrder state to smooth out transition animations and prevent stuttering
         var debouncedShowCartOrder by remember { mutableStateOf(showCartOrder) }
         LaunchedEffect(showCartOrder) {
             if (showCartOrder) {
                 debouncedShowCartOrder = true
             } else {
-                delay(150) // 150ms debounce delay
-                debouncedShowCartOrder = isCartFocused || isOrderFocused || isFnBActive
+                if (currentRoute != "cantingfood") {
+                    debouncedShowCartOrder = false
+                } else {
+                    delay(150) // 150ms debounce delay only when focus changes on the same screen
+                    debouncedShowCartOrder = isCartFocused || isOrderFocused || isFnBActive
+                }
             }
         }
 
@@ -1079,8 +1082,12 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             if (showRequestCapsule) {
                 debouncedShowRequestCapsule = true
             } else {
-                delay(150) // 150ms debounce delay
-                debouncedShowRequestCapsule = isMyRequestFocused || isRequestActive
+                if (currentRoute != "contact") {
+                    debouncedShowRequestCapsule = false
+                } else {
+                    delay(150) // 150ms debounce delay only when focus changes on the same screen
+                    debouncedShowRequestCapsule = isMyRequestFocused || isRequestActive
+                }
             }
         }
 
@@ -1933,27 +1940,6 @@ fun MyRequestsDrawer(onDismiss: () -> Unit, requests: List<Request>, onSelectReq
                                     }
                                 }
                             }
-                        }
-                        
-                        // Footer
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "DHTV",
-                                color = Color.White.copy(alpha = 0.3f),
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                            Icon(
-                                painter = painterResource(id = R.drawable.info_circle_svgrepo_com),
-                                contentDescription = "Help",
-                                tint = Color.White.copy(alpha = 0.3f),
-                                modifier = Modifier.size(16.dp)
-                            )
                         }
                     }
                 }

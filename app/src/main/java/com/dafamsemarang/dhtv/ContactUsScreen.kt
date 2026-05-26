@@ -246,7 +246,7 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
     val startPaddingPx = with(density) { 58.dp.toPx() }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
-    val categorySlideDistance = (screenWidthPx * 0.15f).toInt()
+    val categorySlideDistance = (screenWidthPx * 0.20f).toInt()
     val defaultSpec = LocalBringIntoViewSpec.current
     
     val categoryBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {

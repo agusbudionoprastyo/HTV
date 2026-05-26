@@ -49,7 +49,7 @@ private fun slideDirection(from: String?, to: String?): Int {
 
 private const val SLIDE_DURATION = 800
 private val GoogleTvEasing = CubicBezierEasing(0.18f, 0.85f, 0.18f, 1.00f)
-private const val SLIDE_OFFSET_PCT = 0.15f
+private const val SLIDE_OFFSET_PCT = 0.20f
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainEnterTransition(slideDistance: Int): EnterTransition {
     val dir = slideDirection(initialState.destination.route, targetState.destination.route)

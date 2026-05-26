@@ -109,12 +109,19 @@ object ShortcutIconCache {
                     banner = resolveInfo.activityInfo.applicationInfo.loadBanner(pm)
                 }
 
+                val installer = try {
+                    pm.getInstallerPackageName(packageName)
+                } catch (e: Exception) {
+                    null
+                }
+
                 apps.add(
                     SupportedApp(
                         packageName = packageName,
                         label = resolveInfo.loadLabel(pm).toString(),
                         icon = resolveInfo.loadIcon(pm),
-                        banner = banner
+                        banner = banner,
+                        installerPackageName = installer
                     )
                 )
             }
