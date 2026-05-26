@@ -645,7 +645,7 @@ fun GlassmorphicWelcomeCard(
                         color = Color.White.copy(alpha = 0.9f),
                         fontSize = 11.sp,
                         textAlign = TextAlign.Start,
-                        modifier = Modifier.offset(y = (-4).dp)
+                        modifier = Modifier.offset(y = (-5).dp)
                     )
                 }
             }
@@ -672,7 +672,7 @@ fun GlassmorphicWelcomeCard(
                     .width(130.dp)
                     .height(75.dp)
                     .align(Alignment.BottomStart)
-                    .offset(x = (-10).dp, y = (-67).dp),
+                    .offset(x = (-10).dp, y = (-77).dp),
                 contentScale = ContentScale.Fit,
                 colorFilter = ColorFilter.tint(Color.White)
             )
