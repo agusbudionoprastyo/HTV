@@ -844,7 +844,10 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             }
                         },
                         isActive = currentRoute == "hotel_guide",
-                        focusRequester = hotelFocusRequester
+                        focusRequester = hotelFocusRequester,
+                        modifier = Modifier.focusProperties {
+                            up = HotelInfoFocus.firstItemRequester
+                        }
                     )
                 }
             }
@@ -2670,7 +2673,8 @@ fun SmallServiceButton(
     onFocusAction: (() -> Unit)? = null,
     isActive: Boolean = false,
     focusRequester: FocusRequester? = null,
-    onFocusStateChange: ((Boolean) -> Unit)? = null
+    onFocusStateChange: ((Boolean) -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
     var isClicked by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
@@ -2682,7 +2686,7 @@ fun SmallServiceButton(
     )
 
     Box(
-        modifier = Modifier.size(36.dp),
+        modifier = modifier.size(36.dp),
         contentAlignment = Alignment.Center
     ) {
         var boxModifier = Modifier

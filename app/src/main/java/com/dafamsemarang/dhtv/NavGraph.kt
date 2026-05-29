@@ -33,8 +33,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.core.content.edit
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
-
-
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 // Ordered list of main screens — determines slide direction
@@ -252,10 +252,18 @@ fun AppNavigation() {
             // ── HOTEL INFO ───────────────────────────────────────────────────
             composable(
                 "hotel_guide",
-                enterTransition = { mainEnterTransition(slideDistance) },
-                exitTransition = { mainExitTransition(slideDistance) },
-                popEnterTransition = { mainEnterTransition(slideDistance) },
-                popExitTransition = { mainExitTransition(slideDistance) }
+                enterTransition = {
+                    fadeIn(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+                },
+                exitTransition = {
+                    fadeOut(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+                },
+                popEnterTransition = {
+                    fadeIn(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+                },
+                popExitTransition = {
+                    fadeOut(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
+                }
             ) {
                 HotelInfoScreen()
                 CheckoutReminder()
