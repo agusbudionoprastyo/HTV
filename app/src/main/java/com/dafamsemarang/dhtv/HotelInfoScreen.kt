@@ -73,18 +73,17 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     var selectedButton by remember { mutableStateOf(0) }
     var selectedItem by remember { mutableStateOf<Item?>(null) }
 
-    var hotelFacilities by remember { mutableStateOf<List<Item>>(emptyList()) }
-    var roomFacilities by remember { mutableStateOf<List<Item>>(emptyList()) }
-    var emergencyProcedure by remember { mutableStateOf<List<Item>>(emptyList()) }
-    var healthAndWellness by remember { mutableStateOf<List<Item>>(emptyList()) }
-    var discoverDestination by remember { mutableStateOf<List<Item>>(emptyList()) }
+    val hotelFacilities by DataRepository.hotelFacilities
+    val roomFacilities by DataRepository.roomFacilities
+    val emergencyProcedure by DataRepository.emergencyProcedure
+    val healthAndWellness by DataRepository.healthAndWellness
+    val discoverDestination by DataRepository.discoverDestination
     
-    // Loading states for shimmer
-    var isLoadingHotelFacilities by remember { mutableStateOf(true) }
-    var isLoadingRoomFacilities by remember { mutableStateOf(true) }
-    var isLoadingEmergencyProcedure by remember { mutableStateOf(true) }
-    var isLoadingHealthWellness by remember { mutableStateOf(true) }
-    var isLoadingDiscoverDestination by remember { mutableStateOf(true) }
+    val isLoadingHotelFacilities = !DataRepository.isHotelFacilitiesLoaded.value
+    val isLoadingRoomFacilities = !DataRepository.isRoomFacilitiesLoaded.value
+    val isLoadingEmergencyProcedure = !DataRepository.isEmergencyProcedureLoaded.value
+    val isLoadingHealthWellness = !DataRepository.isHealthWellnessLoaded.value
+    val isLoadingDiscoverDestination = !DataRepository.isDiscoverDestinationLoaded.value
     
     // Delay shimmer visibility until after screen transition completes (500ms)
     var shimmerVisible by remember { mutableStateOf(false) }
@@ -104,88 +103,6 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     
     var focusedItemIndex by remember { mutableIntStateOf(0) }
     val verticalListState = rememberLazyListState()
-
-    // Get context and branchId from SharedPreferences
-    val context = LocalContext.current
-    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-    val branchId = sharedPreferences.getString("branchId", null)
-
-    // Firebase Real-Time Listener with deterministic lifecycle control
-    DisposableEffect(key1 = branchId) {
-        var ref1: com.google.firebase.database.DatabaseReference? = null
-        var ref2: com.google.firebase.database.DatabaseReference? = null
-        var ref3: com.google.firebase.database.DatabaseReference? = null
-        var ref4: com.google.firebase.database.DatabaseReference? = null
-        var ref5: com.google.firebase.database.DatabaseReference? = null
-        
-        var l1: com.google.firebase.database.ValueEventListener? = null
-        var l2: com.google.firebase.database.ValueEventListener? = null
-        var l3: com.google.firebase.database.ValueEventListener? = null
-        var l4: com.google.firebase.database.ValueEventListener? = null
-        var l5: com.google.firebase.database.ValueEventListener? = null
-
-        if (branchId != null) {
-            val db = com.google.firebase.database.FirebaseDatabase.getInstance().reference
-            
-            ref1 = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("HOTEL_FACILITY")
-            l1 = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    hotelFacilities = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
-                    if (isLoadingHotelFacilities) isLoadingHotelFacilities = false
-                }
-                override fun onCancelled(error: DatabaseError) { isLoadingHotelFacilities = false }
-            }
-            ref1.addValueEventListener(l1)
-
-            ref2 = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("ROOMS_FACILITY")
-            l2 = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    roomFacilities = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
-                    if (isLoadingRoomFacilities) isLoadingRoomFacilities = false
-                }
-                override fun onCancelled(error: DatabaseError) { isLoadingRoomFacilities = false }
-            }
-            ref2.addValueEventListener(l2)
-
-            ref3 = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("EMERGENCY_PROCEDURE")
-            l3 = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    emergencyProcedure = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
-                    if (isLoadingEmergencyProcedure) isLoadingEmergencyProcedure = false
-                }
-                override fun onCancelled(error: DatabaseError) { isLoadingEmergencyProcedure = false }
-            }
-            ref3.addValueEventListener(l3)
-
-            ref4 = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("HEALTH_WELLNESS")
-            l4 = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    healthAndWellness = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
-                    if (isLoadingHealthWellness) isLoadingHealthWellness = false
-                }
-                override fun onCancelled(error: DatabaseError) { isLoadingHealthWellness = false }
-            }
-            ref4.addValueEventListener(l4)
-
-            ref5 = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("DISCOVER_DESTINATION")
-            l5 = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    discoverDestination = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
-                    if (isLoadingDiscoverDestination) isLoadingDiscoverDestination = false
-                }
-                override fun onCancelled(error: DatabaseError) { isLoadingDiscoverDestination = false }
-            }
-            ref5.addValueEventListener(l5)
-        }
-
-        onDispose {
-            if (ref1 != null && l1 != null) ref1.removeEventListener(l1)
-            if (ref2 != null && l2 != null) ref2.removeEventListener(l2)
-            if (ref3 != null && l3 != null) ref3.removeEventListener(l3)
-            if (ref4 != null && l4 != null) ref4.removeEventListener(l4)
-            if (ref5 != null && l5 != null) ref5.removeEventListener(l5)
-        }
-    }
 
     val categoriesList = listOf(
         Pair("HOTEL FACILITY", hotelFacilities),

@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SEO Meta Tags -->
+  <title>HTV | Solusi IPTV Multi-Branch Premium untuk Perhotelan</title>
+  <meta name="description"
+    content="Hadirkan pengalaman menginap istimewa dengan HTV - sistem Android TV modern berbasis Jetpack Compose yang dirancang untuk brand hotel premium. Dilengkapi sinkronisasi Firebase real-time, in-room dining digital, dan sambutan tamu personal.">
+  <meta name="keywords"
+    content="IPTV Hotel, Sistem TV Hotel, Android TV hospitality, Jetpack Compose IPTV, Firebase TV Hotel, Pemesanan Makanan TV Hotel, Smart TV Hotel">
+  <meta name="author" content="Tim Pengembang HTV">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+
+  <!-- Dynamic Background Glow Spots -->
+  <div class="glow-spot glow-hero-1"></div>
+  <div class="glow-spot glow-hero-2"></div>
+
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <div class="container">
+      <a href="#" class="logo" id="nav-logo">
+        HTV<span class="logo-dot"></span>
+      </a>
+
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#hero">Beranda</a></li>
+          <li><a href="#features">Fitur</a></li>
+          <li><a href="#simulator">Eksplorasi</a></li>
+          <li><a href="#pricing">Harga</a></li>
+          <li><a href="#tech-stack">Teknologi</a></li>
+          <li><a href="#request-demo">Minta Demo</a></li>
+        </ul>
+      </nav>
+
+      <a href="#request-demo" class="btn btn-secondary" style="padding: 0.6rem 1.4rem; font-size: 0.85rem;"
+        id="nav-cta-btn">
+        Minta Demo
+      </a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section id="hero" class="hero section">
+    <div class="container">
+      <div class="hero-grid">
+        <div class="hero-content reveal active">
+          <span class="hero-tagline">Standar Baru IPTV Perhotelan</span>
+          <h1 class="hero-title">Hadirkan Pengalaman Menginap Istimewa Bersama <span class="text-gold">HTV</span></h1>
+          <p class="hero-description">
+            Sistem IPTV premium multi-branch berbasis Android TV yang dibangun secara native dengan Jetpack Compose.
+            Permudah akses live streaming, pesan sambutan personal, layanan *in-room dining*, dan kendali terpusat lewat
+            CMS real-time di setiap kamar hotel Anda.
+          </p>
+          <div class="hero-actions">
+            <a href="#simulator" class="btn btn-primary" id="hero-primary-btn">
+              <i class="fa-solid fa-circle-play" style="margin-right: 8px;"></i>Coba Eksplorasi
+            </a>
+            <a href="#request-demo" class="btn btn-secondary" id="hero-secondary-btn">Hubungi Tim Kami</a>
+          </div>
+        </div>
+
+        <div class="hero-image-wrapper reveal active">
+          <div class="hero-tv-container">
+            <div class="tv-frame-outer">
+              <div class="tv-screen">
+                <video autoplay muted loop playsinline style="width:100%; height:100%; object-fit:cover;">
+                  <source src="assets/0604.mp4" type="video/mp4">
+                  Browser Anda tidak mendukung tag video.
+                </video>
+              </div>
+              <div class="tv-stand"></div>
+              <div class="tv-base"></div>
+            </div>
+            <!-- TV Remote Control Illustration -->
+            <img src="assets/remote.svg" class="tv-remote-showcase" alt="HTV Remote Control">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Core Features Section -->
+  <section id="features" class="section light-section">
+    <div class="container">
+      <div class="section-title-wrapper reveal">
+        <h2 class="section-title">Fitur Utama <span class="text-gold">HTV Hospitality</span></h2>
+        <p class="section-subtitle">Katalog lengkap fitur interaktif yang dirancang untuk memanjakan tamu sekaligus
+          mempermudah pengelolaan operasional hotel Anda.</p>
+      </div>
+
+      <div class="features-grid">
+        <!-- Feature 1: Beranda Utama -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-house fa-2x"></i>
+          </div>
+          <h3>Dashboard Utama & Widget Pintar</h3>
+          <p>Antarmuka utama modern dengan optimasi navigasi remote TV. Menampilkan <strong>Widget Cuaca</strong>
+            terkini, <strong>Widget Banner Promo</strong> hotel yang dinamis, serta integrasi <strong>FIDS (Flight
+              Information Display System)</strong> untuk memantau jadwal penerbangan secara langsung dari kamar.</p>
+        </div>
+
+        <!-- Feature 2: Welcome Letter -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-handshake-angle fa-2x"></i>
+          </div>
+          <h3>Sambutan Tamu Personal</h3>
+          <p>Berikan impresi hangat begitu tamu melangkah masuk. Layar TV akan menampilkan pesan selamat datang khusus
+            yang dipersonalisasi dengan nama tamu, nomor kamar, dan foto profil secara real-time.</p>
+        </div>
+
+        <!-- Feature 3: Integrasi PMS Hotel -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-network-wired fa-2x"></i>
+          </div>
+          <h3>Integrasi PMS Hotel</h3>
+          <p>Sinkronisasi instan dengan Property Management System (PMS) hotel untuk mendeteksi status
+            check-in/check-out secara otomatis, memuat data nama tamu secara real-time, serta membebankan biaya
+            transaksi F&B langsung ke tagihan folio kamar tamu.</p>
+        </div>
+
+        <!-- Feature 4: In-Room Dining -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-utensils fa-2x"></i>
+          </div>
+          <h3>In-Room Dining Digital</h3>
+          <p>Optimalkan pendapatan F&B dengan katalog pemesanan makanan & minuman langsung dari TV. Tamu dapat melihat
+            galeri foto hidangan, memilih varian, dan menambahkannya ke keranjang belanja digital.</p>
+        </div>
+
+        <!-- Feature 5: Request Layanan -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-bell-concierge fa-2x"></i>
+          </div>
+          <h3>Layanan Concierge Mandiri</h3>
+          <p>Tamu dapat meminta perlengkapan kamar tambahan seperti handuk ekstra, air mineral, bantal, atau layanan
+            pembersihan kamar (Make Up Room) hanya dengan beberapa klik di remote TV.</p>
+        </div>
+
+        <!-- Feature 6: Riwayat Pesanan -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-receipt fa-2x"></i>
+          </div>
+          <h3>Pemantauan Status Pesanan</h3>
+          <p>Transparansi penuh untuk tamu. Dilengkapi menu "Riwayat Pesanan" untuk melacak status pesanan makanan
+            secara real-time, mulai dari dikonfirmasi, sedang dimasak, hingga siap diantarkan ke kamar.</p>
+        </div>
+
+        <!-- Feature 7: Jangan Ganggu -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-ban fa-2x"></i>
+          </div>
+          <h3>Mode Jangan Ganggu (DND)</h3>
+          <p>Jaga privasi tamu dengan fitur DND satu klik dari kamar. Status "Do Not Disturb" akan disinkronkan secara
+            instan ke dasbor staf hotel untuk mencegah gangguan selama tamu beristirahat.</p>
+        </div>
+
+        <!-- Feature 8: Laci Aplikasi & Pintasan -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-table-cells-large fa-2x"></i>
+          </div>
+          <h3>Pintasan & Laci Aplikasi</h3>
+          <p>Akses cepat ke berbagai aplikasi pihak ketiga populer seperti YouTube, Netflix, atau Prime Video. Tamu juga
+            dapat mengedit pintasan aplikasi di halaman utama sesuai dengan preferensi mereka.</p>
+        </div>
+
+        <!-- Feature 9: Pusat Pemberitahuan -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-bell fa-2x"></i>
+          </div>
+          <h3>Laci Notifikasi Terintegrasi</h3>
+          <p>Terima pesan pengumuman penting, promo spesial restoran hotel, pengingat check-out, hingga status pemesanan
+            kamar secara langsung melalui panel notifikasi TV yang interaktif.</p>
+        </div>
+
+        <!-- Feature 10: Pengamanan PIN -->
+        <div class="glass-card feature-card reveal">
+          <div class="feature-icon-box">
+            <i class="fa-solid fa-key fa-2x"></i>
+          </div>
+          <h3>Keamanan Sistem & Kunci PIN</h3>
+          <p>Proteksi tingkat tinggi untuk konfigurasi TV. Pengaturan sensitif seperti jaringan internet, CMS, parameter
+            Firebase, dan opsi administrator diamankan menggunakan autentikasi kode PIN khusus.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Interactive TV Gallery Section -->
+  <section id="simulator" class="simulator-section">
+    <!-- Gallery Top (Dark Background with Glowing Wall-mounted TV) -->
+    <div class="simulator-top">
+      <div class="container">
+        <div class="section-title-wrapper reveal" style="margin-bottom: 3.5rem;">
+          <h2 class="section-title">Eksplorasi <span class="text-gold">Fitur Interaktif</span></h2>
+          <p class="section-subtitle">Jelajahi langsung kecanggihan antarmuka native Jetpack Compose HTV. Tampilan layar
+            di kamar tamu akan berganti secara otomatis.</p>
+        </div>
+
+        <div class="tv-simulator-wrapper reveal">
+          <div class="tv-glow-backlight"></div>
+          <div class="tv-frame-outer wall-mounted">
+            <div class="tv-screen" id="simulator-tv-screen">
+              <!-- Beranda / IPTV Home (Screen 1) -->
+              <img src="assets/beranda.png" id="screen-beranda" class="simulator-screen-img active"
+                alt="IPTV Main Menu">
+
+              <!-- Welcome Letter Screen (Screen 2) — Live HTML Render -->
+              <div id="screen-welcome" class="simulator-screen-img sim-welcome-screen">
+                <div class="sim-welcome-bg" style="background-image: url('assets/athapap-beach-6514331.jpg');"></div>
+                <div class="sim-welcome-overlay"></div>
+                <div class="sim-welcome-card">
+                  <div class="sim-welcome-left">
+                    <span class="sim-welcome-label">Selamat Datang</span>
+                    <h3 class="sim-welcome-hotel">Halo,<br>Bapak Reza</h3>
+                    <p class="sim-welcome-dear">Kamar <strong>Deluxe Ocean View</strong> · No. <strong>312</strong></p>
+                    <p class="sim-welcome-body">Kami senang menyambut kehadiran Anda. Semoga masa menginap Anda penuh dengan kenyamanan dan pengalaman yang tak terlupakan.</p>
+                    <p class="sim-welcome-room">CHECK-IN: 4 Juni 2025 · CHECK-OUT: 7 Juni 2025 · TAMU: 2 Orang</p>
+                    <p class="sim-welcome-wifi">Wi-Fi: Free Wi-Fi | Breakfast | Spa Access</p>
+                  </div>
+                  <div class="sim-welcome-right">
+                    <div class="sim-welcome-photo-box" style="display:flex; flex-direction:column; align-items:center; gap:4px; width:100%;">
+                      <div class="sim-welcome-photo">
+                        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+                          <circle cx="50" cy="50" r="50" fill="rgba(255, 255, 255, 0.15)"/>
+                          <!-- Head -->
+                          <circle cx="50" cy="40" r="18" fill="rgba(255, 255, 255, 0.6)"/>
+                          <!-- Shoulders -->
+                          <path d="M18 80 C 18 62, 82 62, 82 80" fill="rgba(255, 255, 255, 0.45)"/>
+                        </svg>
+                      </div>
+                      <span style="color:#ffffff; font-size:0.45rem; font-weight:700; font-family:var(--font-heading); margin-top:2px;">Reza Pratama</span>
+                      <span style="color:#022c22; background:linear-gradient(90deg, #6ee7b7, #34d399); font-size:0.35rem; font-weight:700; padding:1px 5px; border-radius:10px; text-transform:uppercase; font-family:var(--font-heading);">Tamu VIP</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- In-Room Dining Catalog (Screen 3) -->
+              <img src="assets/fnb.png" id="screen-fnb" class="simulator-screen-img"
+                alt="Food & Beverage ordering menu">
+
+              <!-- Cart (Screen 4) -->
+              <img src="assets/cart.png" id="screen-cart" class="simulator-screen-img" alt="Shopping Cart">
+
+              <!-- Order Summary (Screen 5) -->
+              <img src="assets/ordersummary.png" id="screen-ordersummary" class="simulator-screen-img"
+                alt="Order Summary">
+
+              <!-- My Order History (Screen 6) -->
+              <img src="assets/myorder.png" id="screen-myorder" class="simulator-screen-img" alt="My Orders List">
+
+              <!-- Hotel Info (Screen 7) -->
+              <img src="assets/hotelinfo.png" id="screen-hotelinfo" class="simulator-screen-img"
+                alt="Hotel Services Info">
+
+              <!-- Concierge Request (Screen 8) -->
+              <img src="assets/request.png" id="screen-request" class="simulator-screen-img"
+                alt="Room Services Request">
+
+              <!-- Do Not Disturb (Screen 9) -->
+              <img src="assets/DND.png" id="screen-dnd" class="simulator-screen-img" alt="Do Not Disturb Setting">
+
+              <!-- App Drawer (Screen 10) -->
+              <img src="assets/appdrawer.png" id="screen-appdrawer" class="simulator-screen-img"
+                alt="Applications Drawer">
+
+              <!-- Security PIN Setting (Screen 11) -->
+              <img src="assets/settingpin.png" id="screen-settingpin" class="simulator-screen-img"
+                alt="Security PIN configuration">
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gallery Bottom (Light Background with Circular Tabs and descriptions) -->
+    <div class="simulator-bottom light-section">
+      <div class="container">
+        <div class="simulator-tabs-scroll-wrapper">
+          <div class="simulator-tabs" id="simulator-tabs-container">
+            <button class="simulator-tab-btn active" data-screen="screen-beranda">
+              <div class="tab-icon-circle">
+                <svg class="progress-ring" width="56" height="56">
+                  <circle class="progress-ring__circle" stroke="#1A73E8" stroke-width="4" fill="transparent" r="26"
+                    cx="28" cy="28" />
+                </svg>
+                <i class="fa-solid fa-house"></i>
+              </div>
+              <span>Beranda</span>
+            </button>
+
+            <button class="simulator-tab-btn" data-screen="screen-welcome">
+              <div class="tab-icon-circle">
+                <svg class="progress-ring" width="56" height="56">
+                  <circle class="progress-ring__circle" stroke="#1A73E8" stroke-width="4" fill="transparent" r="26"
+                    cx="28" cy="28" />
+                </svg>
+                <i class="fa-solid fa-hand-holding-hand"></i>
+              </div>
+              <span>Welcome</span>
+            </button>
+
+            <button class="simulator-tab-btn" data-screen="screen-fnb-flow">
+              <div class="tab-icon-circle">
+                <svg class="progress-ring" width="56" height="56">
+                  <circle class="progress-ring__circle" stroke="#1A73E8" stroke-width="4" fill="transparent" r="26"
+                    cx="28" cy="28" />
+                </svg>
+                <i class="fa-solid fa-utensils"></i>
+              </div>
+              <span>Pemesanan F&B</span>
+            </button>
+
+            <button class="simulator-tab-btn" data-screen="screen-hotelinfo">
+              <div class="tab-icon-circle">
+                <svg class="progress-ring" width="56" height="56">
+                  <circle class="progress-ring__circle" stroke="#1A73E8" stroke-width="4" fill="transparent" r="26"
+                    cx="28" cy="28" />
+                </svg>
+                <i class="fa-solid fa-circle-info"></i>
+              </div>
+              <span>Info Hotel</span>
+            </button>
+
+            <button class="simulator-tab-btn" data-screen="screen-request">
+              <div class="tab-icon-circle">
+                <svg class="progress-ring" width="56" height="56">
+                  <circle class="progress-ring__circle" stroke="#1A73E8" stroke-width="4" fill="transparent" r="26"
+                    cx="28" cy="28" />
+                </svg>
+                <i class="fa-solid fa-bell-concierge"></i>
+              </div>
+              <span>Layanan</span>
+            </button>
+
+            <button class="simulator-tab-btn" data-screen="screen-dnd">
+              <div class="tab-icon-circle">
+                <svg class="progress-ring" width="56" height="56">
+                  <circle class="progress-ring__circle" stroke="#1A73E8" stroke-width="4" fill="transparent" r="26"
+                    cx="28" cy="28" />
+                </svg>
+                <i class="fa-solid fa-ban"></i>
+              </div>
+              <span>DND</span>
+            </button>
+
+            <button class="simulator-tab-btn" data-screen="screen-appdrawer">
+              <div class="tab-icon-circle">
+                <svg class="progress-ring" width="56" height="56">
+                  <circle class="progress-ring__circle" stroke="#1A73E8" stroke-width="4" fill="transparent" r="26"
+                    cx="28" cy="28" />
+                </svg>
+                <i class="fa-solid fa-table-cells-large"></i>
+              </div>
+              <span>App Drawer</span>
+            </button>
+
+            <button class="simulator-tab-btn" data-screen="screen-settingpin">
+              <div class="tab-icon-circle">
+                <svg class="progress-ring" width="56" height="56">
+                  <circle class="progress-ring__circle" stroke="#1A73E8" stroke-width="4" fill="transparent" r="26"
+                    cx="28" cy="28" />
+                </svg>
+                <i class="fa-solid fa-key"></i>
+              </div>
+              <span>Keamanan PIN</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic active tab content details -->
+        <div class="simulator-info-box reveal">
+          <h3 id="simulator-info-title">Dashboard TV Interaktif Terpadu</h3>
+          <p id="simulator-info-desc">Tampilan beranda utama yang bersih dengan akses langsung ke seluruh layanan hotel,
+            widget cuaca, banner promo, dan jadwal penerbangan real-time (FIDS).</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech Stack Spotlight -->
+  <section id="tech-stack" class="section light-section">
+    <div class="container">
+      <div class="section-title-wrapper reveal">
+        <h2 class="section-title">Arsitektur Native <span class="text-gold">Berkinerja Tinggi</span></h2>
+        <p class="section-subtitle">Kombinasi performa tinggi, stabilitas, dan animasi mikro yang dirancang khusus untuk
+          kenyamanan mata tamu.</p>
+      </div>
+
+      <div class="tech-container reveal">
+        <div class="tech-card">
+          <div class="tech-icon"><i class="fa-brands fa-android"></i></div>
+          <h4>Jetpack Compose</h4>
+          <p>UI modern berbasis deklaratif untuk navigasi remote TV yang responsif, mulus, dan hemat memori.</p>
+        </div>
+
+        <div class="tech-card">
+          <div class="tech-icon"><i class="fa-solid fa-fire"></i></div>
+          <h4>Firebase Realtime DB</h4>
+          <p>Sinkronisasi cloud instan. Informasi kamar, teks sambutan, daftar channel, dan menu F&B diperbarui kurang
+            dari 100ms.</p>
+        </div>
+
+        <div class="tech-card">
+          <div class="tech-icon"><i class="fa-solid fa-play"></i></div>
+          <h4>ExoPlayer (Media3)</h4>
+          <p>Mesin video andal untuk kelancaran streaming HLS/DASH, screensaver video berulang, dan hardware decoding.
+          </p>
+        </div>
+
+        <div class="tech-card">
+          <div class="tech-icon"><i class="fa-solid fa-network-wired"></i></div>
+          <h4>Ktor & Retrofit</h4>
+          <p>Klien HTTP asinkron yang efisien untuk memuat gambar dan data kamar tanpa menghambat performa UI.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing Section -->
+  <section id="pricing" class="section light-section">
+    <div class="container">
+      <div class="section-title-wrapper reveal">
+        <h2 class="section-title">Paket Kemitraan <span class="text-gold">HTV</span></h2>
+        <p class="section-subtitle">Pilih metode implementasi yang paling sesuai untuk infrastruktur dan kebutuhan hotel
+          Anda.</p>
+      </div>
+
+      <div class="pricing-grid reveal">
+        <!-- Direct Inject Plan -->
+        <div class="glass-card pricing-card">
+          <div class="pricing-header">
+            <div class="pricing-header-text">
+              <div class="pricing-name">Direct Inject</div>
+              <p class="pricing-desc">Model implementasi tanpa hardware tambahan. Sangat cocok jika hotel Anda sudah
+                memiliki unit Smart TV (Android TV/Google TV) di setiap kamar.</p>
+            </div>
+            <img src="assets/smart-tvs.svg" class="pricing-icon" alt="Smart TVs">
+          </div>
+          <div class="pricing-divider"></div>
+          <ul class="pricing-features">
+            <li><i class="fa-solid fa-circle-check"></i> Instalasi langsung di Android TV / Google TV</li>
+            <li><i class="fa-solid fa-circle-check"></i> Tanpa biaya sewa atau perawatan STB tambahan</li>
+            <li><i class="fa-solid fa-circle-check"></i> Integrasi penuh dengan sistem PMS Hotel</li>
+            <li><i class="fa-solid fa-circle-check"></i> Dukungan pemeliharaan jarak jauh (Remote Support)</li>
+            <li><i class="fa-solid fa-circle-check"></i> Pembaruan fitur & OS secara berkala</li>
+          </ul>
+          <a href="#request-demo" class="btn btn-secondary" style="width: 100%;">Pilih Paket Direct Inject</a>
+        </div>
+
+        <!-- STB Rental Plan -->
+        <div class="glass-card pricing-card featured">
+          <div class="pricing-badge">Rekomendasi Hardware</div>
+          <div class="pricing-header">
+            <div class="pricing-header-text">
+              <div class="pricing-name">STB Rental Bundle</div>
+              <p class="pricing-desc">Paket lengkap termasuk sewa perangkat keras. Sangat ideal untuk hotel dengan TV
+                LED/LCD standar yang ingin ditingkatkan menjadi Smart TV.</p>
+            </div>
+            <img src="assets/google-tv-streamer.svg" class="pricing-icon" alt="STB Streamer">
+          </div>
+          <div class="pricing-divider"></div>
+          <ul class="pricing-features">
+            <li><i class="fa-solid fa-circle-check"></i> Termasuk Sewa Android TV Box (STB) Premium</li>
+            <li><i class="fa-solid fa-circle-check"></i> Garansi penggantian unit STB yang rusak (Instant Swap)</li>
+            <li><i class="fa-solid fa-circle-check"></i> Integrasi penuh dengan sistem PMS Hotel</li>
+            <li><i class="fa-solid fa-circle-check"></i> Dukungan teknis On-Site & Remote Maintenance</li>
+            <li><i class="fa-solid fa-circle-check"></i> Pembaruan fitur & OS secara berkala</li>
+          </ul>
+          <a href="#request-demo" class="btn btn-outline-orange" style="width: 100%;">Pilih Paket STB Rental</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact & Demo Request Section -->
+  <section id="request-demo" class="section light-section">
+    <div class="container">
+      <div class="contact-grid">
+        <div class="contact-info reveal">
+          <h2>Siap meningkatkan standar <span class="text-gold">kamar hotel Anda?</span></h2>
+          <p>HTV dapat disesuaikan sepenuhnya agar selaras dengan identitas visual, logo, tema warna, dan layanan unik
+            hotel Anda. Diskusikan kebutuhan Anda dengan tim integrasi kami.</p>
+
+          <div class="info-items">
+            <a href="https://wa.me/6285695022093?text=Halo%20Tim%20HTV%2C%20saya%20tertarik%20dengan%20solusi%20IPTV%20Hospitality%20HTV%20untuk%20hotel%20kami."
+              target="_blank" rel="noopener noreferrer" class="info-item hover-lift"
+              style="display: flex; text-decoration: none; color: inherit;">
+              <div class="info-item-icon"><i class="fa-brands fa-whatsapp fa-xl"></i></div>
+              <div class="info-item-text">
+                <p>WhatsApp Kemitraan</p>
+                <strong>+62 856-9502-2093</strong>
+              </div>
+            </a>
+
+            <div class="info-item">
+              <div class="info-item-icon"><i class="fa-solid fa-building"></i></div>
+              <div class="info-item-text">
+                <p>Kantor Pusat</p>
+                <strong>Jakarta, Indonesia</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Glassmorphic Demo Request Form -->
+        <div class="glass-card reveal" style="padding: 3rem;">
+          <form class="contact-form" id="demo-request-form">
+            <div class="form-status" id="form-status-message"></div>
+
+            <div class="form-group">
+              <label for="form-name">Nama Lengkap</label>
+              <input type="text" class="form-control" id="form-name" placeholder="Contoh: John Doe" required>
+            </div>
+
+            <div class="form-group">
+              <label for="form-email">Email Kerja</label>
+              <input type="email" class="form-control" id="form-email" placeholder="alamat@hotelanda.com" required>
+            </div>
+
+            <div class="form-group">
+              <label for="form-hotel">Nama Hotel / Properti</label>
+              <input type="text" class="form-control" id="form-hotel" placeholder="Contoh: Grand Hyatt Jakarta"
+                required>
+            </div>
+
+            <div class="form-group">
+              <label for="form-message">Kebutuhan Khusus</label>
+              <textarea class="form-control" id="form-message"
+                placeholder="Tuliskan kebutuhan khusus Anda, seperti jumlah kamar atau integrasi sistem PMS..."></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; border:none; margin-top: 1rem;"
+              id="submit-demo-btn">
+              Kirim Permintaan Demo
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="logo footer-logo" style="justify-content: center;">
+        HTV<span class="logo-dot"></span>
+      </div>
+
+      <ul class="footer-links">
+        <li><a href="#hero">Beranda</a></li>
+        <li><a href="#features">Fitur</a></li>
+        <li><a href="#simulator">Eksplorasi</a></li>
+        <li><a href="#tech-stack">Teknologi</a></li>
+        <li><a href="#request-demo">Minta Demo</a></li>
+      </ul>
+
+      <p class="footer-copy">&copy; 2026 Sistem IPTV Hospitality HTV. Hak Cipta Dilindungi Undang-Undang.</p>
+    </div>
+  </footer>
+
+  <!-- Script -->
+  <script src="app.js"></script>
+</body>
+
+</html>

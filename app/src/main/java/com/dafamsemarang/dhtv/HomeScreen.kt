@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +54,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import androidx.navigation.NavHostController
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.database.DataSnapshot
@@ -106,6 +108,9 @@ object GlobalMediaPlayerHolder {
     var sharedMediaPlayer: android.media.MediaPlayer? = null
     var videoWasPaused: Boolean = false
     var videoHasStarted: Boolean = false
+    var lastPlaybackPosition: Int = 0
+    var lastPlaybackUrl: String = ""
+    var activeSessionToken: String? = null
     
     // PERSISTENCE PROTOCOL: Save precise playback details to hardware storage
     fun savePlaybackState(context: android.content.Context, index: Int, pos: Int) {
@@ -692,10 +697,214 @@ fun FlightRow(flight: Flight, isArrival: Boolean) {
 }
 
 @Composable
+fun BannerVideoPlayer(
+    videoUrl: String,
+    mediaPlayer: MediaPlayer,
+    isActive: Boolean,
+    onVideoReady: (Boolean) -> Unit,
+    onVideoComplete: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val sessionToken = remember(videoUrl) { java.util.UUID.randomUUID().toString() }
+    
+    LaunchedEffect(videoUrl, isActive) {
+        if (isActive) {
+            GlobalMediaPlayerHolder.activeSessionToken = sessionToken
+            Log.d("VideoPlayer", "Registered active session: $sessionToken for $videoUrl")
+        }
+    }
+    
+    val cachedVideoFile = remember(videoUrl) {
+        File(context.cacheDir, videoUrl.hashCode().toString() + "_banner.mp4")
+    }
+    
+    var isVideoReady by remember(videoUrl) { mutableStateOf(false) }
+    var hasCompleted by remember(videoUrl) { mutableStateOf(false) }
+    
+    var activeSurfaceTexture by remember { mutableStateOf<android.graphics.SurfaceTexture?>(null) }
+    var textureViewInstance by remember { mutableStateOf<TextureView?>(null) }
+
+    var isDisposed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(videoUrl, activeSurfaceTexture, isActive) {
+        val surfaceTex = activeSurfaceTexture
+        if (surfaceTex == null) {
+            isVideoReady = false
+            onVideoReady(false)
+            return@LaunchedEffect
+        }
+
+        if (!isActive) {
+            try {
+                if (mediaPlayer.isPlaying) {
+                    val pos = mediaPlayer.currentPosition
+                    if (pos > 0 && pos < mediaPlayer.duration - 500) {
+                        GlobalMediaPlayerHolder.lastPlaybackPosition = pos
+                        GlobalMediaPlayerHolder.lastPlaybackUrl = videoUrl
+                        Log.d("VideoPlayer", "Persistent: Saved playback position: ${pos}ms")
+                    }
+                    mediaPlayer.pause()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            isVideoReady = false
+            onVideoReady(false)
+            return@LaunchedEffect
+        }
+
+        val playVideo = { file: File ->
+            try {
+                try {
+                    mediaPlayer.setOnPreparedListener(null)
+                    mediaPlayer.setOnCompletionListener(null)
+                    mediaPlayer.setOnErrorListener(null)
+                    mediaPlayer.setOnVideoSizeChangedListener(null)
+                } catch (e: Exception) {}
+                
+                mediaPlayer.reset()
+                mediaPlayer.setDataSource(context, Uri.fromFile(file))
+                mediaPlayer.setSurface(android.view.Surface(surfaceTex))
+                mediaPlayer.isLooping = false
+                mediaPlayer.setVolume(0f, 0f)
+                mediaPlayer.prepareAsync()
+                mediaPlayer.setOnPreparedListener {
+                    if (videoUrl == GlobalMediaPlayerHolder.lastPlaybackUrl && GlobalMediaPlayerHolder.lastPlaybackPosition > 0) {
+                        mediaPlayer.seekTo(GlobalMediaPlayerHolder.lastPlaybackPosition)
+                        GlobalMediaPlayerHolder.lastPlaybackPosition = 0
+                        GlobalMediaPlayerHolder.lastPlaybackUrl = ""
+                    }
+                    mediaPlayer.start()
+                    isVideoReady = true
+                    onVideoReady(true)
+                }
+                mediaPlayer.setOnCompletionListener {
+                    if (!isDisposed && isActive && GlobalMediaPlayerHolder.activeSessionToken == sessionToken) {
+                        hasCompleted = true
+                        GlobalMediaPlayerHolder.lastPlaybackPosition = 0
+                        GlobalMediaPlayerHolder.lastPlaybackUrl = ""
+                        onVideoComplete()
+                    }
+                }
+                mediaPlayer.setOnErrorListener { _, _, _ ->
+                    if (!isDisposed && isActive && GlobalMediaPlayerHolder.activeSessionToken == sessionToken) {
+                        onVideoComplete()
+                    }
+                    true
+                }
+                mediaPlayer.setOnVideoSizeChangedListener { _, videoWidth, videoHeight ->
+                    val view = textureViewInstance
+                    if (view != null && videoWidth > 0 && videoHeight > 0) {
+                        val viewWidth = view.width
+                        val viewHeight = view.height
+                        val sx = viewWidth.toFloat() / videoWidth
+                        val sy = viewHeight.toFloat() / videoHeight
+                        val maxScale = maxOf(sx, sy)
+                        val matrix = android.graphics.Matrix()
+                        matrix.setScale(maxScale / sx, maxScale / sy, viewWidth / 2f, viewHeight / 2f)
+                        view.setTransform(matrix)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                if (!isDisposed && isActive && GlobalMediaPlayerHolder.activeSessionToken == sessionToken) {
+                    onVideoComplete()
+                }
+            }
+        }
+
+        if (!cachedVideoFile.exists()) {
+            downloadAndCacheVideo(videoUrl, cachedVideoFile,
+                onSuccess = { file ->
+                    playVideo(file)
+                },
+                onError = { e ->
+                    e.printStackTrace()
+                    if (!isDisposed && isActive && GlobalMediaPlayerHolder.activeSessionToken == sessionToken) {
+                        onVideoComplete()
+                    }
+                }
+            )
+        } else {
+            playVideo(cachedVideoFile)
+        }
+    }
+
+    DisposableEffect(videoUrl) {
+        onDispose {
+            isDisposed = true
+            if (GlobalMediaPlayerHolder.activeSessionToken == sessionToken) {
+                try {
+                    val pos = mediaPlayer.currentPosition
+                    val duration = mediaPlayer.duration
+                    if (pos > 0 && pos < duration - 500) {
+                        GlobalMediaPlayerHolder.lastPlaybackPosition = pos
+                        GlobalMediaPlayerHolder.lastPlaybackUrl = videoUrl
+                        Log.d("VideoPlayer", "OnDispose: Saved video position: ${pos}ms")
+                    }
+                    if (mediaPlayer.isPlaying) {
+                        mediaPlayer.pause()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                GlobalMediaPlayerHolder.activeSessionToken = null
+            } else {
+                Log.d("VideoPlayer", "Ignoring onDispose for inactive session: $sessionToken")
+            }
+        }
+    }
+
+    Box(modifier = modifier) {
+        AndroidView(
+            factory = { ctx ->
+                TextureView(ctx).apply {
+                    textureViewInstance = this
+                    surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                        override fun onSurfaceTextureAvailable(surfaceTexture: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                            activeSurfaceTexture = surfaceTexture
+                        }
+                        override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {}
+                        override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture): Boolean {
+                            activeSurfaceTexture = null
+                            if (GlobalMediaPlayerHolder.activeSessionToken == sessionToken) {
+                                try {
+                                    try {
+                                        val pos = mediaPlayer.currentPosition
+                                        val duration = mediaPlayer.duration
+                                        if (pos > 0 && pos < duration - 500) {
+                                            GlobalMediaPlayerHolder.lastPlaybackPosition = pos
+                                            GlobalMediaPlayerHolder.lastPlaybackUrl = videoUrl
+                                            Log.d("VideoPlayer", "onSurfaceTextureDestroyed: Saved video position: ${pos}ms")
+                                        }
+                                    } catch (ex: Exception) {
+                                        Log.e("VideoPlayer", "Could not save position on surface destroyed: ${ex.message}")
+                                    }
+                                    mediaPlayer.stop()
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            } else {
+                                Log.d("VideoPlayer", "Ignoring surface destruction for inactive session: $sessionToken")
+                            }
+                            return true
+                        }
+                        override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) {}
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
 fun VideoAndSlideshowSection(
     context: Context,
     videoUrls: List<String>,
     imageList: List<String>,
+    slideshowTitles: List<String> = emptyList(),
     currentImageIndex: Int,
     wasPausedState: MutableState<Boolean>? = null,
     videoStartedState: MutableState<Boolean>? = null,
@@ -712,7 +921,8 @@ fun VideoAndSlideshowSection(
     flightAirportName: String = "",
     fidsActive: Boolean = true,
     onBannerFocusChanged: (Boolean) -> Unit = {},
-    onNavigateDown: () -> Unit = {}
+    onNavigateDown: () -> Unit = {},
+    onVideoComplete: () -> Unit = {}
 ) {
     // Use shared MediaPlayer if provided, otherwise create local one
     var localMediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -726,6 +936,7 @@ fun VideoAndSlideshowSection(
     }
     
     var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
+    var isVideoReadyGlobal by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
     
     // Track if video was paused (not stopped) so we can resume it
@@ -843,31 +1054,8 @@ fun VideoAndSlideshowSection(
         }
         
         onDispose {
-            // IMPORTANT: NEVER release MediaPlayer when navigating to other screens
-            // Only pause it so it can resume when coming back
-            // MediaPlayer will be released only when HomeScreen is completely disposed
-            val player = currentMediaPlayer
-            if (player != null) {
-            try {
-                    // Just pause, don't stop or release
-                if (player.isPlaying) {
-                        player.pause()
-                        setWasPaused(true)
-                        wasPausedState?.value = true
-                        videoStartedState?.value = true
-                        Log.d("VideoPlayer", "MediaPlayer paused on dispose (NOT released) - state saved for resume")
-                    } else {
-                        // Still save state even if not playing
-                        setWasPaused(true)
-                        wasPausedState?.value = true
-                        videoStartedState?.value = true
-                        Log.d("VideoPlayer", "MediaPlayer state saved on dispose (NOT released)")
-                    }
-                } catch (e: Exception) {
-                    Log.e("VideoPlayer", "Error pausing MediaPlayer on dispose: ${e.message}", e)
-                }
-            }
-            // CRITICAL: Don't release or set to null, keep MediaPlayer for resume
+            // CRITICAL: Don't pause or release MediaPlayer here.
+            // Let the child BannerVideoPlayer handle its own lifecycle and pause/resume session-safely.
             Log.d("VideoPlayer", "VideoAndSlideshowSection disposed - MediaPlayer kept alive for resume")
         }
     }
@@ -1128,7 +1316,7 @@ fun VideoAndSlideshowSection(
     var isNavigatingLeft by remember { mutableStateOf(false) }
 
     // Slideshow Images with shimmer (Widescreen landscape banner on the left)
-    if (isLoadingSlideshow || imageList.isNotEmpty()) {
+    if (isLoadingSlideshow || imageList.isNotEmpty() || fidsActive) {
         val arrivalsPagesCount = if (flightArrivals.isEmpty()) 1 else ((flightArrivals.size + 3) / 4)
         val departuresPagesCount = if (flightDepartures.isEmpty()) 1 else ((flightDepartures.size + 3) / 4)
         val fidsSlidesCount = if (fidsActive) (arrivalsPagesCount + departuresPagesCount) else 0
@@ -1178,7 +1366,7 @@ fun VideoAndSlideshowSection(
                     if (keyEvent.type == KeyEventType.KeyDown) {
                         when (keyEvent.key) {
                             Key.DirectionRight -> {
-                                if (imageList.isNotEmpty() && totalSlidesCount > 0) {
+                                if (totalSlidesCount > 0) {
                                     isNavigatingLeft = false
                                     val nextIndex = (currentImageIndex + 1) % totalSlidesCount
                                     onImageIndexChanged(nextIndex)
@@ -1186,7 +1374,7 @@ fun VideoAndSlideshowSection(
                                 } else false
                             }
                             Key.DirectionLeft -> {
-                                if (imageList.isNotEmpty() && totalSlidesCount > 0) {
+                                if (totalSlidesCount > 0) {
                                     isNavigatingLeft = true
                                     val prevIndex = (currentImageIndex - 1 + totalSlidesCount) % totalSlidesCount
                                     onImageIndexChanged(prevIndex)
@@ -1233,7 +1421,7 @@ fun VideoAndSlideshowSection(
                         modifier = Modifier
                             .fillMaxSize()
                     )
-                } else if (imageList.isNotEmpty()) {
+                } else if (imageList.isNotEmpty() || fidsActive) {
                     // 1. Sliding Content (Images and Flight Rows)
                     AnimatedContent(
                         targetState = currentImageIndex,
@@ -1361,12 +1549,35 @@ fun VideoAndSlideshowSection(
                             }
                         } else {
                             val imageUrl = imageList.getOrNull(targetIndex) ?: ""
-                            Image(
-                                painter = rememberCachedPainter(imageUrl),
-                                contentDescription = "Slideshow Image",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
+                            val isVideo = imageUrl.endsWith(".mp4", ignoreCase = true) || 
+                                          imageUrl.endsWith(".mkv", ignoreCase = true) || 
+                                          imageUrl.contains("/video", ignoreCase = true)
+                            if (isVideo) {
+                                val thumbFile = remember(imageUrl) {
+                                    File(context.cacheDir, imageUrl.hashCode().toString() + "_thumb.jpg")
+                                }
+                                if (thumbFile.exists() && thumbFile.length() > 0) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(model = thumbFile),
+                                        contentDescription = "Slideshow Video Thumbnail",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black)
+                                    )
+                                }
+                            } else {
+                                Image(
+                                    painter = rememberCachedPainter(imageUrl),
+                                    contentDescription = "Slideshow Image",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
                         }
                     }
 
@@ -1481,7 +1692,57 @@ fun VideoAndSlideshowSection(
                                         }
                                     }
                                 }
-                            }
+                        }
+                    }
+                }
+
+                    val activeUrl = imageList.getOrNull(currentImageIndex) ?: ""
+                    val isActiveSlideVideo = activeUrl.endsWith(".mp4", ignoreCase = true) || 
+                                           activeUrl.endsWith(".mkv", ignoreCase = true) || 
+                                           activeUrl.contains("/video", ignoreCase = true)
+                    
+                    val hasAnyVideo = imageList.any { url ->
+                        url.endsWith(".mp4", ignoreCase = true) || 
+                        url.endsWith(".mkv", ignoreCase = true) || 
+                        url.contains("/video", ignoreCase = true)
+                    }
+                    
+                    if (hasAnyVideo) {
+                        val resolvedPlayer = mediaPlayer ?: remember { MediaPlayer() }
+                        var lastVideoUrl by remember { mutableStateOf("") }
+                        if (isActiveSlideVideo && activeUrl.isNotEmpty()) {
+                            lastVideoUrl = activeUrl
+                        }
+                        
+                        // Slide transition offset animation for the video player
+                        val videoSlideOffset by animateDpAsState(
+                            targetValue = when {
+                                isActiveSlideVideo -> 0.dp
+                                isNavigatingLeft -> 448.dp
+                                else -> (-448).dp
+                            },
+                            animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+                            label = "video_offset"
+                        )
+                        
+                        val isVideoVisible = isActiveSlideVideo || Math.abs(videoSlideOffset.value) < 447f
+                        
+                        if (lastVideoUrl.isNotEmpty()) {
+                            BannerVideoPlayer(
+                                videoUrl = lastVideoUrl,
+                                mediaPlayer = resolvedPlayer,
+                                isActive = isActiveSlideVideo,
+                                onVideoReady = { isReady ->
+                                    isVideoReadyGlobal = isReady
+                                },
+                                onVideoComplete = onVideoComplete,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .offset(x = videoSlideOffset)
+                                    .graphicsLayer {
+                                        alpha = if (isVideoVisible && isVideoReadyGlobal) 1f else 0f
+                                    }
+                            )
                         }
                     }
                 } // Closes Card Body Box
@@ -1490,6 +1751,7 @@ fun VideoAndSlideshowSection(
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        .height(12.dp)
                         .padding(bottom = 0.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1523,7 +1785,10 @@ fun VideoAndSlideshowSection(
                             color = Color.White.copy(alpha = 0.5f),
                             fontSize = 6.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.5.sp,
+                            style = TextStyle(
+                                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                            )
                         )
                         Spacer(modifier = Modifier.width(1.dp))
                     }
@@ -1573,6 +1838,7 @@ fun HomeScreen(navController: NavHostController) {
     Log.d("HomeScreen", "HomeScreen composition started")
     
     val imageList by DataRepository.slideshowImages
+    val slideshowTitles by DataRepository.slideshowTitles
     var currentImageIndex by DataRepository.currentImageIndex
     val videoUrlsState by DataRepository.videoUrls
     val slideDurations by DataRepository.slideshowDurations
@@ -1795,7 +2061,14 @@ fun HomeScreen(navController: NavHostController) {
 
     // Timer for changing image based on slide duration (restarts on manual D-pad changes for jank-free transition timing)
     LaunchedEffect(isSlideshowActive, imageList, slideDurations, currentImageIndex, fidsActive, arrivalsPagesCount, departuresPagesCount, isBannerFocused) {
-        if (isSlideshowActive && imageList.isNotEmpty() && !isBannerFocused) {
+        if (isSlideshowActive && totalSlidesCount > 0 && !isBannerFocused) {
+            val currentUrl = imageList.getOrNull(currentImageIndex) ?: ""
+            val isVideo = currentUrl.endsWith(".mp4", ignoreCase = true) || 
+                          currentUrl.endsWith(".mkv", ignoreCase = true) || 
+                          currentUrl.contains("/video", ignoreCase = true)
+            if (isVideo) {
+                return@LaunchedEffect
+            }
             if (totalSlidesCount > 0) {
                 try {
                     // Flight info total = 30 detik, dibagi rata ke semua halaman (arr + dept)
@@ -1806,7 +2079,7 @@ fun HomeScreen(navController: NavHostController) {
                         slideDurations.getOrNull(currentImageIndex) ?: 5
                     }
                     delay(duration * 1000L)
-                    if (isSlideshowActive && imageList.isNotEmpty() && !isBannerFocused) {
+                    if (isSlideshowActive && totalSlidesCount > 0 && !isBannerFocused) {
                         currentImageIndex = (currentImageIndex + 1) % totalSlidesCount
                     }
                 } catch (e: Exception) {
@@ -1878,6 +2151,7 @@ fun HomeScreen(navController: NavHostController) {
                         context = context, 
                         videoUrls = videoUrlsState, 
                         imageList = imageList, 
+                        slideshowTitles = slideshowTitles,
                         currentImageIndex = currentImageIndex,
                         wasPausedState = wasPausedState,
                         videoStartedState = videoStartedState,
@@ -1894,6 +2168,11 @@ fun HomeScreen(navController: NavHostController) {
                         flightAirportName = flightAirportName,
                         fidsActive = fidsActive,
                         onBannerFocusChanged = { isBannerFocused = it },
+                        onVideoComplete = {
+                            if (isSlideshowActive && totalSlidesCount > 0 && !isBannerFocused) {
+                                currentImageIndex = (currentImageIndex + 1) % totalSlidesCount
+                            }
+                        },
                         onNavigateDown = {
                             try {
                                 shortcutFocusRequesters[0].requestFocus()

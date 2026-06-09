@@ -7,14 +7,25 @@ import com.google.firebase.database.*
 import java.util.Locale
 import java.util.TimeZone
 import java.text.SimpleDateFormat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
  
 object DataRepository {
     // Live data holders (Compose mutableState for reactivity)
     val menuItems = mutableStateOf<List<MenuItemData>>(emptyList())
     val requestItems = mutableStateOf<List<GuestRequest>>(emptyList())
  
+    // Hotel Info Live data holders
+    val hotelFacilities = mutableStateOf<List<Item>>(emptyList())
+    val roomFacilities = mutableStateOf<List<Item>>(emptyList())
+    val emergencyProcedure = mutableStateOf<List<Item>>(emptyList())
+    val healthAndWellness = mutableStateOf<List<Item>>(emptyList())
+    val discoverDestination = mutableStateOf<List<Item>>(emptyList())
+ 
     // Slideshow & Video Live data holders
     val slideshowImages = mutableStateOf<List<String>>(emptyList())
+    val slideshowTitles = mutableStateOf<List<String>>(emptyList())
     val slideshowDurations = mutableStateOf<List<Int>>(emptyList())
     val isSlideshowActive = mutableStateOf(false)
     val isLoadingSlideshow = mutableStateOf(true)
@@ -26,6 +37,11 @@ object DataRepository {
     // Loading state flags
     val isMenuLoaded = mutableStateOf(false)
     val isRequestLoaded = mutableStateOf(false)
+    val isHotelFacilitiesLoaded = mutableStateOf(false)
+    val isRoomFacilitiesLoaded = mutableStateOf(false)
+    val isEmergencyProcedureLoaded = mutableStateOf(false)
+    val isHealthWellnessLoaded = mutableStateOf(false)
+    val isDiscoverDestinationLoaded = mutableStateOf(false)
 
     // NEW Persistent States
     // Weather
@@ -44,9 +60,15 @@ object DataRepository {
     // Guest & DND
     val guestInfo = mutableStateOf<GuestInfo?>(null)
     val isDndActive = mutableStateOf(false)
+    val instagramHandle = mutableStateOf<String?>(null)
  
     private var menuListener: ValueEventListener? = null
     private var requestListener: ValueEventListener? = null
+    private var hotelFacilitiesListener: ValueEventListener? = null
+    private var roomFacilitiesListener: ValueEventListener? = null
+    private var emergencyProcedureListener: ValueEventListener? = null
+    private var healthAndWellnessListener: ValueEventListener? = null
+    private var discoverDestinationListener: ValueEventListener? = null
     private var slideshowListener: ValueEventListener? = null
     private var videoListener: ValueEventListener? = null
 
@@ -59,10 +81,16 @@ object DataRepository {
     private var flightInfoListener: ValueEventListener? = null
     private var guestInfoListener: ValueEventListener? = null
     private var dndListener: ValueEventListener? = null
+    private var contactListener: ValueEventListener? = null
  
     private var activeBranchId: String? = null
     private var activeMenuRef: DatabaseReference? = null
     private var activeRequestRef: DatabaseReference? = null
+    private var activeHotelFacilitiesRef: DatabaseReference? = null
+    private var activeRoomFacilitiesRef: DatabaseReference? = null
+    private var activeEmergencyProcedureRef: DatabaseReference? = null
+    private var activeHealthAndWellnessRef: DatabaseReference? = null
+    private var activeDiscoverDestinationRef: DatabaseReference? = null
     private var activeSlideshowRef: DatabaseReference? = null
     private var activeVideoRef: DatabaseReference? = null
 
@@ -75,6 +103,7 @@ object DataRepository {
     private var activeFlightInfoRef: DatabaseReference? = null
     private var activeGuestInfoRef: DatabaseReference? = null
     private var activeDndRef: DatabaseReference? = null
+    private var activeContactRef: DatabaseReference? = null
  
     fun startPreload(context: android.content.Context, branchId: String?) {
         if (branchId == null) return
@@ -88,7 +117,13 @@ object DataRepository {
             companyIconListener != null &&
             weatherSettingListener != null &&
             fidsSettingListener != null &&
-            guestInfoListener != null
+            guestInfoListener != null &&
+            hotelFacilitiesListener != null &&
+            roomFacilitiesListener != null &&
+            emergencyProcedureListener != null &&
+            healthAndWellnessListener != null &&
+            discoverDestinationListener != null &&
+            contactListener != null
         ) {
             Log.d("DataRepository", "Preload already active for branch: $branchId")
             return
@@ -139,6 +174,86 @@ object DataRepository {
         }
         requestRef.addValueEventListener(requestListener!!)
  
+        // Preload Hotel Info - Hotel Facility
+        val hotelFacRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("HOTEL_FACILITY")
+        activeHotelFacilitiesRef = hotelFacRef
+        hotelFacilitiesListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val items = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
+                hotelFacilities.value = items
+                isHotelFacilitiesLoaded.value = true
+                Log.d("DataRepository", "Hotel facilities loaded: ${items.size}")
+            }
+            override fun onCancelled(error: DatabaseError) {
+                isHotelFacilitiesLoaded.value = true
+            }
+        }
+        hotelFacRef.addValueEventListener(hotelFacilitiesListener!!)
+
+        // Preload Hotel Info - Rooms Facility
+        val roomFacRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("ROOMS_FACILITY")
+        activeRoomFacilitiesRef = roomFacRef
+        roomFacilitiesListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val items = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
+                roomFacilities.value = items
+                isRoomFacilitiesLoaded.value = true
+                Log.d("DataRepository", "Room facilities loaded: ${items.size}")
+            }
+            override fun onCancelled(error: DatabaseError) {
+                isRoomFacilitiesLoaded.value = true
+            }
+        }
+        roomFacRef.addValueEventListener(roomFacilitiesListener!!)
+
+        // Preload Hotel Info - Emergency Procedure
+        val emergRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("EMERGENCY_PROCEDURE")
+        activeEmergencyProcedureRef = emergRef
+        emergencyProcedureListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val items = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
+                emergencyProcedure.value = items
+                isEmergencyProcedureLoaded.value = true
+                Log.d("DataRepository", "Emergency procedures loaded: ${items.size}")
+            }
+            override fun onCancelled(error: DatabaseError) {
+                isEmergencyProcedureLoaded.value = true
+            }
+        }
+        emergRef.addValueEventListener(emergencyProcedureListener!!)
+
+        // Preload Hotel Info - Health & Wellness
+        val healthRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("HEALTH_WELLNESS")
+        activeHealthAndWellnessRef = healthRef
+        healthAndWellnessListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val items = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
+                healthAndWellness.value = items
+                isHealthWellnessLoaded.value = true
+                Log.d("DataRepository", "Health & Wellness loaded: ${items.size}")
+            }
+            override fun onCancelled(error: DatabaseError) {
+                isHealthWellnessLoaded.value = true
+            }
+        }
+        healthRef.addValueEventListener(healthAndWellnessListener!!)
+
+        // Preload Hotel Info - Discover Destination
+        val discoverRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("DISCOVER_DESTINATION")
+        activeDiscoverDestinationRef = discoverRef
+        discoverDestinationListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val items = snapshot.children.mapNotNull { it.getValue(Item::class.java) }
+                discoverDestination.value = items
+                isDiscoverDestinationLoaded.value = true
+                Log.d("DataRepository", "Discover destinations loaded: ${items.size}")
+            }
+            override fun onCancelled(error: DatabaseError) {
+                isDiscoverDestinationLoaded.value = true
+            }
+        }
+        discoverRef.addValueEventListener(discoverDestinationListener!!)
+ 
         // Preload Slideshow
         val slideshowRef = db.child("BRANCHES").child(branchId).child("SLIDESHOW").child("imageUrls")
         activeSlideshowRef = slideshowRef
@@ -158,10 +273,12 @@ object DataRepository {
                         isSlideshowActive.value = true
                         slideshowImages.value = activeSlides.map { it.url }
                         slideshowDurations.value = activeSlides.map { it.duration }
+                        slideshowTitles.value = activeSlides.map { it.title ?: "" }
                     } else {
                         isSlideshowActive.value = false
                         slideshowImages.value = emptyList()
                         slideshowDurations.value = emptyList()
+                        slideshowTitles.value = emptyList()
                     }
                     isLoadingSlideshow.value = false
                     Log.d("DataRepository", "Slideshow preloaded successfully: ${slideshowImages.value.size} active slides")
@@ -190,6 +307,7 @@ object DataRepository {
                     videoUrls.value = urls
                     isLoadingVideos.value = false
                     Log.d("DataRepository", "Videos preloaded successfully: ${urls.size} active videos")
+                    preloadVideos(context, urls)
                 } catch (e: Exception) {
                     isLoadingVideos.value = false
                 }
@@ -303,6 +421,20 @@ object DataRepository {
             }
             guestRef.addValueEventListener(guestInfoListener!!)
         }
+
+        // Preload Instagram config from SETTING/CONTACT
+        val contactRef = db.child("BRANCHES").child(branchId).child("SETTING").child("CONTACT")
+        activeContactRef = contactRef
+        contactListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                instagramHandle.value = snapshot.child("INSTAGRAM").getValue(String::class.java)
+                Log.d("DataRepository", "Instagram handle loaded: ${instagramHandle.value}")
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "Contact preload failed: ${error.message}")
+            }
+        }
+        contactRef.addValueEventListener(contactListener!!)
     }
 
     private fun setupWeatherListeners(db: DatabaseReference, city: String?) {
@@ -531,6 +663,11 @@ object DataRepository {
         activeRequestRef?.let { ref -> requestListener?.let { ref.removeEventListener(it) } }
         activeSlideshowRef?.let { ref -> slideshowListener?.let { ref.removeEventListener(it) } }
         activeVideoRef?.let { ref -> videoListener?.let { ref.removeEventListener(it) } }
+        activeHotelFacilitiesRef?.let { ref -> hotelFacilitiesListener?.let { ref.removeEventListener(it) } }
+        activeRoomFacilitiesRef?.let { ref -> roomFacilitiesListener?.let { ref.removeEventListener(it) } }
+        activeEmergencyProcedureRef?.let { ref -> emergencyProcedureListener?.let { ref.removeEventListener(it) } }
+        activeHealthAndWellnessRef?.let { ref -> healthAndWellnessListener?.let { ref.removeEventListener(it) } }
+        activeDiscoverDestinationRef?.let { ref -> discoverDestinationListener?.let { ref.removeEventListener(it) } }
 
         activeCompanyIconRef?.let { ref -> companyIconListener?.let { ref.removeEventListener(it) } }
         activeWeatherSettingRef?.let { ref -> weatherSettingListener?.let { ref.removeEventListener(it) } }
@@ -540,11 +677,17 @@ object DataRepository {
         activeFlightInfoRef?.let { ref -> flightInfoListener?.let { ref.removeEventListener(it) } }
         activeGuestInfoRef?.let { ref -> guestInfoListener?.let { ref.removeEventListener(it) } }
         activeDndRef?.let { ref -> dndListener?.let { ref.removeEventListener(it) } }
+        activeContactRef?.let { ref -> contactListener?.let { ref.removeEventListener(it) } }
  
         menuListener = null
         requestListener = null
         slideshowListener = null
         videoListener = null
+        hotelFacilitiesListener = null
+        roomFacilitiesListener = null
+        emergencyProcedureListener = null
+        healthAndWellnessListener = null
+        discoverDestinationListener = null
 
         companyIconListener = null
         weatherSettingListener = null
@@ -554,11 +697,17 @@ object DataRepository {
         flightInfoListener = null
         guestInfoListener = null
         dndListener = null
+        contactListener = null
  
         activeMenuRef = null
         activeRequestRef = null
         activeSlideshowRef = null
         activeVideoRef = null
+        activeHotelFacilitiesRef = null
+        activeRoomFacilitiesRef = null
+        activeEmergencyProcedureRef = null
+        activeHealthAndWellnessRef = null
+        activeDiscoverDestinationRef = null
 
         activeCompanyIconRef = null
         activeWeatherSettingRef = null
@@ -568,14 +717,27 @@ object DataRepository {
         activeFlightInfoRef = null
         activeGuestInfoRef = null
         activeDndRef = null
+        activeContactRef = null
  
         activeBranchId = null
         isMenuLoaded.value = false
         isRequestLoaded.value = false
+        isHotelFacilitiesLoaded.value = false
+        isRoomFacilitiesLoaded.value = false
+        isEmergencyProcedureLoaded.value = false
+        isHealthWellnessLoaded.value = false
+        isDiscoverDestinationLoaded.value = false
+
+        hotelFacilities.value = emptyList()
+        roomFacilities.value = emptyList()
+        emergencyProcedure.value = emptyList()
+        healthAndWellness.value = emptyList()
+        discoverDestination.value = emptyList()
         isSlideshowActive.value = false
         isLoadingSlideshow.value = true
         isLoadingVideos.value = true
         slideshowImages.value = emptyList()
+        slideshowTitles.value = emptyList()
         slideshowDurations.value = emptyList()
         videoUrls.value = emptyList()
         currentImageIndex.value = 0
@@ -593,5 +755,83 @@ object DataRepository {
  
         guestInfo.value = null
         isDndActive.value = false
+        instagramHandle.value = null
+    }
+
+    private fun preloadVideos(context: android.content.Context, urls: List<String>) {
+        val scope = CoroutineScope(Dispatchers.IO)
+        for (url in urls) {
+            scope.launch {
+                try {
+                    if (url.isEmpty()) return@launch
+                    val cacheFileStandard = java.io.File(context.cacheDir, url.hashCode().toString() + ".mp4")
+                    val cacheFileBanner = java.io.File(context.cacheDir, url.hashCode().toString() + "_banner.mp4")
+                    
+                    if (cacheFileStandard.exists() && cacheFileStandard.length() > 0 && 
+                        cacheFileBanner.exists() && cacheFileBanner.length() > 0) {
+                        Log.d("DataRepository", "Video already cached: $url")
+                        return@launch
+                    }
+                    Log.d("DataRepository", "Start preloading video: $url")
+                    val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    connection.connectTimeout = 15000
+                    connection.readTimeout = 15000
+                    connection.inputStream.use { input ->
+                        val tempFile = java.io.File(context.cacheDir, url.hashCode().toString() + ".tmp")
+                        tempFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                        
+                        if (!cacheFileStandard.exists() || cacheFileStandard.length() == 0L) {
+                            try {
+                                tempFile.copyTo(cacheFileStandard, overwrite = true)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                        
+                        if (cacheFileBanner.exists()) {
+                            try {
+                                cacheFileBanner.delete()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+
+                        if (tempFile.renameTo(cacheFileBanner)) {
+                            Log.d("DataRepository", "Video preloaded successfully: $url")
+                            
+                            val thumbFile = java.io.File(context.cacheDir, url.hashCode().toString() + "_thumb.jpg")
+                            if (!thumbFile.exists() || thumbFile.length() == 0L) {
+                                val retriever = android.media.MediaMetadataRetriever()
+                                try {
+                                    retriever.setDataSource(cacheFileBanner.absolutePath)
+                                    var bitmap = retriever.getFrameAtTime(1000000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                    if (bitmap == null) {
+                                        bitmap = retriever.getFrameAtTime()
+                                    }
+                                    if (bitmap != null) {
+                                        java.io.FileOutputStream(thumbFile).use { out ->
+                                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                                        }
+                                        Log.d("DataRepository", "Video thumbnail preloaded and saved to: ${thumbFile.name}")
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                } finally {
+                                    try {
+                                        retriever.release()
+                                    } catch (ex: Exception) {}
+                                }
+                            }
+                        } else {
+                            tempFile.delete()
+                        }
+                    }
+                } catch (e: java.lang.Exception) {
+                    Log.e("DataRepository", "Failed to preload video: $url, error: ${e.message}")
+                }
+            }
+        }
     }
 }

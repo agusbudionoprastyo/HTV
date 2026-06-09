@@ -377,7 +377,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
 
     val mediaPlayer = remember { MediaPlayer.create(context, R.raw.notif) }
 
-    var storedPin by remember { mutableStateOf<String?>(null) }
+    var storedPin by remember { mutableStateOf<String?>(sharedPreferences.getString("cached_pin", "4646")) }
 
     DisposableEffect(Unit) {
         var pinRef: com.google.firebase.database.DatabaseReference? = null
@@ -866,9 +866,29 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Icon (Filled background clock!)
-            FooterClockIcon(modifier = Modifier.size(22.dp))
-            
+            val instagram = DataRepository.instagramHandle.value
+            if (!instagram.isNullOrEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.logo_instagram),
+                        contentDescription = "Instagram Logo",
+                        tint = Color.White.copy(alpha = 0.55f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = instagram,
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+
             // Jam
             Text(
                 text = footerTime,

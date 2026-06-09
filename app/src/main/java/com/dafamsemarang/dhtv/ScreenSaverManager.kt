@@ -567,7 +567,7 @@ fun GlassmorphicWelcomeCard(
             .width(480.dp)
             .wrapContentHeight()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.1f)), // Removed padding from parent Box to allow true overflow!
+            .background(Color.Black.copy(alpha = 0.35f)), // Transparent black glass background without border
         contentAlignment = Alignment.Center
     ) {
         Column(
