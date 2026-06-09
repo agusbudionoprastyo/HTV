@@ -205,36 +205,74 @@ fun SettingsOptionRow(
 }
  
 private fun openAccessibilitySettings(context: Context) {
-    try {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        context.startActivity(intent)
-    } catch (e: Exception) {
+    // Helper to create TV Settings intent pointing directly to the Accessibility fragment
+    fun createTvIntent(packageName: String): Intent {
+        val intent = Intent()
+        intent.setClassName(packageName, "$packageName.MainSettings")
+        // These extras tell Android TV Settings to drill down into the accessibility fragment immediately
+        intent.putExtra(":settings:show_fragment", "$packageName.system.AccessibilityFragment")
+        val args = android.os.Bundle()
+        args.putString(":settings:fragment_args_key", "accessibility")
+        intent.putExtra(":settings:show_fragment_args", args)
+        return intent
+    }
+
+    val accessibilityIntents = listOf(
+        // 1. Android TV OEM Link (Specific to custom Android TV Boxes using OEM redirect paths)
+        Intent("android.settings.ACCESSIBILITY_TV_OEM_LINK").setClassName("com.android.tv.settings", "com.android.tv.settings.oemlink.AccessibilitySettingsActivity"),
+        Intent("android.settings.ACCESSIBILITY_TV_OEM_LINK"),
+        
+        // 2. Standard Android Action
+        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
+        
+        // 3. Android TV Settings with fragment target (For standard Android TV)
+        createTvIntent("com.android.tv.settings"),
+        
+        // 4. Google TV Settings with fragment target (For newer Google TV devices)
+        createTvIntent("com.google.android.tv.settings"),
+        
+        // 5. Android TV / Google TV standard settings package (Modern UI structure standalone)
+        Intent().setClassName("com.android.tv.settings", "com.android.tv.settings.accessibility.AccessibilityActivity"),
+        
+        // 6. Android TV (Older / AOSP UI structure e.g. "Device Preferences > Accessibility")
+        Intent().setClassName("com.android.tv.settings", "com.android.tv.settings.system.AccessibilityActivity"),
+        
+        // 7. Newer Google TV settings package
+        Intent().setClassName("com.google.android.tv.settings", "com.google.android.tv.settings.accessibility.AccessibilityActivity"),
+        Intent().setClassName("com.google.android.tv.settings", "com.google.android.tv.settings.system.AccessibilityActivity"),
+        
+        // 8. AOSP / Generic TV Box (Mobile Settings layout)
+        Intent().setClassName("com.android.settings", "com.android.settings.Settings\$AccessibilitySettingsActivity"),
+        Intent().setClassName("com.android.settings", "com.android.settings.accessibility.AccessibilitySettings"),
+        
+        // 9. Amazon Fire TV settings
+        Intent().setClassName("com.amazon.tv.settings", "com.amazon.tv.settings.accessibility.AccessibilityActivity"),
+        
+        // 10. Generic system action with settings package constraint
+        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).setPackage("com.android.tv.settings"),
+        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).setPackage("com.google.android.tv.settings"),
+        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).setPackage("com.android.settings")
+    )
+
+    for (intent in accessibilityIntents) {
         try {
-            // Android TV OS fallback
-            val intent = Intent()
-            intent.setClassName("com.android.tv.settings", "com.android.tv.settings.accessibility.AccessibilityActivity")
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             context.startActivity(intent)
-        } catch (e2: Exception) {
-            try {
-                // TV settings package fallback with standard action
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                intent.setPackage("com.android.tv.settings")
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                context.startActivity(intent)
-            } catch (e3: Exception) {
-                try {
-                    // System Settings fallback
-                    val intent = Intent(Settings.ACTION_SETTINGS)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context.startActivity(intent)
-                    Toast.makeText(context, "Cari menu 'Aksesibilitas' di Pengaturan", Toast.LENGTH_LONG).show()
-                } catch (e4: Exception) {
-                    Toast.makeText(context, "Gagal membuka menu Aksesibilitas", Toast.LENGTH_SHORT).show()
-                }
-            }
+            android.util.Log.d("SettingsOptions", "Successfully opened accessibility settings using: ${intent.component ?: intent.action}")
+            return
+        } catch (e: Exception) {
+            // Keep trying other intents
         }
+    }
+
+    // Final fallback: open general settings and show guide toast
+    try {
+        val fallbackIntent = Intent(Settings.ACTION_SETTINGS)
+        fallbackIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        context.startActivity(fallbackIntent)
+        Toast.makeText(context, "Cari menu 'Aksesibilitas' di Pengaturan", Toast.LENGTH_LONG).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Gagal membuka Pengaturan", Toast.LENGTH_SHORT).show()
     }
 }
  

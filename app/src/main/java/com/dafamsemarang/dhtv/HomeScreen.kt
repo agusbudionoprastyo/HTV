@@ -2304,38 +2304,38 @@ fun HomeScreen(navController: NavHostController) {
                     // Guest Greeting & Room Details Column (Bottom-aligned with the shortcut container)
                     Column(
                         modifier = Modifier.width(320.dp),
-                        horizontalAlignment = Alignment.Start
+                        horizontalAlignment = Alignment.End
                     ) {
-                        // Enlarged Guest Name (Size 36.sp, Bold, left aligned)
+                        // Enlarged Guest Name (Size 36.sp, Bold, right-aligned)
                         Text(
                             text = formatName(guestInfo?.fname ?: "Guest Name"),
                             style = MaterialTheme.typography.headlineLarge.copy(fontSize = 36.sp),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Start,
+                            textAlign = TextAlign.End,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 6.dp)
                         )
                         
                         Text(
-                            text = "Its our pleasure to welcome you to our hotel. We will do everything in our power to make your stay most convenient and enjoyable.",
+                            text = "Its our pleasure to welcome you to our hotel. We will do everything in our power to make your stay most convenient and enjoyable",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontSize = 14.sp,
                                 lineHeight = 19.sp
                             ),
                             color = Color.White.copy(alpha = 0.85f),
                             fontWeight = FontWeight.Normal,
-                            textAlign = TextAlign.Justify,
+                            textAlign = TextAlign.End,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 10.dp)
                         )
 
-                        // Room Number, Type, Non-Smoking Group (Distributed evenly across the same 320.dp width)
+                        // Room Number, Type, Non-Smoking Group (Right-aligned with spacing and divider bars)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.End,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 8.dp)
@@ -2357,11 +2357,13 @@ fun HomeScreen(navController: NavHostController) {
                                 )
                             }
 
+                            Spacer(modifier = Modifier.width(12.dp))
                             Text(
                                 text = "|",
                                 color = Color.White.copy(alpha = 0.4f),
                                 style = MaterialTheme.typography.bodyLarge
                             )
+                            Spacer(modifier = Modifier.width(12.dp))
                             
                             // Room Type Group (Just roomtype label)
                             Text(
@@ -2371,11 +2373,13 @@ fun HomeScreen(navController: NavHostController) {
                                 fontWeight = FontWeight.Medium
                             )
                             
+                            Spacer(modifier = Modifier.width(12.dp))
                             Text(
                                 text = "|",
                                 color = Color.White.copy(alpha = 0.4f),
                                 style = MaterialTheme.typography.bodyLarge
                             )
+                            Spacer(modifier = Modifier.width(12.dp))
                             
                             // Smoking Preference Group
                             Row(verticalAlignment = Alignment.CenterVertically) {
