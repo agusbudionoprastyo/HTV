@@ -793,7 +793,7 @@ fun HeaderSection(currentRoute: String? = "home") {
             // Replacement container for non-home screens
             val headerReplacement = when (targetRoute) {
                     "cantingfood" -> Pair(R.drawable.room_service_3_svgrepo_com, "Room Service")
-                    "contact" -> Pair(R.drawable.service_request_svgrepo_com, "Request Service")
+                    "contact" -> Pair(R.drawable.ic_request_service, "Request Service")
                     "hotel_guide" -> Pair(R.drawable.info_circle_svgrepo_com, "Hotel Info")
                     else -> Pair(R.drawable.info_circle_svgrepo_com, "Hotel Info")
                 }

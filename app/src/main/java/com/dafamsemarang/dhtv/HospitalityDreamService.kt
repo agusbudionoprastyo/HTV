@@ -1,6 +1,7 @@
 package com.dafamsemarang.dhtv
 
 import android.service.dreams.DreamService
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -13,6 +14,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.dafamsemarang.dhtv.ui.theme.dhtvTheme
 
 class HospitalityDreamService : DreamService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
     
@@ -36,6 +38,11 @@ class HospitalityDreamService : DreamService(), LifecycleOwner, ViewModelStoreOw
         isInteractive = true // Cover touch / keyboard events for buttons
         isFullscreen = true   // Cover status bar and navigation bar
         
+        // Clear FLAG_SECURE to allow taking screenshots of the native screensaver
+        window?.let {
+            it.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         
         // Start listening to Firebase database to load screensaver configuration
@@ -43,7 +50,14 @@ class HospitalityDreamService : DreamService(), LifecycleOwner, ViewModelStoreOw
         
         val composeView = ComposeView(this).apply {
             setContent {
-                ScreenSaverOverlay()
+                dhtvTheme {
+                    androidx.compose.material3.Surface(
+                        modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                        color = androidx.compose.ui.graphics.Color.Black
+                    ) {
+                        ScreenSaverOverlay()
+                    }
+                }
             }
         }
         

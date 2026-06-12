@@ -46,7 +46,8 @@ fun downloadAndCacheImage(
     onSuccess: (String) -> Unit,
     onError: (Exception) -> Unit
 ) {
-    if (imageUrl.isEmpty()) {
+    val sanitizedUrl = imageUrl.replace(" ", "%20")
+    if (sanitizedUrl.isEmpty()) {
         onError(Exception("Empty image URL"))
         return
     }
@@ -62,7 +63,7 @@ fun downloadAndCacheImage(
     CoroutineScope(Dispatchers.IO).launch {
         try {
             val request = ImageRequest.Builder(context)
-                .data(imageUrl)
+                .data(sanitizedUrl)
                 .allowHardware(false) // Disable hardware bitmaps during caching download
                 .build()
             
@@ -102,10 +103,11 @@ fun downloadAndCacheImage(
  * Get cache file name from image URL
  */
 fun getImageCacheFileName(imageUrl: String, prefix: String = "img"): String {
-    val cleanUrl = imageUrl.substringBefore('?').substringBefore('#')
+    val sanitizedUrl = imageUrl.replace(" ", "%20")
+    val cleanUrl = sanitizedUrl.substringBefore('?').substringBefore('#')
     val rawExtension = cleanUrl.substringAfterLast('.', "")
     val extension = rawExtension.lowercase().filter { it.isLetterOrDigit() }.take(4).ifEmpty { "png" }
-    val hash = imageUrl.hashCode().toString().replace("-", "n")
+    val hash = sanitizedUrl.hashCode().toString().replace("-", "n")
     // v2: Invalidate cache to force PNG re-download (fixes black background transparency issue)
     return "${prefix}_${hash}_v2.$extension"
 }
@@ -139,19 +141,20 @@ fun CachedAsyncImage(
     showShimmer: Boolean = true
 ) {
     val context = LocalContext.current
-    val cacheFileName = remember(imageUrl) {
-        getImageCacheFileName(imageUrl, cachePrefix)
+    val sanitizedUrl = remember(imageUrl) { imageUrl.replace(" ", "%20") }
+    val cacheFileName = remember(sanitizedUrl) {
+        getImageCacheFileName(sanitizedUrl, cachePrefix)
     }
-    val existingPath = remember(imageUrl) {
-        if (imageUrl.isEmpty()) null else getCachedImagePath(context, cacheFileName)
+    val existingPath = remember(sanitizedUrl) {
+        if (sanitizedUrl.isEmpty()) null else getCachedImagePath(context, cacheFileName)
     }
     
-    var cachedImagePath by remember(imageUrl) { mutableStateOf<String?>(existingPath) }
-    var isLoading by remember(imageUrl) { mutableStateOf(existingPath == null && imageUrl.isNotEmpty()) }
+    var cachedImagePath by remember(sanitizedUrl) { mutableStateOf<String?>(existingPath) }
+    var isLoading by remember(sanitizedUrl) { mutableStateOf(existingPath == null && sanitizedUrl.isNotEmpty()) }
     
     // Check/refresh cache in background
-    LaunchedEffect(imageUrl) {
-        if (imageUrl.isEmpty()) {
+    LaunchedEffect(sanitizedUrl) {
+        if (sanitizedUrl.isEmpty()) {
             isLoading = false
             return@LaunchedEffect
         }
@@ -165,7 +168,7 @@ fun CachedAsyncImage(
             // Download and cache if not exists
             downloadAndCacheImage(
                 context = context,
-                imageUrl = imageUrl,
+                imageUrl = sanitizedUrl,
                 cacheFileName = cacheFileName,
                 onSuccess = { path ->
                     cachedImagePath = path
@@ -273,17 +276,18 @@ fun Modifier.shimmerEffect(): Modifier {
 @Composable
 fun rememberCachedPainter(url: String, errorPlaceholder: Int? = null): coil.compose.AsyncImagePainter {
     val context = LocalContext.current
-    val model = remember(url) {
-        if (url.isNotEmpty()) {
-            val cacheFileName = getImageCacheFileName(url)
+    val sanitizedUrl = remember(url) { url.replace(" ", "%20") }
+    val model = remember(sanitizedUrl) {
+        if (sanitizedUrl.isNotEmpty()) {
+            val cacheFileName = getImageCacheFileName(sanitizedUrl)
             val cachedPath = getCachedImagePath(context, cacheFileName)
             if (cachedPath != null) {
                 File(cachedPath)
             } else {
-                url
+                sanitizedUrl
             }
         } else {
-            url
+            sanitizedUrl
         }
     }
 

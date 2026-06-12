@@ -333,6 +333,20 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     val hotelFocusRequester = remember { FocusRequester() }
     val requestFocusRequester = remember { FocusRequester() }
     val myRequestFocusRequester = remember { FocusRequester() }
+    val screensaverFocusRequester = remember { FocusRequester() }
+
+    var wasScreenSaverActive by remember { mutableStateOf(false) }
+    LaunchedEffect(ScreenSaverManager.isScreenSaverActive) {
+        val isActive = ScreenSaverManager.isScreenSaverActive
+        if (wasScreenSaverActive && !isActive) {
+            try {
+                screensaverFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                Log.e("FooterSection", "Failed to refocus screensaver button: ${e.message}")
+            }
+        }
+        wasScreenSaverActive = isActive
+    }
 
     var isFooterFocused by remember { mutableStateOf(false) }
 
@@ -552,7 +566,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 }
                 .focusGroup()
                 .onFocusChanged { isFooterFocused = it.hasFocus },
-            horizontalArrangement = Arrangement.spacedBy(17.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             // Capsule 1 (Notifications)
@@ -636,6 +650,60 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         onClick = { showPinDialog = true },
                         title = "Settings",
                         isActive = true
+                    )
+                }
+            }
+
+            // Capsule 5 (Screensaver)
+            Box {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(50.dp))
+                        .background(
+                            color = Color(207, 223, 237).copy(alpha = baseAlpha),
+                            shape = RoundedCornerShape(50.dp)
+                        )
+                        .drawBehind {
+                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
+                            drawRoundRect(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.35f),
+                                        Color.White.copy(alpha = 0.03f),
+                                        Color.White.copy(alpha = 0.20f)
+                                    ),
+                                    start = Offset(0f, 0f),
+                                    end = Offset(this.size.width, this.size.height)
+                                ),
+                                cornerRadius = CornerRadius(this.size.height / 2),
+                                style = Stroke(width = 1.2.dp.toPx())
+                            )
+                        }
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start,
+                    modifier = Modifier.padding(4.dp)
+                ) {
+                    SmallServiceButton(
+                        iconRes = R.drawable.ic_screensaver,
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_MAIN).apply {
+                                    setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // Fallback to in-app screensaver
+                                ScreenSaverManager.isScreenSaverActive = true
+                            }
+                        },
+                        title = "Screensaver",
+                        isActive = true,
+                        focusRequester = screensaverFocusRequester
                     )
                 }
             }
@@ -748,7 +816,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     modifier = Modifier.padding(4.dp)
                 ) {
                     SmallServiceButton(
-                        iconRes = R.drawable.ic_home_launcher_custom,
+                        iconRes = R.drawable.ic_home,
                         onClick = {
                             if (currentRoute != "home") navController?.navigate("home") {
                                 popUpTo("home") { saveState = true }
@@ -766,7 +834,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         focusRequester = homeFocusRequester
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
 
                     // F&B button – NOT wrapped, track its position via onGloballyPositioned
                     Box(
@@ -796,8 +864,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         )
                     }
 
-
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
 
                     Box(
                         modifier = Modifier
@@ -807,7 +874,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             .wrapContentSize()
                     ) {
                         SmallServiceButton(
-                            iconRes = R.drawable.service_request_svgrepo_com,
+                            iconRes = R.drawable.ic_request_service,
                             onClick = {
                                 if (currentRoute != "contact") navController?.navigate("contact") {
                                     popUpTo("home") { saveState = true }
@@ -826,7 +893,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
 
                     SmallServiceButton(
                         iconRes = R.drawable.info_circle_svgrepo_com,
@@ -2004,7 +2071,7 @@ fun MyRequestItemDrawer(request: Request, isFocused: Boolean) {
                 )
             } else {
                 Icon(
-                    painter = painterResource(id = R.drawable.service_request_svgrepo_com),
+                    painter = painterResource(id = R.drawable.ic_request_service),
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
                     tint = Color.White
@@ -2466,7 +2533,7 @@ fun NotificationItem(
                         notification.type == "DND" -> R.drawable.ic_dnd
                         notification.type == "LAUNDRY" -> R.drawable.hotel_coat_check_svgrepo_com
                         notification.type == "ROOM_SERVICE" -> R.drawable.room_service_3_svgrepo_com
-                        notification.type == "GUEST_REQUEST" -> R.drawable.service_request_svgrepo_com
+                        notification.type == "GUEST_REQUEST" -> R.drawable.ic_request_service
                         else -> R.drawable.notifications_svgrepo_com // Default icon
                     }
 

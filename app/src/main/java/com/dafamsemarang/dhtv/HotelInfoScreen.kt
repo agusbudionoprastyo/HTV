@@ -29,6 +29,7 @@ import androidx.compose.animation.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import coil.compose.rememberAsyncImagePainter
 import com.dafamsemarang.dhtv.CachedAsyncImage
 import androidx.compose.foundation.lazy.LazyRow
@@ -64,6 +65,8 @@ import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.ui.input.key.*
 
+private val routeCache = java.util.concurrent.ConcurrentHashMap<String, RouteInfo>()
+
 object HotelInfoFocus {
     val firstItemRequester = FocusRequester()
 }
@@ -78,7 +81,9 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     val emergencyProcedure by DataRepository.emergencyProcedure
     val healthAndWellness by DataRepository.healthAndWellness
     val discoverDestination by DataRepository.discoverDestination
+    val branchLatLng by DataRepository.branchLatLng
     
+
     val isLoadingHotelFacilities = !DataRepository.isHotelFacilitiesLoaded.value
     val isLoadingRoomFacilities = !DataRepository.isRoomFacilitiesLoaded.value
     val isLoadingEmergencyProcedure = !DataRepository.isEmergencyProcedureLoaded.value
@@ -102,7 +107,7 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     val scope = rememberCoroutineScope()
     
     var focusedItemIndex by remember { mutableIntStateOf(0) }
-    val verticalListState = rememberLazyListState()
+    val rowState = rememberLazyListState()
 
     val categoriesList = listOf(
         Pair("HOTEL FACILITY", hotelFacilities),
@@ -116,9 +121,9 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     var debouncedFocusedItem by remember { mutableStateOf<Item?>(null) }
 
     // Efficient TV scroll debouncer: Renders the first item instantly on load, then applies 250ms delay for active navigation.
-    // Also prevents background image loading and text re-rendering during active vertical scroll to ensure absolute 60fps smoothness!
-    LaunchedEffect(currentFocusedItem, verticalListState.isScrollInProgress) {
-        val isScrolling = verticalListState.isScrollInProgress && verticalListState.firstVisibleItemIndex > 0
+    // Also prevents background image loading and text re-rendering during active horizontal scroll to ensure absolute 60fps smoothness!
+    LaunchedEffect(currentFocusedItem, rowState.isScrollInProgress) {
+        val isScrolling = rowState.isScrollInProgress
         if (!isScrolling) {
             if (debouncedFocusedItem == null && currentFocusedItem != null) {
                 debouncedFocusedItem = currentFocusedItem
@@ -177,10 +182,10 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xFF0C0C0C).copy(alpha = 0.70f),
-                                Color(0xFF0C0C0C).copy(alpha = 0.50f),
-                                Color(0xFF0C0C0C).copy(alpha = 0.30f),
-                                Color(0xFF0C0C0C).copy(alpha = 0.10f),
+                                Color(0xFF0C0C0C).copy(alpha = 0.90f),
+                                Color(0xFF0C0C0C).copy(alpha = 0.75f),
+                                Color(0xFF0C0C0C).copy(alpha = 0.55f),
+                                Color(0xFF0C0C0C).copy(alpha = 0.25f),
                                 Color.Transparent
                             ),
                             startX = 0f,
@@ -196,8 +201,8 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color(0xFF0C0C0C).copy(alpha = 0.20f),
-                                Color(0xFF0C0C0C).copy(alpha = 0.50f)
+                                Color(0xFF0C0C0C).copy(alpha = 0.35f),
+                                Color(0xFF0C0C0C).copy(alpha = 0.70f)
                             )
                         )
                     )
@@ -212,10 +217,9 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
             object : BringIntoViewSpec {
                 override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
                     get() {
-                        val duration = if (android.os.Build.VERSION.SDK_INT < 31) 60 else 100
                         return androidx.compose.animation.core.tween(
-                            durationMillis = duration,
-                            easing = androidx.compose.animation.core.FastOutSlowInEasing
+                            durationMillis = 300,
+                            easing = androidx.compose.animation.core.CubicBezierEasing(0.18f, 0.85f, 0.18f, 1.00f)
                         )
                     }
 
@@ -229,10 +233,9 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
             object : BringIntoViewSpec {
                 override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
                     get() {
-                        val duration = if (android.os.Build.VERSION.SDK_INT < 31) 90 else 150
                         return androidx.compose.animation.core.tween(
-                            durationMillis = duration,
-                            easing = androidx.compose.animation.core.FastOutSlowInEasing
+                            durationMillis = 300,
+                            easing = androidx.compose.animation.core.CubicBezierEasing(0.18f, 0.85f, 0.18f, 1.00f)
                         )
                     }
 
@@ -403,35 +406,309 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                     ) { targetCardIndex ->
                         val item = itemsList.getOrNull(targetCardIndex) ?: debouncedFocusedItem
                         if (item != null) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 58.dp, end = 58.dp, bottom = 8.dp)
-                            ) {
-                                Text(
-                                    text = item.name,
-                                    style = TextStyle(
-                                        fontSize = 32.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        letterSpacing = (-0.5).sp
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = item.description,
-                                    style = TextStyle(
-                                        fontSize = 14.sp,
-                                        lineHeight = 20.sp,
-                                        fontWeight = FontWeight.Normal,
-                                        color = Color.White.copy(alpha = 0.75f)
-                                    ),
-                                    maxLines = 5,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.fillMaxWidth(0.7f)
-                                )
+                            // For Discover Destination (targetIndex == 4), show a two-column layout
+                            // with title+description on the left and a static map image on the right.
+                            if (targetIndex == 4) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 58.dp, end = 58.dp, bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Left: Title + Description
+                                    Column(
+                                        modifier = Modifier.weight(0.75f)
+                                    ) {
+                                        Text(
+                                            text = item.name,
+                                            style = TextStyle(
+                                                fontSize = 26.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                letterSpacing = (-0.5).sp
+                                            ),
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = item.description,
+                                            style = TextStyle(
+                                                fontSize = 12.sp,
+                                                lineHeight = 18.sp,
+                                                fontWeight = FontWeight.Normal,
+                                                color = Color.White.copy(alpha = 0.75f)
+                                            ),
+                                            maxLines = 7,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .weight(1.25f)
+                                            .fillMaxHeight(),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                         // 1. Static Map Card (Left Column)
+                                         val destLatLng = debouncedFocusedItem?.longlat?.takeIf { it.isNotEmpty() }
+                                         val originLatLng = branchLatLng.takeIf { !it.isNullOrEmpty() }
+                                         val travelMode = debouncedFocusedItem?.travelMode?.takeIf { it.isNotEmpty() } ?: "driving"
+                                         val apiKey = "AIzaSyAlZ1fPEOKMmywDHbZNvmCTEXvPPTCsVTo"
+
+                                         fun processStaticMapUrl(url: String): String {
+                                             if (url.isEmpty() || url.contains("signature=")) return url
+                                             var resUrl = url
+                                             resUrl = if (resUrl.contains("size=")) {
+                                                 resUrl.replace(Regex("size=\\d+x\\d+"), "size=300x300")
+                                             } else {
+                                                 resUrl + "&size=300x300"
+                                             }
+                                             if (!resUrl.contains("scale=")) {
+                                                 resUrl += "&scale=2"
+                                             }
+                                             resUrl = resUrl.replace(Regex("&style=[^&]*"), "")
+                                             try {
+                                                 val customStyle = listOf(
+                                                     "feature:poi|visibility:off",
+                                                     "feature:transit|visibility:off",
+                                                     "feature:administrative|visibility:off",
+                                                     "feature:landscape|color:0xffffff",
+                                                     "feature:water|color:0xe0e0e0",
+                                                     "feature:road.local|visibility:off",
+                                                     "feature:road.highway|element:geometry|color:0x666666",
+                                                     "feature:road.arterial|element:geometry|color:0x888888",
+                                                     "feature:road|element:labels|visibility:on",
+                                                     "feature:road|element:labels.text.fill|color:0x444444",
+                                                     "feature:road|element:labels.text.stroke|visibility:on|color:0xffffff"
+                                                 ).joinToString("") { "&style=${java.net.URLEncoder.encode(it, "UTF-8")}" }
+                                                 resUrl += customStyle
+                                             } catch (e: Exception) {}
+                                             return resUrl
+                                         }
+
+                                         val cacheKey = "${debouncedFocusedItem?.name ?: ""}_$travelMode"
+                                         val cachedRoute = routeCache[cacheKey]
+
+                                         val dynamicRouteState = androidx.compose.runtime.produceState<RouteInfo?>(
+                                             initialValue = cachedRoute,
+                                             debouncedFocusedItem?.name, travelMode
+                                         ) {
+                                             if (cachedRoute != null) {
+                                                 value = cachedRoute
+                                             } else {
+                                                 val currentDest = destLatLng
+                                                 if (currentDest != null && originLatLng != null) {
+                                                     val routeInfo = fetchDirectionsRouteInfo(originLatLng, currentDest, travelMode, apiKey)
+                                                     if (routeInfo != null) {
+                                                         routeCache[cacheKey] = routeInfo
+                                                         value = routeInfo
+                                                     } else {
+                                                         value = null
+                                                     }
+                                                 } else {
+                                                     value = null
+                                                 }
+                                             }
+                                         }
+                                         val routeInfo = dynamicRouteState.value
+
+                                         val highResMapUrl = remember(routeInfo, debouncedFocusedItem?.staticMapUrl) {
+                                             val currentRoute = routeInfo
+                                             val currentDest = destLatLng
+                                             val currentItem = debouncedFocusedItem
+                                             if (currentRoute != null && currentDest != null && originLatLng != null) {
+                                                 val encodedPolyline = java.net.URLEncoder.encode(currentRoute.polyline, "UTF-8")
+                                                 val customStyle = listOf(
+                                                     "feature:poi|visibility:off",
+                                                     "feature:transit|visibility:off",
+                                                     "feature:administrative|visibility:off",
+                                                     "feature:landscape|color:0xffffff",
+                                                     "feature:water|color:0xe0e0e0",
+                                                     "feature:road.local|visibility:off",
+                                                     "feature:road.highway|element:geometry|color:0x666666",
+                                                     "feature:road.arterial|element:geometry|color:0x888888",
+                                                     "feature:road|element:labels|visibility:on",
+                                                     "feature:road|element:labels.text.fill|color:0x444444",
+                                                     "feature:road|element:labels.text.stroke|visibility:on|color:0xffffff"
+                                                 ).joinToString("") { "&style=${java.net.URLEncoder.encode(it, "UTF-8")}" }
+                                                 
+                                                 // Parse origin lat/lng to add visibility padding for short routes to prevent over-zooming
+                                                 val originParts = originLatLng.split(",")
+                                                 val originLat = originParts.getOrNull(0)?.toDoubleOrNull()
+                                                 val originLng = originParts.getOrNull(1)?.toDoubleOrNull()
+                                                 val visibleParam = if (originLat != null && originLng != null) {
+                                                     "&visible=${originLat + 0.0035},${originLng + 0.0035}&visible=${originLat - 0.0035},${originLng - 0.0035}"
+                                                 } else ""
+                                                 
+                                                 "https://maps.googleapis.com/maps/api/staticmap?size=300x300&scale=2&path=color:0xff0000ff|weight:5|enc:$encodedPolyline&markers=color:blue|label:H|$originLatLng&markers=color:red|label:D|$currentDest&key=$apiKey$customStyle$visibleParam"
+                                             } else if (currentItem != null) {
+                                                 processStaticMapUrl(currentItem.staticMapUrl)
+                                             } else {
+                                                 ""
+                                             }
+                                         }
+                                         val hasMap = highResMapUrl.isNotEmpty()
+
+                                         if (hasMap) {
+                                              Column(
+                                                  modifier = Modifier
+                                                      .fillMaxHeight()
+                                                      .aspectRatio(0.75f)
+                                                      .clip(RoundedCornerShape(16.dp))
+                                                      .background(Color.White.copy(alpha = 0.3f))
+                                                      .padding(8.dp),
+                                                  horizontalAlignment = Alignment.CenterHorizontally
+                                              ) {
+                                                  Box(
+                                                      modifier = Modifier
+                                                          .fillMaxWidth()
+                                                          .aspectRatio(1f)
+                                                          .clip(RoundedCornerShape(12.dp)),
+                                                      contentAlignment = Alignment.Center
+                                                  ) {
+                                                      val context = LocalContext.current
+                                                      val mapRequest = remember(highResMapUrl) {
+                                                          coil.request.ImageRequest.Builder(context)
+                                                              .data(highResMapUrl)
+                                                              .build()
+                                                      }
+                                                      coil.compose.AsyncImage(
+                                                          model = mapRequest,
+                                                          contentDescription = "Peta Rute",
+                                                          contentScale = ContentScale.Crop,
+                                                          modifier = Modifier.fillMaxSize()
+                                                      )
+                                                  }
+                                                  Spacer(modifier = Modifier.height(8.dp))
+                                                  if (routeInfo != null && routeInfo.distance.isNotEmpty() && routeInfo.duration.isNotEmpty()) {
+                                                      val travelText = if (travelMode == "walking") "jalan kaki" else "berkendara"
+                                                      Text(
+                                                          text = "${routeInfo.distance} (${routeInfo.duration} $travelText)",
+                                                          style = TextStyle(
+                                                              fontSize = 10.sp,
+                                                              lineHeight = 14.sp,
+                                                              color = Color.White.copy(alpha = 0.8f),
+                                                              fontWeight = FontWeight.Medium,
+                                                              textAlign = TextAlign.Left
+                                                          ),
+                                                          modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                                                      )
+                                                  }
+                                              }
+                                              Spacer(modifier = Modifier.width(12.dp))
+                                         }
+
+                                         // 2. QR Code Card (Right Column)
+                                         val qrUrl = remember(debouncedFocusedItem?.name, destLatLng, originLatLng, travelMode) {
+                                             val currentItem = debouncedFocusedItem
+                                             if (currentItem == null) ""
+                                             else if (destLatLng != null && originLatLng != null) {
+                                                 // Directions: hotel → destination
+                                                 "https://www.google.com/maps/dir/?api=1&origin=${java.net.URLEncoder.encode(originLatLng, "UTF-8")}&destination=${java.net.URLEncoder.encode(destLatLng, "UTF-8")}&travelmode=$travelMode"
+                                             } else if (destLatLng != null) {
+                                                 "https://www.google.com/maps/search/?api=1&query=${java.net.URLEncoder.encode(destLatLng, "UTF-8")}"
+                                             } else {
+                                                 "https://www.google.com/maps/search/?api=1&query=${java.net.URLEncoder.encode(currentItem.name, "UTF-8")}"
+                                             }
+                                         }
+                                         val qrBitmapState = produceState<android.graphics.Bitmap?>(initialValue = null, qrUrl) {
+                                             value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                                 try {
+                                                     if (qrUrl.isEmpty()) null
+                                                     else {
+                                                         val writer = com.google.zxing.qrcode.QRCodeWriter()
+                                                         val bitMatrix = writer.encode(qrUrl, com.google.zxing.BarcodeFormat.QR_CODE, 180, 180)
+                                                         val bmp = android.graphics.Bitmap.createBitmap(180, 180, android.graphics.Bitmap.Config.ARGB_8888)
+                                                         for (x in 0 until 180) {
+                                                             for (y in 0 until 180) {
+                                                                 bmp.setPixel(x, y, if (bitMatrix[x, y]) android.graphics.Color.parseColor("#666666") else android.graphics.Color.TRANSPARENT)
+                                                             }
+                                                         }
+                                                         bmp
+                                                     }
+                                                 } catch (e: Exception) { null }
+                                             }
+                                         }
+                                         val qrBitmap = qrBitmapState.value
+
+                                         Column(
+                                             modifier = Modifier
+                                                 .fillMaxHeight()
+                                                 .aspectRatio(0.75f)
+                                                 .clip(RoundedCornerShape(16.dp))
+                                                 .background(Color.White.copy(alpha = 0.3f))
+                                                 .padding(8.dp),
+                                             horizontalAlignment = Alignment.CenterHorizontally
+                                         ) {
+                                             Box(
+                                                 modifier = Modifier
+                                                     .fillMaxWidth()
+                                                     .aspectRatio(1f)
+                                                     .clip(RoundedCornerShape(12.dp))
+                                                     .background(Color.White),
+                                                 contentAlignment = Alignment.Center
+                                             ) {
+                                                 if (qrBitmap != null) {
+                                                     androidx.compose.foundation.Image(
+                                                         bitmap = qrBitmap.asImageBitmap(),
+                                                         contentDescription = "QR Code",
+                                                         modifier = Modifier
+                                                             .fillMaxSize()
+                                                             .padding(2.dp)
+                                                             .clip(RoundedCornerShape(8.dp))
+                                                     )
+                                                 }
+                                             }
+
+                                             Spacer(modifier = Modifier.height(8.dp))
+
+                                              Text(
+                                                  text = "Akses dari ponsel anda",
+                                                  style = TextStyle(
+                                                      fontSize = 10.sp,
+                                                      lineHeight = 14.sp,
+                                                      color = Color.White.copy(alpha = 0.8f),
+                                                      fontWeight = FontWeight.Medium,
+                                                      textAlign = TextAlign.Left
+                                                  ),
+                                                  modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                                              )
+                                         }
+                                    }
+                                }
+                            } else {
+                                // Default layout for all other tabs
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 58.dp, end = 58.dp, bottom = 8.dp)
+                                ) {
+                                    Text(
+                                        text = item.name,
+                                        style = TextStyle(
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            letterSpacing = (-0.5).sp
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = item.description,
+                                        style = TextStyle(
+                                            fontSize = 14.sp,
+                                            lineHeight = 20.sp,
+                                            fontWeight = FontWeight.Normal,
+                                            color = Color.White.copy(alpha = 0.75f)
+                                        ),
+                                        maxLines = 5,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.fillMaxWidth(0.7f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -477,7 +754,6 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                         .height(180.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
-                    val rowState = rememberLazyListState()
                     val snapBehavior = rememberSnapFlingBehavior(lazyListState = rowState)
                     // isNavigatingHorizontally is hoisted to Column scope (shared with detail AnimatedContent)
 
@@ -731,5 +1007,48 @@ fun ItemCardShimmer() {
                     )
                 )
         )
+    }
+}
+
+data class RouteInfo(
+    val polyline: String,
+    val distance: String,
+    val duration: String
+)
+
+suspend fun fetchDirectionsRouteInfo(origin: String, destination: String, mode: String, apiKey: String): RouteInfo? {
+    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val urlStr = "https://maps.googleapis.com/maps/api/directions/json?origin=${java.net.URLEncoder.encode(origin, "UTF-8")}&destination=${java.net.URLEncoder.encode(destination, "UTF-8")}&mode=${java.net.URLEncoder.encode(mode, "UTF-8")}&key=$apiKey"
+            val conn = java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            
+            val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+            val json = org.json.JSONObject(responseText)
+            if (json.optString("status") == "OK") {
+                val routes = json.optJSONArray("routes")
+                if (routes != null && routes.length() > 0) {
+                    val routeObj = routes.getJSONObject(0)
+                    val overviewPolyline = routeObj.optJSONObject("overview_polyline")
+                    val polylinePoints = overviewPolyline?.optString("points") ?: ""
+                    
+                    val legs = routeObj.optJSONArray("legs")
+                    var distanceText = ""
+                    var durationText = ""
+                    if (legs != null && legs.length() > 0) {
+                        val legObj = legs.getJSONObject(0)
+                        distanceText = legObj.optJSONObject("distance")?.optString("text") ?: ""
+                        durationText = legObj.optJSONObject("duration")?.optString("text") ?: ""
+                    }
+                    return@withContext RouteInfo(polylinePoints, distanceText, durationText)
+                }
+            }
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 }

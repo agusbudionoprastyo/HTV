@@ -62,7 +62,10 @@ data class Flight(
 data class Item(
     val name: String = "",
     val description: String = "",
-    val imageUrl: String = ""
+    val imageUrl: String = "",
+    val longlat: String = "",  // Format: "lat,lng" e.g. "-7.1234,110.5678"
+    val staticMapUrl: String = "",
+    val travelMode: String = "driving"
 )
 
 data class Variant(

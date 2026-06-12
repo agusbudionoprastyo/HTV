@@ -6,6 +6,7 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -18,10 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -143,6 +147,12 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
     val branchId = sharedPreferences.getString("branchId", null)
     val coroutineScope = rememberCoroutineScope()
     
+    val welcomeTextShadow = Shadow(
+        color = Color.Black.copy(alpha = 0.50f),
+        offset = Offset(0f, 1.5f),
+        blurRadius = 3f
+    )
+    
     // Create a unique key for this pairing session to ensure state reset after unpair/pair
     // This key changes when any pairing data changes, ensuring fresh state
     val pairingSessionKey = remember(roomId, deviceId, branchId) { 
@@ -255,6 +265,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
             // Store listeners for cleanup
             val welcomeListener = object : ValueEventListener {
                     override fun onDataChange(dataSnapshot: DataSnapshot) {
+                        android.util.Log.d("WelcomeScreen", "WELCOME_LETTER raw snapshot: ${dataSnapshot.value}")
                         val data = dataSnapshot.getValue(WelcomeData::class.java)
                         welcomeData = data ?: WelcomeData() // Use default if data is null
                         Log.d("WelcomeScreen", "Welcome data updated: ${welcomeData.welcomeMessage}")
@@ -562,9 +573,6 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
     // Room Image (No error placeholder to prevent generic error images)
     val roomImage = rememberCachedPainter(welcomeData.roomImageUrl, null)
     
-    // Sign Image (No error placeholder to prevent generic error images)
-    val signImage = rememberCachedPainter(welcomeData.signUrl, null)
-
     // Welcome Background Image from CMS (No error placeholder to prevent generic error images)
     val welcomeBackground = rememberCachedPainter(welcomeData.backgroundUrl, null)
     val hasBackgroundImage = remember(welcomeData.backgroundUrl) { isValidImageUrl(welcomeData.backgroundUrl) }
@@ -930,13 +938,13 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                         text = "Dear ${formatName(guestInfo?.fname ?: "Guest Name")}",
                         modifier = Modifier
                             .padding(0.dp),
-                        color = Color.White,
+                        color = Color(0xFF292A2C),
                         textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(top = 0.dp),
-                        color = Color.White,
+                        color = Color(0xFF292A2C),
                         thickness = .5.dp
                     )
                 }
@@ -949,67 +957,66 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = welcomeData.welcomeMessage.replace("\\n", "\n"),
-                        color = Color.White,
+                        color = Color(0xFF292A2C).copy(alpha = 0.8f),
                         maxLines = Int.MAX_VALUE,
                         overflow = TextOverflow.Visible,
                         textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
                     )
 
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth(0.5f)
+                            .wrapContentHeight()
+                            .align(Alignment.CenterHorizontally)
                     ) {
                         Column(
                             modifier = Modifier
-                                .align(Alignment.Center),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .align(Alignment.BottomStart),
+                            horizontalAlignment = Alignment.Start
                         ) {
-                            Text(
-                                text = "Best Regards",
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                             Text(
+                                 text = "Warm Regards,",
+                                 color = Color(0xFF292A2C).copy(alpha = 0.8f),
+                                 fontSize = 11.sp,
+                                 fontWeight = FontWeight.Bold,
+                                 textAlign = TextAlign.Start
+                             )
 
-                            Spacer(modifier = Modifier.height(32.dp))
+                             if (welcomeData.signUrl.isNotEmpty()) {
+                                 val signImage = rememberCachedPainter(welcomeData.signUrl, null)
+                                 android.util.Log.d("WelcomeScreen", "Signature image state: URL='${welcomeData.signUrl}', State=${signImage.state}")
+                                 Image(
+                                     painter = signImage,
+                                     contentDescription = "sign",
+                                     modifier = Modifier
+                                         .width(130.dp)
+                                         .height(75.dp)
+                                         .border(1.5.dp, Color.White.copy(alpha = 0.3f)),
+                                     contentScale = ContentScale.Fit,
+                                     colorFilter = ColorFilter.tint(Color(0xFF292A2C))
+                                 )
+                             } else {
+                                 Spacer(modifier = Modifier.height(44.dp))
+                             }
 
-                            Text(
-                                text = "General Manager",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-
-                            Text(
-                                text = welcomeData.gm,
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        }
-
-                        // Signature image / status with higher z-index (Ensures painter is composed during loading so Coil triggers the load)
-                        Box(
-                            modifier = Modifier
-                                .width(200.dp)
-                                .height(144.dp)
-                                .align(Alignment.Center)
-                                .zIndex(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (welcomeData.signUrl.isBlank() || signImage.state is AsyncImagePainter.State.Error) {
-                                Text(
-                                    text = "Signature Not found",
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                                )
-                            } else {
-                                Image(
-                                    painter = signImage,
-                                    contentDescription = "sign",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
+                             Text(
+                                 text = "General Manager",
+                                 color = Color(0xFF292A2C),
+                                 fontSize = 12.sp,
+                                 fontWeight = FontWeight.Bold,
+                                 textAlign = TextAlign.Start
+                             )
+                             if (welcomeData.gm.isNotEmpty()) {
+                                 Text(
+                                     text = welcomeData.gm,
+                                     color = Color(0xFF292A2C).copy(alpha = 0.8f),
+                                     fontSize = 11.sp,
+                                     fontWeight = FontWeight.Bold,
+                                     textAlign = TextAlign.Start,
+                                     modifier = Modifier.offset(y = (-12).dp)
+                                 )
+                             }
                         }
                     }
                 }
@@ -1026,7 +1033,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 .padding(bottom = 32.dp)
                 .zIndex(1f), // Lower z-index so it doesn't block clicks
                 color = Color.White,
-                style = MaterialTheme.typography.titleSmall
+                style = MaterialTheme.typography.titleSmall.copy(shadow = welcomeTextShadow)
             )
     }
 }

@@ -61,6 +61,8 @@ object DataRepository {
     val guestInfo = mutableStateOf<GuestInfo?>(null)
     val isDndActive = mutableStateOf(false)
     val instagramHandle = mutableStateOf<String?>(null)
+    val branchLatLng = mutableStateOf<String?>(null)  // Format: "lat,lng" from LONGLAT_BRANCH
+
  
     private var menuListener: ValueEventListener? = null
     private var requestListener: ValueEventListener? = null
@@ -82,6 +84,8 @@ object DataRepository {
     private var guestInfoListener: ValueEventListener? = null
     private var dndListener: ValueEventListener? = null
     private var contactListener: ValueEventListener? = null
+    private var branchLatLngListener: ValueEventListener? = null
+
  
     private var activeBranchId: String? = null
     private var activeMenuRef: DatabaseReference? = null
@@ -104,6 +108,8 @@ object DataRepository {
     private var activeGuestInfoRef: DatabaseReference? = null
     private var activeDndRef: DatabaseReference? = null
     private var activeContactRef: DatabaseReference? = null
+    private var activeBranchLatLngRef: DatabaseReference? = null
+
  
     fun startPreload(context: android.content.Context, branchId: String?) {
         if (branchId == null) return
@@ -123,7 +129,9 @@ object DataRepository {
             emergencyProcedureListener != null &&
             healthAndWellnessListener != null &&
             discoverDestinationListener != null &&
-            contactListener != null
+            contactListener != null &&
+            branchLatLngListener != null
+
         ) {
             Log.d("DataRepository", "Preload already active for branch: $branchId")
             return
@@ -435,6 +443,20 @@ object DataRepository {
             }
         }
         contactRef.addValueEventListener(contactListener!!)
+
+        // Preload hotel coordinates from BRANCHES/{branchId}/LONGLAT_BRANCH
+        val branchLatLngRef = db.child("BRANCHES").child(branchId).child("LONGLAT_BRANCH")
+        activeBranchLatLngRef = branchLatLngRef
+        branchLatLngListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                branchLatLng.value = snapshot.getValue(String::class.java)
+                Log.d("DataRepository", "Branch LatLng loaded: ${branchLatLng.value}")
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "BranchLatLng preload failed: ${error.message}")
+            }
+        }
+        branchLatLngRef.addValueEventListener(branchLatLngListener!!)
     }
 
     private fun setupWeatherListeners(db: DatabaseReference, city: String?) {
@@ -698,6 +720,8 @@ object DataRepository {
         guestInfoListener = null
         dndListener = null
         contactListener = null
+        branchLatLngListener = null
+
  
         activeMenuRef = null
         activeRequestRef = null
@@ -718,6 +742,8 @@ object DataRepository {
         activeGuestInfoRef = null
         activeDndRef = null
         activeContactRef = null
+        activeBranchLatLngRef = null
+
  
         activeBranchId = null
         isMenuLoaded.value = false
@@ -756,6 +782,7 @@ object DataRepository {
         guestInfo.value = null
         isDndActive.value = false
         instagramHandle.value = null
+        branchLatLng.value = null
     }
 
     private fun preloadVideos(context: android.content.Context, urls: List<String>) {

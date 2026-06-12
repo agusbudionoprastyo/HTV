@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tag ID used to track the current map query loaded in the WebView for Discover Destination -->
+    <item name="webview_map_query_tag" type="id"/>
+</resources>

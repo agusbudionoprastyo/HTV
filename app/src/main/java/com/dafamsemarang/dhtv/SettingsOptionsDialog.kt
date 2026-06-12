@@ -105,7 +105,7 @@ fun SettingsOptionsDialog(
                         SettingsOptionItem(
                             title = "Jadikan Default Launcher",
                             desc = "Atur aplikasi ini sebagai beranda utama televisi",
-                            icon = R.drawable.ic_home_launcher_custom,
+                            icon = R.drawable.ic_home,
                             onClick = {
                                 openHomeSettings(context)
                                 onDismiss()

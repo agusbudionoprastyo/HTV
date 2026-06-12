@@ -25,6 +25,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,9 +43,17 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.*
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.zIndex
 
 object ScreenSaverManager {
     var isScreenSaverActive by mutableStateOf(false)
@@ -189,6 +198,7 @@ object ScreenSaverManager {
         welcomeRef.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 try {
+                    android.util.Log.d("ScreenSaverManager", "WELCOME_LETTER raw snapshot: ${snapshot.value}")
                     if (snapshot.exists()) {
                         welcomeMessage = snapshot.child("welcomeMessage").getValue(String::class.java) ?: ""
                         signUrl = snapshot.child("signUrl").getValue(String::class.java) ?: ""
@@ -450,6 +460,29 @@ fun ScreenSaverOverlay() {
                         )
                     }
                 }
+
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(1500)),
+                    exit = fadeOut(animationSpec = tween(800)),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    Text(
+                        text = "Press any key to continue.",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 32.dp),
+                        style = TextStyle(
+                            shadow = Shadow(
+                                color = Color.Black.copy(alpha = 0.6f),
+                                offset = Offset(0f, 1.5f),
+                                blurRadius = 3f
+                            )
+                        )
+                    )
+                }
             }
         }
     }
@@ -457,63 +490,103 @@ fun ScreenSaverOverlay() {
 
 @Composable
 fun VideoScreenSaver(url: String) {
-    var videoViewInstance: VideoView? by remember { mutableStateOf(null) }
-
-    // CRITICAL: Safely stop playback and release resources when the screensaver is closed/disposed
+    val context = LocalContext.current
+    var mediaPlayerInstance by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    var currentSurface by remember { mutableStateOf<android.view.Surface?>(null) }
+    var activePath by remember { mutableStateOf("") }
+    
+    // Manage MediaPlayer lifecycle
     DisposableEffect(url) {
         onDispose {
             try {
-                videoViewInstance?.stopPlayback()
+                mediaPlayerInstance?.stop()
+                mediaPlayerInstance?.release()
             } catch (e: Exception) {
-                Log.e("ScreenSaver", "Error releasing VideoView: ${e.message}")
+                Log.e("ScreenSaver", "Error releasing MediaPlayer: ${e.message}")
             }
-            videoViewInstance = null
+            mediaPlayerInstance = null
+            currentSurface?.release()
+            currentSurface = null
         }
     }
 
     AndroidView(
-        factory = { context ->
-            VideoView(context).apply {
-                videoViewInstance = this
-                
-                // Determine whether to play from the local cache file or fall back to the remote URL
-                val cachedPath = ScreenSaverManager.cachedVideoPath
-                if (cachedPath != null && java.io.File(cachedPath).exists()) {
-                    Log.d("VideoScreenSaver", "Playing screensaver from local cache: $cachedPath")
-                    setVideoPath(cachedPath)
-                } else {
-                    Log.d("VideoScreenSaver", "Local cache not ready. Streaming from remote URL: $url")
-                    setVideoURI(Uri.parse(url))
-                }
-                
-                setOnPreparedListener { mediaPlayer ->
-                    mediaPlayer.isLooping = true
-                    mediaPlayer.start()
-                }
-                setOnErrorListener { _, _, _ ->
-                    true // Prevents error dialog from displaying
+        factory = { ctx ->
+            android.view.TextureView(ctx).apply {
+                surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
+                    override fun onSurfaceTextureAvailable(surfaceTexture: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                        val surface = android.view.Surface(surfaceTexture)
+                        currentSurface = surface
+                        
+                        try {
+                            val cachedPath = ScreenSaverManager.cachedVideoPath
+                            val targetPath = if (cachedPath != null && java.io.File(cachedPath).exists()) cachedPath else url
+                            activePath = targetPath
+                            
+                            val mp = android.media.MediaPlayer().apply {
+                                setSurface(surface)
+                                isLooping = true
+                                
+                                if (targetPath == cachedPath) {
+                                    Log.d("VideoScreenSaver", "Playing screensaver from local cache: $cachedPath")
+                                    setDataSource(cachedPath)
+                                } else {
+                                    Log.d("VideoScreenSaver", "Local cache not ready. Streaming from remote URL: $url")
+                                    setDataSource(ctx, android.net.Uri.parse(url))
+                                }
+                                
+                                setOnPreparedListener { 
+                                    start() 
+                                }
+                                setOnErrorListener { _, _, _ -> 
+                                    true 
+                                }
+                                prepareAsync()
+                            }
+                            mediaPlayerInstance = mp
+                        } catch (e: Exception) {
+                            Log.e("VideoScreenSaver", "Error preparing MediaPlayer: ${e.message}")
+                        }
+                    }
+
+                    override fun onSurfaceTextureSizeChanged(surfaceTexture: android.graphics.SurfaceTexture, width: Int, height: Int) {}
+
+                    override fun onSurfaceTextureDestroyed(surfaceTexture: android.graphics.SurfaceTexture): Boolean {
+                        try {
+                            mediaPlayerInstance?.stop()
+                            mediaPlayerInstance?.release()
+                        } catch (e: Exception) {}
+                        mediaPlayerInstance = null
+                        currentSurface?.release()
+                        currentSurface = null
+                        return true
+                    }
+
+                    override fun onSurfaceTextureUpdated(surfaceTexture: android.graphics.SurfaceTexture) {}
                 }
             }
         },
-        update = { videoView ->
-            // If the local cache becomes ready while the screensaver is displayed, switch to it seamlessly
+        update = { textureView ->
+            // If the local cache becomes ready while the screensaver is active, seamlessly reload video source
             val cachedPath = ScreenSaverManager.cachedVideoPath
-            val currentUriStr = videoView.tag as? String
             val targetPath = if (cachedPath != null && java.io.File(cachedPath).exists()) cachedPath else url
+            val mp = mediaPlayerInstance
             
-            if (currentUriStr != targetPath) {
-                videoView.tag = targetPath
+            if (mp != null && activePath != targetPath) {
+                activePath = targetPath
                 try {
-                    videoView.stopPlayback()
+                    mp.reset()
+                    mp.setSurface(currentSurface)
+                    mp.isLooping = true
                     if (targetPath == cachedPath) {
                         Log.d("VideoScreenSaver", "Seamlessly switching playback to local cached file: $cachedPath")
-                        videoView.setVideoPath(cachedPath)
+                        mp.setDataSource(cachedPath)
                     } else {
-                        videoView.setVideoURI(Uri.parse(url))
+                        mp.setDataSource(context, android.net.Uri.parse(url))
                     }
-                    videoView.start()
+                    mp.prepareAsync()
                 } catch (e: Exception) {
-                    Log.e("VideoScreenSaver", "Error updating VideoView source: ${e.message}")
+                    Log.e("VideoScreenSaver", "Error updating MediaPlayer source: ${e.message}")
                 }
             }
         },
@@ -567,7 +640,23 @@ fun GlassmorphicWelcomeCard(
             .width(480.dp)
             .wrapContentHeight()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.Black.copy(alpha = 0.35f)), // Transparent black glass background without border
+            .background(Color(207, 223, 237).copy(alpha = 0.30f))
+            .drawBehind {
+                // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
+                drawRoundRect(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.03f),
+                            Color.White.copy(alpha = 0.20f)
+                        ),
+                        start = Offset(0f, 0f),
+                        end = Offset(size.width, size.height)
+                    ),
+                    cornerRadius = CornerRadius(24.dp.toPx()),
+                    style = Stroke(width = 1.2.dp.toPx())
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -579,7 +668,7 @@ fun GlassmorphicWelcomeCard(
         ) {
             Text(
                 text = "Welcome, ${formatName(guestName)}",
-                color = Color.White,
+                color = Color(0xFF292A2C),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Start,
@@ -596,8 +685,9 @@ fun GlassmorphicWelcomeCard(
             ) {
                 Text(
                     text = welcomeMessage.replace("\\n", "\n"),
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = Color(0xFF292A2C).copy(alpha = 0.8f),
                     fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Start, // Left aligned
                     lineHeight = 18.sp,
                     modifier = Modifier.weight(1f)
@@ -618,64 +708,53 @@ fun GlassmorphicWelcomeCard(
             }
             
             Spacer(modifier = Modifier.height(20.dp))
-            
-            // Clean left-aligned closing column containing the vertical space gap for the overlay signature
+
             Column(
                 horizontalAlignment = Alignment.Start
             ) {
                 Text(
                     text = "Warm Regards,",
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = Color(0xFF292A2C).copy(alpha = 0.8f),
                     fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Start
                 )
                 
-                Spacer(modifier = Modifier.height(44.dp)) // The signature gap
+                if (signUrl.isNotEmpty()) {
+                    val signPainter = rememberCachedPainter(url = signUrl)
+                    android.util.Log.d("ScreenSaverManager", "Signature image state: URL='$signUrl', State=${signPainter.state}")
+                    Image(
+                        painter = signPainter,
+                        contentDescription = "Signature",
+                        modifier = Modifier
+                            .width(130.dp)
+                            .height(75.dp)
+                            .border(1.5.dp, Color.White.copy(alpha = 0.3f)),
+                        contentScale = ContentScale.Fit,
+                        colorFilter = ColorFilter.tint(Color(0xFF292A2C))
+                    )
+                } else {
+                    Spacer(modifier = Modifier.height(44.dp))
+                }
 
                 Text(
                     text = "General Manager",
-                    color = Color.White,
+                    color = Color(0xFF292A2C),
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Start
                 )
                 if (gmName.isNotEmpty()) {
                     Text(
                         text = gmName,
-                        color = Color.White.copy(alpha = 0.9f),
+                        color = Color(0xFF292A2C).copy(alpha = 0.8f),
                         fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Start,
-                        modifier = Modifier.offset(y = (-5).dp)
+                        modifier = Modifier.offset(y = (-12).dp)
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.height(20.dp))
-            
-            Text(
-                text = "Press any key to continue",
-                color = Color.White.copy(alpha = 0.5f),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        // Render signature image OUTSIDE the main column, as a direct child of the card Box.
-        // This allows it to ignore card padding boundaries and overflow beautifully while staying centered/aligned!
-        if (signUrl.isNotEmpty()) {
-            Image(
-                painter = rememberCachedPainter(url = signUrl),
-                contentDescription = "Signature",
-                modifier = Modifier
-                    .width(130.dp)
-                    .height(75.dp)
-                    .align(Alignment.BottomStart)
-                    .offset(x = (-10).dp, y = (-77).dp),
-                contentScale = ContentScale.Fit,
-                colorFilter = ColorFilter.tint(Color.White)
-            )
         }
     }
 }

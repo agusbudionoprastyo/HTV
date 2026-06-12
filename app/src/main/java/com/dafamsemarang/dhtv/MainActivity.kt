@@ -185,7 +185,26 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                     }
 
                     // Render screensaver inside the app overlay when active
-                    if (ScreenSaverManager.isScreenSaverActive) {
+                    val isScreenSaverActive = ScreenSaverManager.isScreenSaverActive
+                    LaunchedEffect(isScreenSaverActive) {
+                        val window = this@MainActivity.window
+                        try {
+                            val decorView = window.decorView
+                            val controller = androidx.core.view.WindowCompat.getInsetsController(window, decorView)
+                            if (isScreenSaverActive) {
+                                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                                controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                                controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                            } else {
+                                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                                controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error setting fullscreen flags: ${e.message}")
+                        }
+                    }
+
+                    if (isScreenSaverActive) {
                         ScreenSaverOverlay()
                     }
                 }
