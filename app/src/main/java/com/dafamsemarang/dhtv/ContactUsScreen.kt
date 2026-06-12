@@ -1446,7 +1446,8 @@ fun RequestDialog(
                             timeStamp,
                             selectedDate ?: "",
                             selectedTime ?: "",
-                            note
+                            note,
+                            guestInfo?.gender
                         )
                     }
                     onDismiss()
@@ -1608,7 +1609,8 @@ fun sendRequestToDatabase(
    timeStamp: Long,
    selectedDate: String,  // Added date
    selectedTime: String,  // Added time
-   note: String // Added note
+   note: String, // Added note
+   gender: String? = null
 ) {
    val database = Firebase.database.reference
    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
@@ -1649,7 +1651,8 @@ fun sendRequestToDatabase(
            selectedTime,
            guestRoom,
            note,
-           branchId
+           branchId,
+           gender
        )
    }.addOnFailureListener {
        Log.e("DHTV_CONTACT", "Failed to save request to Firebase")
@@ -1664,7 +1667,8 @@ private fun sendPostRequestToApi(
     selectedTime: String,
     guestRoom: String,
     note: String,
-    branchId: String
+    branchId: String,
+    gender: String? = null
 ) {
     val database = Firebase.database.reference
     val telegramGatewayRef = database.child("BRANCHES").child(branchId).child("SETTING").child("TELEGRAM_REQUEST")
@@ -1700,7 +1704,7 @@ private fun sendPostRequestToApi(
                             "<b>$escapedTitle</b>\n<i>$escapedDesc</i>\n\n<b>Kategori:</b> $escapedCategory"
                         }
                         
-                        val escapedGuestName = escapeHtml(formatName(guestName))
+                        val escapedGuestName = escapeHtml(formatName(guestName, gender))
                         val escapedNote = if (note.isNotEmpty()) escapeHtml(note) else ""
                         
                         val message = """

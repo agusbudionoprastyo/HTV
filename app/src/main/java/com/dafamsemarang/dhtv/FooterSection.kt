@@ -334,6 +334,46 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     val requestFocusRequester = remember { FocusRequester() }
     val myRequestFocusRequester = remember { FocusRequester() }
     val screensaverFocusRequester = remember { FocusRequester() }
+    val dndFocusRequester = remember { FocusRequester() }
+    val wifiFocusRequester = remember { FocusRequester() }
+    val whatsappFocusRequester = remember { FocusRequester() }
+    val notificationFocusRequester = remember { FocusRequester() }
+    val settingsFocusRequester = remember { FocusRequester() }
+
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val lastFocused = GlobalFocusTracker.lastFocusedItem
+                Log.d("FooterSection", "Lifecycle ON_RESUME - Restoring focus to: $lastFocused")
+                if (lastFocused != null && lastFocused.startsWith("footer_")) {
+                    scope.launch {
+                        delay(400)
+                        try {
+                            when (lastFocused) {
+                                "footer_home" -> homeFocusRequester.requestFocus()
+                                "footer_food" -> foodFocusRequester.requestFocus()
+                                "footer_hotel" -> hotelFocusRequester.requestFocus()
+                                "footer_contact" -> requestFocusRequester.requestFocus()
+                                "footer_screensaver" -> screensaverFocusRequester.requestFocus()
+                                "footer_dnd" -> dndFocusRequester.requestFocus()
+                                "footer_wifi" -> wifiFocusRequester.requestFocus()
+                                "footer_whatsapp" -> whatsappFocusRequester.requestFocus()
+                            }
+                            Log.d("FooterSection", "Successfully restored focus to $lastFocused")
+                        } catch (e: Exception) {
+                            Log.e("FooterSection", "Failed to restore focus to $lastFocused: ${e.message}")
+                        }
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     var wasScreenSaverActive by remember { mutableStateOf(false) }
     LaunchedEffect(ScreenSaverManager.isScreenSaverActive) {
@@ -556,7 +596,22 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 .focusProperties {
                     enter = {
                         when (currentRoute) {
-                            "home" -> homeFocusRequester
+                            "home" -> {
+                                val lastFooter = GlobalFocusTracker.lastFocusedFooterItem
+                                when (lastFooter) {
+                                    "footer_home" -> homeFocusRequester
+                                    "footer_food" -> foodFocusRequester
+                                    "footer_hotel" -> hotelFocusRequester
+                                    "footer_contact" -> requestFocusRequester
+                                    "footer_screensaver" -> screensaverFocusRequester
+                                    "footer_dnd" -> dndFocusRequester
+                                    "footer_wifi" -> wifiFocusRequester
+                                    "footer_whatsapp" -> whatsappFocusRequester
+                                    "footer_notification" -> notificationFocusRequester
+                                    "footer_settings" -> settingsFocusRequester
+                                    else -> FocusRequester.Default
+                                }
+                            }
                             "cantingfood" -> foodFocusRequester
                             "hotel_guide" -> hotelFocusRequester
                             "contact" -> requestFocusRequester
@@ -607,7 +662,14 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         badgeCount = notificationCount,
                         onClick = { showNotificationButtonDialog = true },
                         title = "Notifications",
-                        isActive = true
+                        isActive = true,
+                        focusRequester = notificationFocusRequester,
+                        onFocusStateChange = { isFocused ->
+                            if (isFocused) {
+                                GlobalFocusTracker.lastFocusedItem = "footer_notification"
+                                GlobalFocusTracker.lastFocusedFooterItem = "footer_notification"
+                            }
+                        }
                     )
                 }
             }
@@ -649,7 +711,14 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         iconRes = R.drawable.setting_svgrepo_com,
                         onClick = { showPinDialog = true },
                         title = "Settings",
-                        isActive = true
+                        isActive = true,
+                        focusRequester = settingsFocusRequester,
+                        onFocusStateChange = { isFocused ->
+                            if (isFocused) {
+                                GlobalFocusTracker.lastFocusedItem = "footer_settings"
+                                GlobalFocusTracker.lastFocusedFooterItem = "footer_settings"
+                            }
+                        }
                     )
                 }
             }
@@ -690,20 +759,31 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     SmallServiceButton(
                         iconRes = R.drawable.ic_screensaver,
                         onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_MAIN).apply {
-                                    setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            val elapsed = System.currentTimeMillis() - ScreenSaverManager.lastDismissedTime
+                            if (elapsed > 500) {
+                                try {
+                                    val intent = Intent(Intent.ACTION_MAIN).apply {
+                                        setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // Fallback to in-app screensaver
+                                    ScreenSaverManager.isScreenSaverActive = true
                                 }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                // Fallback to in-app screensaver
-                                ScreenSaverManager.isScreenSaverActive = true
+                            } else {
+                                Log.d("FooterSection", "Ignored screensaver button click due to debounce cool-down ($elapsed ms)")
                             }
                         },
                         title = "Screensaver",
                         isActive = true,
-                        focusRequester = screensaverFocusRequester
+                        focusRequester = screensaverFocusRequester,
+                        onFocusStateChange = { isFocused ->
+                            if (isFocused) {
+                                GlobalFocusTracker.lastFocusedItem = "footer_screensaver"
+                                GlobalFocusTracker.lastFocusedFooterItem = "footer_screensaver"
+                            }
+                        }
                     )
                 }
             }
@@ -758,7 +838,14 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             }
                         },
                         title = "DND",
-                        isActive = true
+                        isActive = true,
+                        focusRequester = dndFocusRequester,
+                        onFocusStateChange = { isFocused ->
+                            if (isFocused) {
+                                GlobalFocusTracker.lastFocusedItem = "footer_dnd"
+                                GlobalFocusTracker.lastFocusedFooterItem = "footer_dnd"
+                            }
+                        }
                     )
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -767,7 +854,14 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         iconRes = R.drawable.wifi_rounded_svgrepo_com,
                         onClick = { showDialog = true },
                         title = "Wi-Fi",
-                        isActive = true
+                        isActive = true,
+                        focusRequester = wifiFocusRequester,
+                        onFocusStateChange = { isFocused ->
+                            if (isFocused) {
+                                GlobalFocusTracker.lastFocusedItem = "footer_wifi"
+                                GlobalFocusTracker.lastFocusedFooterItem = "footer_wifi"
+                            }
+                        }
                     )
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -776,7 +870,14 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         iconRes = R.drawable.whatsapp_svgrepo_com,
                         onClick = { showWaDialog = true },
                         title = "WhatsApp",
-                        isActive = true
+                        isActive = true,
+                        focusRequester = whatsappFocusRequester,
+                        onFocusStateChange = { isFocused ->
+                            if (isFocused) {
+                                GlobalFocusTracker.lastFocusedItem = "footer_whatsapp"
+                                GlobalFocusTracker.lastFocusedFooterItem = "footer_whatsapp"
+                            }
+                        }
                     )
                 }
             }
@@ -831,7 +932,13 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             }
                         },
                         isActive = currentRoute == "home",
-                        focusRequester = homeFocusRequester
+                        focusRequester = homeFocusRequester,
+                        onFocusStateChange = { isFocused ->
+                            if (isFocused) {
+                                GlobalFocusTracker.lastFocusedItem = "footer_home"
+                                GlobalFocusTracker.lastFocusedFooterItem = "footer_home"
+                            }
+                        }
                     )
 
                     Spacer(modifier = Modifier.width(4.dp))
@@ -860,7 +967,13 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                 }
                             },
                             isActive = currentRoute == "cantingfood",
-                            focusRequester = foodFocusRequester
+                            focusRequester = foodFocusRequester,
+                            onFocusStateChange = { isFocused ->
+                                if (isFocused) {
+                                    GlobalFocusTracker.lastFocusedItem = "footer_food"
+                                    GlobalFocusTracker.lastFocusedFooterItem = "footer_food"
+                                }
+                            }
                         )
                     }
 
@@ -889,7 +1002,13 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                 }
                             },
                             isActive = currentRoute == "contact",
-                            focusRequester = requestFocusRequester
+                            focusRequester = requestFocusRequester,
+                            onFocusStateChange = { isFocused ->
+                                if (isFocused) {
+                                    GlobalFocusTracker.lastFocusedItem = "footer_contact"
+                                    GlobalFocusTracker.lastFocusedFooterItem = "footer_contact"
+                                }
+                            }
                         )
                     }
 
@@ -912,6 +1031,12 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         },
                         isActive = currentRoute == "hotel_guide",
                         focusRequester = hotelFocusRequester,
+                        onFocusStateChange = { isFocused ->
+                            if (isFocused) {
+                                GlobalFocusTracker.lastFocusedItem = "footer_hotel"
+                                GlobalFocusTracker.lastFocusedFooterItem = "footer_hotel"
+                            }
+                        },
                         modifier = Modifier.focusProperties {
                             up = HotelInfoFocus.firstItemRequester
                         }
@@ -943,13 +1068,13 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         painter = painterResource(id = R.drawable.logo_instagram),
                         contentDescription = "Instagram Logo",
                         tint = Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(12.dp)
                     )
                     Text(
                         text = instagram,
                         color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
                 
@@ -2847,6 +2972,7 @@ fun SmallServiceButtonWithBadge(
     onClick: () -> Unit,
     title: String? = null,
     isActive: Boolean = false,
+    focusRequester: FocusRequester? = null,
     onFocusStateChange: ((Boolean) -> Unit)? = null
 ) {
     var isClicked by remember { mutableStateOf(false) }
@@ -2884,10 +3010,14 @@ fun SmallServiceButtonWithBadge(
         contentAlignment = Alignment.Center
     ) {
         // Clickable button
+        var boxModifier = Modifier
+            .fillMaxSize()
+            .clip(CircleShape)
+        if (focusRequester != null) {
+            boxModifier = boxModifier.focusRequester(focusRequester)
+        }
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape)
+            modifier = boxModifier
                 .onFocusChanged { 
                     isFocused = it.isFocused 
                     onFocusStateChange?.invoke(it.isFocused)

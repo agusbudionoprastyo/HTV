@@ -43,7 +43,8 @@ data class GuestInfo(
     val roomnight: Int = 0,
     val roomtype: String = "",
     val guestImageUrl: String = "",
-    val isSmoking: Boolean = false
+    val isSmoking: Boolean = false,
+    val gender: String = ""
 )
 
 data class Flight(

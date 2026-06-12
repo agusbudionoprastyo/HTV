@@ -108,34 +108,22 @@ fun isValidImageUrl(url: String?): Boolean {
            !trimmed.contains("no_image", ignoreCase = true)
 }
 
-fun formatNameID(fname: String): String {
-    val words = fname.split(", ")
-
-    return if (words.size == 2) {
-        val title = words[1]
-        val name = words[0]
-
-        // Replace Mr with Bapak, Mrs with Ibu
-        val formattedTitle = when (title) {
-            "Mr" -> "bapak"
-            "Mrs" -> "ibu"
-            else -> title // If title is not Mr or Mrs, use it as is
-        }
-
-        // Combine formatted title and name
-        "$formattedTitle $name"
-    } else {
-        fname // Return as is if no comma is found
+fun formatNameID(fname: String, gender: String? = null): String {
+    val prefix = when (gender?.lowercase()) {
+        "male" -> "Bapak "
+        "female" -> "Ibu "
+        else -> ""
     }
+    return prefix + fname
 }
 
-fun formatNameEN(fname: String): String {
-    val words = fname.split(", ")
-    return if (words.size == 2) {
-        "${words[1]} ${words[0]}"
-    } else {
-        fname // Return as is if no comma is found
+fun formatNameEN(fname: String, gender: String? = null): String {
+    val prefix = when (gender?.lowercase()) {
+        "male" -> "Mr. "
+        "female" -> "Mrs. "
+        else -> ""
     }
+    return prefix + fname
 }
 
 @Composable
@@ -502,7 +490,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                     try {
                             // After English, switch to Indonesian language and speak
                                         currentTTS.language = Locale("id", "ID")
-                            val indonesianMessage = "Halo! ${formatNameID(guestInfo?.fname ?: "Nama Tamu")}. ${welcomeData.voId.replace("\\n", "")}"
+                            val indonesianMessage = "Halo! ${formatNameID(guestInfo?.fname ?: "Nama Tamu", guestInfo?.gender)}. ${welcomeData.voId.replace("\\n", "")}"
                             Log.d("WelcomeScreen", "Speaking Indonesian message: $indonesianMessage")
                                         currentTTS.speak(indonesianMessage, TextToSpeech.QUEUE_FLUSH, null, "indonesian")
                                     } catch (e: Exception) {
@@ -549,7 +537,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
         if (isTTSInitialized && !guestInfo?.fname.isNullOrBlank() && textToSpeech != null && !ttsDisabled && welcomeData.voEn.isNotEmpty()) {
             val messageEn = welcomeData.voEn.replace("\\n", "")
             // Prepare the message for English
-            val englishMessage = "Hello! ${formatNameEN(guestInfo?.fname ?: "Guest Name")}. $messageEn"
+            val englishMessage = "Hello! ${formatNameEN(guestInfo?.fname ?: "Guest Name", guestInfo?.gender)}. $messageEn"
             Log.d("WelcomeScreen", "Speaking English message: $englishMessage")
             // Speak the message in English and tag it with "english" as an utterance ID
             try {
@@ -935,7 +923,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Dear ${formatName(guestInfo?.fname ?: "Guest Name")}",
+                        text = "Dear ${formatName(guestInfo?.fname ?: "Guest Name", guestInfo?.gender)}",
                         modifier = Modifier
                             .padding(0.dp),
                         color = Color(0xFF292A2C),

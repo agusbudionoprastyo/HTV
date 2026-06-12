@@ -57,6 +57,7 @@ import androidx.compose.ui.zIndex
 
 object ScreenSaverManager {
     var isScreenSaverActive by mutableStateOf(false)
+    var lastDismissedTime by mutableStateOf(0L)
     
     // Screensaver state fetched from Firebase Realtime Database
     var isVideoActive by mutableStateOf(false)
@@ -135,13 +136,9 @@ object ScreenSaverManager {
                     try {
                         if (snapshot.exists()) {
                             val rawFname = snapshot.child("fname").getValue(String::class.java) ?: ""
+                            val genderVal = snapshot.child("gender").getValue(String::class.java) ?: ""
                             if (rawFname.isNotEmpty()) {
-                                val words = rawFname.split(", ")
-                                guestName = if (words.size == 2) {
-                                    "${words[1]} ${words[0]}"
-                                } else {
-                                    rawFname
-                                }
+                                guestName = formatName(rawFname, genderVal)
                                 Log.d("ScreenSaverManager", "Guest name loaded for screensaver: $guestName")
                             }
 
@@ -381,7 +378,11 @@ fun ScreenSaverOverlay() {
     // Automatically request focus on screensaver launch to intercept key events cleanly
     LaunchedEffect(Unit) {
         try {
-            focusRequester.requestFocus()
+            // Retry focus request with small delays to ensure Box is attached
+            for (i in 1..3) {
+                delay(100L)
+                focusRequester.requestFocus()
+            }
         } catch (e: Exception) {}
     }
     
@@ -398,11 +399,12 @@ fun ScreenSaverOverlay() {
                     if (context is android.service.dreams.DreamService) {
                         context.finish()
                     } else {
+                        ScreenSaverManager.lastDismissedTime = System.currentTimeMillis()
                         ScreenSaverManager.isScreenSaverActive = false
                     }
-                    return@onPreviewKeyEvent true
                 }
-                false
+                // ALWAYS consume both KeyDown and KeyUp events inside screensaver to prevent event leaking/propagation to underlying buttons on dismissal
+                true
             }
     ) {
         var showWelcomeCard by remember { mutableStateOf(false) }

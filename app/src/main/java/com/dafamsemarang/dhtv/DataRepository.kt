@@ -411,10 +411,11 @@ object DataRepository {
                             roomnight = snapshot.child("roomnight").getValue(Int::class.java) ?: 0,
                             roomtype = snapshot.child("roomtype").getValue(String::class.java) ?: "",
                             guestImageUrl = snapshot.child("guestImageUrl").getValue(String::class.java) ?: "",
-                            isSmoking = snapshot.child("isSmoking").getValue(Boolean::class.java) == true
+                            isSmoking = snapshot.child("isSmoking").getValue(Boolean::class.java) == true,
+                            gender = snapshot.child("gender").getValue(String::class.java) ?: ""
                         )
                         guestInfo.value = info
-                        Log.d("DataRepository", "Guest info loaded: ${info.fname}, Folio: ${info.folio}")
+                        Log.d("DataRepository", "Guest info loaded: fname=${info.fname}, gender=${info.gender}, Folio: ${info.folio}")
                         setupDndListener(db, branchId, info.folio)
                     } else {
                         guestInfo.value = null

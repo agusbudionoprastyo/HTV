@@ -128,6 +128,12 @@ object GlobalMediaPlayerHolder {
     }
 }
 
+object GlobalFocusTracker {
+    var lastFocusedItem: String? = null // format: "shortcut_{index}", "footer_{name}"
+    var lastFocusedFooterItem: String? = null // format: "footer_{name}"
+}
+
+
 data class SupportedApp(
     val packageName: String,
     val label: String,
@@ -937,6 +943,11 @@ fun VideoAndSlideshowSection(
     
     var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
     var isVideoReadyGlobal by remember { mutableStateOf(false) }
+    var isTransitionFinished by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(1200L) // Wait for screen transition to fully complete
+        isTransitionFinished = true
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     
     // Track if video was paused (not stopped) so we can resume it
@@ -1054,9 +1065,17 @@ fun VideoAndSlideshowSection(
         }
         
         onDispose {
-            // CRITICAL: Don't pause or release MediaPlayer here.
-            // Let the child BannerVideoPlayer handle its own lifecycle and pause/resume session-safely.
-            Log.d("VideoPlayer", "VideoAndSlideshowSection disposed - MediaPlayer kept alive for resume")
+            Log.d("VideoPlayer", "VideoAndSlideshowSection disposed - Pausing MediaPlayer to save CPU/GPU resource")
+            try {
+                mediaPlayer?.let { player ->
+                    if (player.isPlaying) {
+                        player.pause()
+                        setWasPaused(true)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("VideoPlayer", "Error pausing on dispose: ${e.message}")
+            }
         }
     }
 
@@ -1251,19 +1270,25 @@ fun VideoAndSlideshowSection(
             try {
                 // Check if video is already playing
                 if (player.isPlaying) {
-                    // Video is already playing, do nothing
-                    Log.d("VideoPlayer", "Video already playing, skipping restart")
+                    // Video is already playing, do nothing and skip delay!
+                    Log.d("VideoPlayer", "Video already playing, skipping restart and delay")
                     setVideoStarted(true)
                     wasPausedState?.value = false
                     videoStartedState?.value = true
                     return@LaunchedEffect
                 }
                 
+                // Delay video playback/initialization to allow slide/navigation transition to finish smoothly first
+                Log.d("VideoPlayer", "Delaying video playback start to allow transition to complete")
+                delay(1000L)
+                
+                // Check player.isPlaying again after delay just in case it started playing in the meantime
+                if (player.isPlaying) {
+                    return@LaunchedEffect
+                }
+                
                 // Always restart video from beginning when returning (no resume)
                 Log.d("VideoPlayer", "Starting video playback from beginning (LaunchedEffect) - lifecycle: $lifecycleState")
-                if (player.isPlaying) {
-                    player.stop()
-                }
                 player.reset()
                 setWasPaused(false)
                 setVideoStarted(true)
@@ -1727,7 +1752,7 @@ fun VideoAndSlideshowSection(
                         
                         val isVideoVisible = isActiveSlideVideo || Math.abs(videoSlideOffset.value) < 447f
                         
-                        if (lastVideoUrl.isNotEmpty()) {
+                        if (lastVideoUrl.isNotEmpty() && isTransitionFinished) {
                             BannerVideoPlayer(
                                 videoUrl = lastVideoUrl,
                                 mediaPlayer = resolvedPlayer,
@@ -1901,6 +1926,36 @@ fun HomeScreen(navController: NavHostController) {
     
     // Focus Requesters for Shortcuts (to move focus during reorder)
     val shortcutFocusRequesters = remember { List(6) { FocusRequester() } }
+
+    val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val lastFocused = GlobalFocusTracker.lastFocusedItem
+                Log.d("HomeScreen", "Lifecycle ON_RESUME - Restoring focus to: $lastFocused")
+                if (lastFocused != null && lastFocused.startsWith("shortcut_")) {
+                    val index = lastFocused.substringAfter("shortcut_").toIntOrNull()
+                    if (index != null && index in 0..5) {
+                        scope.launch {
+                            delay(400)
+                            try {
+                                shortcutFocusRequesters[index].requestFocus()
+                                Log.d("HomeScreen", "Successfully restored focus to shortcut_$index")
+                            } catch (e: Exception) {
+                                Log.e("HomeScreen", "Failed to restore focus to shortcut_$index: ${e.message}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
 
     fun swapShortcuts(fromIndex: Int, toIndex: Int) {
         if (toIndex in shortcutSlots.indices) {
@@ -2102,317 +2157,324 @@ fun HomeScreen(navController: NavHostController) {
                 .fillMaxSize()
         ) {
             // Content like buttons, text, etc.
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 125.dp)
-                .padding(start = 58.dp, end = 58.dp), // Unified TV safety margins
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.Start
-        ) {
-            // Use key to prevent recreation when returning from other screens
-            // Pass state directly (not wrapped in remember) so it's always in sync
-            key("video_section") {
-                // Use MutableState directly from parent to ensure state persists across navigation
-                // IMPORTANT: Initialize with current parent state values
-                val wasPausedState = remember { mutableStateOf<Boolean>(videoWasPaused) }
-                val videoStartedState = remember { mutableStateOf<Boolean>(videoHasStarted) }
-                val sharedPlayerState = remember { mutableStateOf<MediaPlayer?>(sharedMediaPlayer) }
-                
-                // Sync state from parent whenever it changes
-                // This ensures child component always has latest state from parent
-                // IMPORTANT: Only update child state if parent state is true (preserve true values)
-                LaunchedEffect(videoWasPaused, videoHasStarted, sharedMediaPlayer) {
-                    // Only update child state if parent state is true (preserve true values)
-                    // This prevents resetting state to false when parent is recreated
-                    if (videoWasPaused) {
-                        wasPausedState.value = true
-                    }
-                    if (videoHasStarted) {
-                        videoStartedState.value = true
-                    }
-                    sharedPlayerState.value = sharedMediaPlayer
-                    Log.d("VideoPlayer", "State synced from parent - wasPaused: $videoWasPaused, videoStarted: $videoHasStarted")
-                }
-                
-                // Resume functionality removed - video will restart from beginning when returning from other screens
-                
-                
-                // Row to align DND indicator next to the banner
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(168.dp), // Perfect alignment matching the height of the banner!
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    VideoAndSlideshowSection(
-                        context = context, 
-                        videoUrls = videoUrlsState, 
-                        imageList = imageList, 
-                        slideshowTitles = slideshowTitles,
-                        currentImageIndex = currentImageIndex,
-                        wasPausedState = wasPausedState,
-                        videoStartedState = videoStartedState,
-                        sharedMediaPlayer = sharedPlayerState,
-                        isLoadingVideos = isLoadingVideos,
-                        isLoadingSlideshow = isLoadingSlideshow,
-                        guestInfo = guestInfo,
-                        roomId = roomId,
-                        roomTypeText = roomTypeText,
-                        currentTime = currentTime,
-                        onImageIndexChanged = { currentImageIndex = it },
-                        flightArrivals = flightArrivals,
-                        flightDepartures = flightDepartures,
-                        flightAirportName = flightAirportName,
-                        fidsActive = fidsActive,
-                        onBannerFocusChanged = { isBannerFocused = it },
-                        onVideoComplete = {
-                            if (isSlideshowActive && totalSlidesCount > 0 && !isBannerFocused) {
-                                currentImageIndex = (currentImageIndex + 1) % totalSlidesCount
-                            }
-                        },
-                        onNavigateDown = {
-                            try {
-                                shortcutFocusRequesters[0].requestFocus()
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 125.dp)
+                    .padding(start = 58.dp, end = 58.dp), // Unified TV safety margins
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+            ) {
+                // Use key to prevent recreation when returning from other screens
+                // Pass state directly (not wrapped in remember) so it's always in sync
+                key("video_section") {
+                    // Use MutableState directly from parent to ensure state persists across navigation
+                    // IMPORTANT: Initialize with current parent state values
+                    val wasPausedState = remember { mutableStateOf<Boolean>(videoWasPaused) }
+                    val videoStartedState = remember { mutableStateOf<Boolean>(videoHasStarted) }
+                    val sharedPlayerState = remember { mutableStateOf<MediaPlayer?>(sharedMediaPlayer) }
+                    
+                    // Sync state from parent whenever it changes
+                    // This ensures child component always has latest state from parent
+                    // IMPORTANT: Only update child state if parent state is true (preserve true values)
+                    LaunchedEffect(videoWasPaused, videoHasStarted, sharedMediaPlayer) {
+                        // Only update child state if parent state is true (preserve true values)
+                        // This prevents resetting state to false when parent is recreated
+                        if (videoWasPaused) {
+                            wasPausedState.value = true
                         }
-                    )
-
-                    // Large white 20% opacity DND Active Indicator (Icon Only)
-                    AnimatedVisibility(
-                        visible = isDndActive,
-                        modifier = Modifier
-                    ) {
-                        Icon(
-                            painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
-                            contentDescription = "DND Active Indicator",
-                            modifier = Modifier.size(96.dp),
-                            tint = Color.White.copy(alpha = 0.2f)
-                        )
+                        if (videoHasStarted) {
+                            videoStartedState.value = true
+                        }
+                        sharedPlayerState.value = sharedMediaPlayer
+                        Log.d("VideoPlayer", "State synced from parent - wasPaused: $videoWasPaused, videoStarted: $videoHasStarted")
                     }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp)) // Close vertical spacing to align closely with the banner
-                
-                // 5. Bottom Service & Shortcut Buttons and Guest Greeting Row (Bottom Aligned)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    ServiceButtonsSection(
-                        context = context,
-                        navController = navController,
-                        shortcutSlots = shortcutSlots,
-                        installedApps = filteredInstalledApps,
-                        onSlotClick = { appPackage -> 
-                            if (isReorderMode) {
-                                 isReorderMode = false
-                            } else {
-                                val pm = context.packageManager
+                    
+                    // Resume functionality removed - video will restart from beginning when returning from other screens
+                    
+                    
+                    // Row to align DND indicator next to the banner
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(168.dp), // Perfect alignment matching the height of the banner!
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        VideoAndSlideshowSection(
+                            context = context, 
+                            videoUrls = videoUrlsState, 
+                            imageList = imageList, 
+                            slideshowTitles = slideshowTitles,
+                            currentImageIndex = currentImageIndex,
+                            wasPausedState = wasPausedState,
+                            videoStartedState = videoStartedState,
+                            sharedMediaPlayer = sharedPlayerState,
+                            isLoadingVideos = isLoadingVideos,
+                            isLoadingSlideshow = isLoadingSlideshow,
+                            guestInfo = guestInfo,
+                            roomId = roomId,
+                            roomTypeText = roomTypeText,
+                            currentTime = currentTime,
+                            onImageIndexChanged = { currentImageIndex = it },
+                            flightArrivals = flightArrivals,
+                            flightDepartures = flightDepartures,
+                            flightAirportName = flightAirportName,
+                            fidsActive = fidsActive,
+                            onBannerFocusChanged = { isBannerFocused = it },
+                            onVideoComplete = {
+                                if (isSlideshowActive && totalSlidesCount > 0 && !isBannerFocused) {
+                                    currentImageIndex = (currentImageIndex + 1) % totalSlidesCount
+                                }
+                            },
+                            onNavigateDown = {
                                 try {
-                                    // Unified TV Launch: Check Leanback Launcher first, fall back to standard Launcher
-                                    var intent = pm.getLeanbackLaunchIntentForPackage(appPackage)
-                                    if (intent == null) {
-                                        intent = pm.getLaunchIntentForPackage(appPackage)
-                                    }
-                                    
-                                    if (intent != null) {
-                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        context.startActivity(intent)
-                                    } else {
-                                       Log.e("HomeScreen", "App not found: $appPackage")
-                                       Toast.makeText(context, "Cannot launch app: $appPackage", Toast.LENGTH_SHORT).show()
-                                    }
+                                    shortcutFocusRequesters[0].requestFocus()
                                 } catch (e: Exception) {
                                     e.printStackTrace()
                                 }
                             }
-                        },
-                        onSlotLongClick = { index ->
-                            if (!isReorderMode) {
-                                optionMenuIndex = index // Open Inline Options
-                                actionTargetIndex = index
-                            }
-                        },
-                        isReorderMode = isReorderMode,
-                        reorderSelectedIndex = actionTargetIndex,
-                        activeOptionIndex = optionMenuIndex, // Pass active option
-                        onReorder = ::swapShortcuts,
-                        onExitReorder = { 
-                            isReorderMode = false 
-                            optionMenuIndex = -1
-                        },
-                        onDismissOption = { optionMenuIndex = -1 },
-                        onMoveOption = { index ->
-                            optionMenuIndex = -1
-                            actionTargetIndex = index
-                            isReorderMode = true
-                        },
-                        onChangeOption = { index ->
-                            val action = {
-                                optionMenuIndex = -1 // Close options
-                                actionTargetIndex = index
-                                selectedSlotIndex = index
-                                showDrawer = true // Open App Drawer
-                            }
-                            
-                            if (index == 0) {
-                                pendingPinAction = action
-                                showPinDialog = true
-                            } else {
-                                action()
-                            }
-                        },
-                        onDeleteOption = { index ->
-                            val action = {
-                                optionMenuIndex = -1 // Close options
-                                // Remove item logic: Replace with EMPTY_SLOT
-                                val newSlots = shortcutSlots.toMutableList()
-                                if (index in newSlots.indices) {
-                                    newSlots[index] = "EMPTY_SLOT"
-                                    shortcutSlots = newSlots
-                                    
-                                    shortcutsPrefs.edit().putString("slot_$index", "EMPTY_SLOT").apply()
-                                    
-                                    // Restore Focus to the current slot (Wait for recomposition)
-                                CoroutineScope(Dispatchers.Main).launch {
-                                         try {
-                                             delay(350) // Allow UI to switch to "Add" button (Increased for safety)
-                                             shortcutFocusRequesters[index].requestFocus()
-                                         } catch (e: Exception) {
-                                             e.printStackTrace()
-                                         }
-                                    }
-                                }
-                            }
-
-                            if (index == 0) {
-                                pendingPinAction = action
-                                showPinDialog = true
-                            } else {
-                                action()
-                            }
-                        },
-                        focusRequesters = shortcutFocusRequesters
-                    )
-
-                    // Guest Greeting & Room Details Column (Bottom-aligned with the shortcut container)
-                    Column(
-                        modifier = Modifier.width(320.dp),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        // Enlarged Guest Name (Size 36.sp, Bold, right-aligned)
-                        Text(
-                            text = formatName(guestInfo?.fname ?: "Guest Name"),
-                            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 36.sp),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 6.dp)
-                        )
-                        
-                        Text(
-                            text = "Its our pleasure to welcome you to our hotel. We will do everything in our power to make your stay most convenient and enjoyable",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 14.sp,
-                                lineHeight = 19.sp
-                            ),
-                            color = Color.White.copy(alpha = 0.85f),
-                            fontWeight = FontWeight.Normal,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp)
                         )
 
-                        // Room Number, Type, Non-Smoking Group (Right-aligned with spacing and divider bars)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.End,
+                        // Large white 20% opacity DND Active Indicator (Icon Only)
+                        AnimatedVisibility(
+                            visible = isDndActive,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp)
                         ) {
-                            // Room Number Group (Door icon + Number)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.nest_doorbell_visitor_24dp_e8eaed_fill0_wght400_grad0_opsz24),
-                                    contentDescription = "Room Icon",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color.White
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = roomId ?: "-",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "|",
-                                color = Color.White.copy(alpha = 0.4f),
-                                style = MaterialTheme.typography.bodyLarge
+                            Icon(
+                                painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
+                                contentDescription = "DND Active Indicator",
+                                modifier = Modifier.size(96.dp),
+                                tint = Color.White.copy(alpha = 0.2f)
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            
-                            // Room Type Group (Just roomtype label)
-                            Text(
-                                text = roomTypeText.trim(),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium
-                            )
-                            
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "|",
-                                color = Color.White.copy(alpha = 0.4f),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            
-                            // Smoking Preference Group
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val isSmoking = guestInfo?.isSmoking ?: false
-                                val smokeIconRes = if (isSmoking) {
-                                    R.drawable.cigarette_with_smoke_svgrepo_com
-                                } else {
-                                    R.drawable.i_no_smoking_svgrepo_com
-                                }
-                                val smokeLabel = if (isSmoking) "Smoking" else "Non-Smoking"
-
-                                Icon(
-                                    painter = painterResource(id = smokeIconRes),
-                                    contentDescription = "Smoking Preference",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color.White
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = smokeLabel,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
                         }
                     }
                 }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                ServiceButtonsSection(
+                    context = context,
+                    navController = navController,
+                    shortcutSlots = shortcutSlots,
+                    installedApps = filteredInstalledApps,
+                    onSlotClick = { appPackage -> 
+                        if (isReorderMode) {
+                             isReorderMode = false
+                        } else {
+                            val pm = context.packageManager
+                            try {
+                                // Unified TV Launch: Check Leanback Launcher first, fall back to standard Launcher
+                                var intent = pm.getLeanbackLaunchIntentForPackage(appPackage)
+                                if (intent == null) {
+                                    intent = pm.getLaunchIntentForPackage(appPackage)
+                                }
+                                
+                                if (intent != null) {
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(intent)
+                                } else {
+                                   Log.e("HomeScreen", "App not found: $appPackage")
+                                   Toast.makeText(context, "Cannot launch app: $appPackage", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    },
+                    onSlotLongClick = { index ->
+                        if (!isReorderMode) {
+                            optionMenuIndex = index // Open Inline Options
+                            actionTargetIndex = index
+                        }
+                    },
+                    isReorderMode = isReorderMode,
+                    reorderSelectedIndex = actionTargetIndex,
+                    activeOptionIndex = optionMenuIndex, // Pass active option
+                    onReorder = ::swapShortcuts,
+                    onExitReorder = { 
+                        isReorderMode = false 
+                        optionMenuIndex = -1
+                    },
+                    onDismissOption = { optionMenuIndex = -1 },
+                    onMoveOption = { index ->
+                        optionMenuIndex = -1
+                        actionTargetIndex = index
+                        isReorderMode = true
+                    },
+                    onChangeOption = { index ->
+                        val action = {
+                            optionMenuIndex = -1 // Close options
+                            actionTargetIndex = index
+                            selectedSlotIndex = index
+                            showDrawer = true // Open App Drawer
+                        }
+                        
+                        if (index == 0) {
+                            pendingPinAction = action
+                            showPinDialog = true
+                        } else {
+                            action()
+                        }
+                    },
+                    onDeleteOption = { index ->
+                        val action = {
+                            optionMenuIndex = -1 // Close options
+                            // Remove item logic: Replace with EMPTY_SLOT
+                            val newSlots = shortcutSlots.toMutableList()
+                            if (index in newSlots.indices) {
+                                newSlots[index] = "EMPTY_SLOT"
+                                shortcutSlots = newSlots
+                                
+                                shortcutsPrefs.edit().putString("slot_$index", "EMPTY_SLOT").apply()
+                                
+                                // Restore Focus to the current slot (Wait for recomposition)
+                                CoroutineScope(Dispatchers.Main).launch {
+                                     try {
+                                         delay(350) // Allow UI to switch to "Add" button (Increased for safety)
+                                         shortcutFocusRequesters[index].requestFocus()
+                                     } catch (e: Exception) {
+                                         e.printStackTrace()
+                                     }
+                                }
+                            }
+                        }
+
+                        if (index == 0) {
+                            pendingPinAction = action
+                            showPinDialog = true
+                        } else {
+                            action()
+                        }
+                    },
+                    focusRequesters = shortcutFocusRequesters
+                )
             }
-}
+            
+            Spacer(modifier = Modifier.width(24.dp))
 
+            // Guest Greeting & Room Details Column (Bottom-aligned with the shortcut container)
+            Column(
+                modifier = Modifier
+                    .width(320.dp)
+                    .align(Alignment.Bottom)
+                    .padding(bottom = 64.dp),
+                verticalArrangement = Arrangement.Bottom,
+                horizontalAlignment = Alignment.End
+            ) {
+                // Enlarged Guest Name (Size 36.sp, Bold, right-aligned)
+                val hasGuestActive = guestInfo != null && (guestInfo?.folio ?: 0) != 0 && !guestInfo?.fname.isNullOrBlank()
+                val guestNameText = if (hasGuestActive) {
+                    formatName(guestInfo?.fname ?: "", guestInfo?.gender)
+                } else {
+                    "No Guest"
+                }
 
+                Text(
+                    text = guestNameText,
+                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 36.sp),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                )
+                
+                Text(
+                    text = "Its our pleasure to welcome you to our hotel. We will do everything in our power to make your stay most convenient and enjoyable",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 14.sp,
+                        lineHeight = 19.sp
+                    ),
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontWeight = FontWeight.Normal,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                )
 
+                // Room Number, Type, Non-Smoking Group (Right-aligned with spacing and divider bars)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                ) {
+                    // Room Number Group (Door icon + Number)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.nest_doorbell_visitor_24dp_e8eaed_fill0_wght400_grad0_opsz24),
+                            contentDescription = "Room Icon",
+                            modifier = Modifier.size(12.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = roomId ?: "-",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "|",
+                        color = Color.White.copy(alpha = 0.4f),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    // Room Type Group (Just roomtype label)
+                    Text(
+                        text = roomTypeText.trim(),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium
+                    )
+                    
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "|",
+                        color = Color.White.copy(alpha = 0.4f),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    // Smoking Preference Group
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val isSmoking = guestInfo?.isSmoking ?: false
+                        val smokeIconRes = if (isSmoking) {
+                            R.drawable.cigarette_with_smoke_svgrepo_com
+                        } else {
+                            R.drawable.i_no_smoking_svgrepo_com
+                        }
+                        val smokeLabel = if (isSmoking) "Smoking" else "Non-Smoking"
+
+                        Icon(
+                            painter = painterResource(id = smokeIconRes),
+                            contentDescription = "Smoking Preference",
+                            modifier = Modifier.size(12.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = smokeLabel,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
     } // End of Inner Content Box
 
         // Action Dialog for Shortcuts
@@ -2850,6 +2912,12 @@ fun ServiceButtonsSection(
                             },
                             onChangeRequest = { onChangeOption(index) },
                             onDeleteRequest = { onDeleteOption(index) },
+                            onFocusRequest = {},
+                            onFocusStateChange = { isFocused ->
+                                if (isFocused) {
+                                    GlobalFocusTracker.lastFocusedItem = "shortcut_$index"
+                                }
+                            },
                             focusRequester = focusRequesters.getOrNull(index),
                             installedApps = installedApps.filter { !shortcutSlots.contains(it.packageName) },
                             canMove = index != 0,
@@ -2912,6 +2980,12 @@ fun ServiceButtonsSection(
                             },
                             onChangeRequest = { onChangeOption(index) },
                             onDeleteRequest = { onDeleteOption(index) },
+                            onFocusRequest = {},
+                            onFocusStateChange = { isFocused ->
+                                if (isFocused) {
+                                    GlobalFocusTracker.lastFocusedItem = "shortcut_$index"
+                                }
+                            },
                             focusRequester = focusRequesters.getOrNull(index),
                             installedApps = installedApps.filter { !shortcutSlots.contains(it.packageName) },
                             canMove = index != 0,
@@ -3206,6 +3280,8 @@ fun ServiceButtonWithPackageBanner(
     onChangeRequest: () -> Unit = {},
     onDeleteRequest: () -> Unit = {},
     focusRequester: FocusRequester? = null,
+    onFocusRequest: () -> Unit = {},
+    onFocusStateChange: (Boolean) -> Unit = {},
     installedApps: List<SupportedApp> = emptyList(), // Added for random banner pulse
     canMove: Boolean = true, // Added to disable move for Slot 1
     modifier: Modifier = Modifier
@@ -3456,6 +3532,10 @@ fun ServiceButtonWithPackageBanner(
             }
             .onFocusChanged { 
                 isFocused = it.isFocused 
+                onFocusStateChange(it.isFocused)
+                if (it.isFocused) {
+                    onFocusRequest()
+                }
                 if (!it.isFocused) {
                      isPressed = false
                      longPressJob?.cancel()
@@ -4128,12 +4208,12 @@ fun getCurrentTime(): String {
     return "$currentDate $currentTime"
 }
 
-fun formatName(fname: String): String {
-    val words = fname.split(", ")
-    return if (words.size == 2) {
-        "${words[1]}. ${words[0]}"
-    } else {
-        fname
+fun formatName(fname: String, gender: String? = null): String {
+    val prefix = when (gender?.lowercase()) {
+        "male" -> "Mr. "
+        "female" -> "Mrs. "
+        else -> ""
     }
+    return prefix + fname
 }
 
