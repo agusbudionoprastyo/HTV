@@ -1574,7 +1574,9 @@ fun VideoAndSlideshowSection(
                             }
                         } else {
                             val imageUrl = imageList.getOrNull(targetIndex) ?: ""
-                            val isVideo = imageUrl.endsWith(".mp4", ignoreCase = true) || 
+                            val slideType = DataRepository.slideshowTypes.value.getOrNull(targetIndex) ?: "image"
+                            val isVideo = slideType == "video" ||
+                                          imageUrl.endsWith(".mp4", ignoreCase = true) || 
                                           imageUrl.endsWith(".mkv", ignoreCase = true) || 
                                           imageUrl.contains("/video", ignoreCase = true)
                             if (isVideo) {
@@ -1722,11 +1724,16 @@ fun VideoAndSlideshowSection(
                 }
 
                     val activeUrl = imageList.getOrNull(currentImageIndex) ?: ""
-                    val isActiveSlideVideo = activeUrl.endsWith(".mp4", ignoreCase = true) || 
+                    val activeType = DataRepository.slideshowTypes.value.getOrNull(currentImageIndex) ?: "image"
+                    val isActiveSlideVideo = activeType == "video" ||
+                                           activeUrl.endsWith(".mp4", ignoreCase = true) || 
                                            activeUrl.endsWith(".mkv", ignoreCase = true) || 
                                            activeUrl.contains("/video", ignoreCase = true)
                     
-                    val hasAnyVideo = imageList.any { url ->
+                    val hasAnyVideo = imageList.indices.any { idx ->
+                        val url = imageList[idx]
+                        val slideType = DataRepository.slideshowTypes.value.getOrNull(idx) ?: "image"
+                        slideType == "video" ||
                         url.endsWith(".mp4", ignoreCase = true) || 
                         url.endsWith(".mkv", ignoreCase = true) || 
                         url.contains("/video", ignoreCase = true)

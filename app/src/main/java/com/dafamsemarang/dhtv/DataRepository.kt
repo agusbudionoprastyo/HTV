@@ -27,6 +27,7 @@ object DataRepository {
     val slideshowImages = mutableStateOf<List<String>>(emptyList())
     val slideshowTitles = mutableStateOf<List<String>>(emptyList())
     val slideshowDurations = mutableStateOf<List<Int>>(emptyList())
+    val slideshowTypes = mutableStateOf<List<String>>(emptyList())
     val isSlideshowActive = mutableStateOf(false)
     val isLoadingSlideshow = mutableStateOf(true)
     val currentImageIndex = mutableStateOf(0)
@@ -262,8 +263,8 @@ object DataRepository {
         }
         discoverRef.addValueEventListener(discoverDestinationListener!!)
  
-        // Preload Slideshow
-        val slideshowRef = db.child("BRANCHES").child(branchId).child("SLIDESHOW").child("imageUrls")
+        // Preload Banners (from BANNER node)
+        val slideshowRef = db.child("BRANCHES").child(branchId).child("BANNER")
         activeSlideshowRef = slideshowRef
         slideshowListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -274,7 +275,8 @@ object DataRepository {
                             val duration = slideSnapshot.child("duration").getValue(Int::class.java) ?: 5
                             val status = slideSnapshot.child("status").getValue(String::class.java)
                             val title = slideSnapshot.child("title").getValue(String::class.java)
-                            if (url != null && status == "active") SlideData(url, duration, title) else null
+                            val type = slideSnapshot.child("type").getValue(String::class.java) ?: "image"
+                            if (url != null && status == "active") BannerSlideData(url, duration, title, type) else null
                         } catch (e: Exception) { null }
                     }
                     if (activeSlides.isNotEmpty()) {
@@ -282,50 +284,36 @@ object DataRepository {
                         slideshowImages.value = activeSlides.map { it.url }
                         slideshowDurations.value = activeSlides.map { it.duration }
                         slideshowTitles.value = activeSlides.map { it.title ?: "" }
+                        slideshowTypes.value = activeSlides.map { it.type }
+                        
+                        // If there are video banners, extract their URLs and trigger preload/caching
+                        val videoUrlsList = activeSlides.filter { it.type == "video" }.map { it.url }
+                        if (videoUrlsList.isNotEmpty()) {
+                            preloadVideos(context, videoUrlsList)
+                        }
                     } else {
                         isSlideshowActive.value = false
                         slideshowImages.value = emptyList()
                         slideshowDurations.value = emptyList()
                         slideshowTitles.value = emptyList()
+                        slideshowTypes.value = emptyList()
                     }
                     isLoadingSlideshow.value = false
-                    Log.d("DataRepository", "Slideshow preloaded successfully: ${slideshowImages.value.size} active slides")
+                    Log.d("DataRepository", "Banners preloaded successfully: ${slideshowImages.value.size} active banners")
                 } catch (e: Exception) {
                     isLoadingSlideshow.value = false
                 }
             }
             override fun onCancelled(error: DatabaseError) {
-                Log.e("DataRepository", "Slideshow preload cancelled: ${error.message}")
+                Log.e("DataRepository", "Banner preload cancelled: ${error.message}")
                 isLoadingSlideshow.value = false
             }
         }
         slideshowRef.addValueEventListener(slideshowListener!!)
  
-        // Preload Video
-        val videoRef = db.child("BRANCHES").child(branchId).child("VIDEO").child("videoUrl")
-        activeVideoRef = videoRef
-        videoListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                try {
-                    val urls = snapshot.children.mapNotNull { videoSnapshot ->
-                        val status = videoSnapshot.child("status").getValue(String::class.java)
-                        val url = videoSnapshot.child("url").getValue(String::class.java)
-                        if (status == "active" && url != null) url else null
-                    }
-                    videoUrls.value = urls
-                    isLoadingVideos.value = false
-                    Log.d("DataRepository", "Videos preloaded successfully: ${urls.size} active videos")
-                    preloadVideos(context, urls)
-                } catch (e: Exception) {
-                    isLoadingVideos.value = false
-                }
-            }
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("DataRepository", "Video preload cancelled: ${error.message}")
-                isLoadingVideos.value = false
-            }
-        }
-        videoRef.addValueEventListener(videoListener!!)
+        // Old VIDEO node disabled/bypassed as per banner migration
+        videoUrls.value = emptyList()
+        isLoadingVideos.value = false
 
         // Preload Company Icon
         val iconRef = db.child("BRANCHES").child(branchId).child("SETTING").child("COMPANY_ICON")
@@ -766,6 +754,7 @@ object DataRepository {
         slideshowImages.value = emptyList()
         slideshowTitles.value = emptyList()
         slideshowDurations.value = emptyList()
+        slideshowTypes.value = emptyList()
         videoUrls.value = emptyList()
         currentImageIndex.value = 0
 
@@ -863,3 +852,11 @@ object DataRepository {
         }
     }
 }
+
+data class BannerSlideData(
+    val url: String,
+    val duration: Int,
+    val title: String?,
+    val type: String
+)
+

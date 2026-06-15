@@ -980,6 +980,8 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                      modifier = Modifier
                                          .width(130.dp)
                                          .height(75.dp)
+                                         .offset(y = (16).dp)
+                                         .offset(x = (-16).dp)
                                          .border(1.5.dp, Color.White.copy(alpha = 0.3f)),
                                      contentScale = ContentScale.Fit,
                                      colorFilter = ColorFilter.tint(Color(0xFF292A2C))

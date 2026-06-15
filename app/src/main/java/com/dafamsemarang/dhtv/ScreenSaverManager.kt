@@ -731,7 +731,8 @@ fun GlassmorphicWelcomeCard(
                         modifier = Modifier
                             .width(130.dp)
                             .height(75.dp)
-                            .border(1.5.dp, Color.White.copy(alpha = 0.3f)),
+                            .offset(y = (16).dp)
+                            .offset(x = (-16).dp),
                         contentScale = ContentScale.Fit,
                         colorFilter = ColorFilter.tint(Color(0xFF292A2C))
                     )
