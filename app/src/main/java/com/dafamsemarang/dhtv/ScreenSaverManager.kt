@@ -64,6 +64,7 @@ object ScreenSaverManager {
     var videoUrl by mutableStateOf("")
     var activeImages by mutableStateOf<List<String>>(emptyList())
     var guestName by mutableStateOf("")
+    var guestGender by mutableStateOf("")
     var guestImageUrl by mutableStateOf("")
     var isWelcomeScreenActive by mutableStateOf(false)
     var welcomeMessage by mutableStateOf("")
@@ -71,6 +72,12 @@ object ScreenSaverManager {
     var gmName by mutableStateOf("")
     var gmTitle by mutableStateOf("General Manager")
     var companyIconUrl by mutableStateOf<String?>(null)
+    var voEn by mutableStateOf("")
+    var voEnAudioUrl by mutableStateOf("")
+    var voEnVoiceName by mutableStateOf("")
+    var voId by mutableStateOf("")
+    var voIdAudioUrl by mutableStateOf("")
+    var voIdVoiceName by mutableStateOf("")
     
     // Video Caching States
     private var appContext: Context? = null
@@ -139,8 +146,12 @@ object ScreenSaverManager {
                             val rawFname = snapshot.child("fname").getValue(String::class.java) ?: ""
                             val genderVal = snapshot.child("gender").getValue(String::class.java) ?: ""
                             if (rawFname.isNotEmpty()) {
-                                guestName = formatName(rawFname, genderVal)
-                                Log.d("ScreenSaverManager", "Guest name loaded for screensaver: $guestName")
+                                guestGender = genderVal
+                                // Store with English format (Mr./Mrs.) for welcome card display.
+                                // TTS functions (formatNameID / formatNameEN) strip prefixes before adding their own,
+                                // so they will still work correctly regardless of what prefix is stored here.
+                                guestName = formatNameEN(rawFname, genderVal)
+                                Log.d("ScreenSaverManager", "Guest name loaded for screensaver: $guestName, gender: $guestGender")
                             }
 
                             val rawGuestUrl = snapshot.child("guestImageUrl").getValue(String::class.java) ?: ""
@@ -181,13 +192,18 @@ object ScreenSaverManager {
                                 })
                             }
                         } else {
+                            Log.d("ScreenSaverManager", "FOGUEST data is null or does not exist for room: $roomId")
                             guestName = ""
+                            guestGender = ""
+                            guestImageUrl = ""
                         }
                     } catch (e: Exception) {
                         Log.e("ScreenSaverManager", "Error parsing guest name for screensaver: ${e.message}")
                     }
                 }
-                override fun onCancelled(error: DatabaseError) {}
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e("ScreenSaverManager", "FOGUEST listener cancelled: ${error.message}")
+                }
             })
         }
         
@@ -202,12 +218,24 @@ object ScreenSaverManager {
                         signUrl = snapshot.child("signUrl").getValue(String::class.java) ?: ""
                         gmName = snapshot.child("gm").getValue(String::class.java) ?: ""
                         gmTitle = snapshot.child("gmTitle").getValue(String::class.java) ?: "General Manager"
+                        voEn = snapshot.child("voEn").getValue(String::class.java) ?: ""
+                        voEnAudioUrl = snapshot.child("voEnAudioUrl").getValue(String::class.java) ?: ""
+                        voEnVoiceName = snapshot.child("voEnVoiceName").getValue(String::class.java) ?: ""
+                        voId = snapshot.child("voId").getValue(String::class.java) ?: ""
+                        voIdAudioUrl = snapshot.child("voIdAudioUrl").getValue(String::class.java) ?: ""
+                        voIdVoiceName = snapshot.child("voIdVoiceName").getValue(String::class.java) ?: ""
                         Log.d("ScreenSaverManager", "Welcome letter loaded for screensaver. Message: $welcomeMessage, Sign: $signUrl")
                     } else {
                         welcomeMessage = ""
                         signUrl = ""
                         gmName = ""
                         gmTitle = "General Manager"
+                        voEn = ""
+                        voEnAudioUrl = ""
+                        voEnVoiceName = ""
+                        voId = ""
+                        voIdAudioUrl = ""
+                        voIdVoiceName = ""
                     }
                 } catch (e: Exception) {
                     Log.e("ScreenSaverManager", "Error parsing WELCOME_LETTER: ${e.message}")
@@ -421,11 +449,103 @@ fun ScreenSaverOverlay() {
             }
     ) {
         var showWelcomeCard by remember { mutableStateOf(false) }
+        var isPlayingAudio by remember { mutableStateOf(false) }
 
-        // Start 5 seconds delay timer when screensaver media starts
+        // Start 5 seconds delay timer when screensaver media starts, play audio, and fade card out on completion
         LaunchedEffect(Unit) {
+            if (ScreenSaverManager.isWelcomeScreenActive) return@LaunchedEffect
             delay(5000)
             showWelcomeCard = true
+            
+            // Audio synthesis logic:
+            val name = ScreenSaverManager.guestName
+            val gender = ScreenSaverManager.guestGender
+            
+            if (name.isNotEmpty()) {
+                isPlayingAudio = true
+                try {
+                    // English TTS
+                    if (ScreenSaverManager.voEn.isNotEmpty()) {
+                        val voiceNameEn = if (ScreenSaverManager.voEnVoiceName.isNotEmpty()) ScreenSaverManager.voEnVoiceName else "en-US-Neural2-F"
+                        val languageCodeEn = if (voiceNameEn.contains("-")) {
+                            voiceNameEn.split("-").take(2).joinToString("-")
+                        } else {
+                            "en-US"
+                        }
+                        val greetingEn = "Hello! ${formatNameEN(name, gender)}."
+                        val enFile = GoogleTtsHelper.synthesizeSpeech(context, greetingEn, languageCodeEn, voiceNameEn)
+                        if (enFile != null) {
+                            val player = android.media.MediaPlayer().apply {
+                                setDataSource(enFile.absolutePath)
+                                prepare()
+                                start()
+                            }
+                            // Wait for playback
+                            while (player.isPlaying) { delay(100) }
+                            player.release()
+                            try { enFile.delete() } catch (e: Exception) {}
+                        }
+                    }
+                    
+                    // English Static Welcome Audio URL
+                    if (ScreenSaverManager.voEnAudioUrl.isNotEmpty()) {
+                        val cacheFile = AudioCacheHelper.getAudioCacheFile(context, ScreenSaverManager.voEnAudioUrl)
+                        val file = if (cacheFile.exists() && cacheFile.length() > 0) cacheFile else AudioCacheHelper.downloadAndCacheAudio(context, ScreenSaverManager.voEnAudioUrl)
+                        if (file != null) {
+                            val player = android.media.MediaPlayer().apply {
+                                setDataSource(file.absolutePath)
+                                prepare()
+                                start()
+                            }
+                            while (player.isPlaying) { delay(100) }
+                            player.release()
+                        }
+                    }
+
+                    // Indonesian TTS
+                    if (ScreenSaverManager.voId.isNotEmpty()) {
+                        val voiceNameId = if (ScreenSaverManager.voIdVoiceName.isNotEmpty()) ScreenSaverManager.voIdVoiceName else "id-ID-Wavenet-B"
+                        val languageCodeId = if (voiceNameId.contains("-")) {
+                            voiceNameId.split("-").take(2).joinToString("-")
+                        } else {
+                            "id-ID"
+                        }
+                        val greetingId = "Halo! ${formatNameID(name, gender)}."
+                        val idFile = GoogleTtsHelper.synthesizeSpeech(context, greetingId, languageCodeId, voiceNameId)
+                        if (idFile != null) {
+                            val player = android.media.MediaPlayer().apply {
+                                setDataSource(idFile.absolutePath)
+                                prepare()
+                                start()
+                            }
+                            while (player.isPlaying) { delay(100) }
+                            player.release()
+                            try { idFile.delete() } catch (e: Exception) {}
+                        }
+                    }
+
+                    // Indonesian Static Welcome Audio URL
+                    if (ScreenSaverManager.voIdAudioUrl.isNotEmpty()) {
+                        val cacheFile = AudioCacheHelper.getAudioCacheFile(context, ScreenSaverManager.voIdAudioUrl)
+                        val file = if (cacheFile.exists() && cacheFile.length() > 0) cacheFile else AudioCacheHelper.downloadAndCacheAudio(context, ScreenSaverManager.voIdAudioUrl)
+                        if (file != null) {
+                            val player = android.media.MediaPlayer().apply {
+                                setDataSource(file.absolutePath)
+                                prepare()
+                                start()
+                            }
+                            while (player.isPlaying) { delay(100) }
+                            player.release()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("ScreenSaverOverlay", "TTS Audio sequence error: ${e.message}", e)
+                } finally {
+                    isPlayingAudio = false
+                    // Hide the Glassmorphic card after audio completes
+                    showWelcomeCard = false
+                }
+            }
         }
 
         if (ScreenSaverManager.isWelcomeScreenActive) {
@@ -448,11 +568,41 @@ fun ScreenSaverOverlay() {
                 }
             )
         } else {
-            // Options 1 & 2: Pristine, full-screen Media Screensaver (No overlays!)
+            // Options 1 & 2: Full-screen Media Screensaver with company logo overlay
             if (ScreenSaverManager.isVideoActive && ScreenSaverManager.videoUrl.isNotEmpty()) {
-                VideoScreenSaver(url = ScreenSaverManager.videoUrl)
+                VideoScreenSaver(url = ScreenSaverManager.videoUrl, isPlayingAudio = isPlayingAudio)
             } else if (ScreenSaverManager.activeImages.isNotEmpty()) {
                 ImageSlideshowScreenSaver(images = ScreenSaverManager.activeImages)
+            }
+
+            // Company logo overlay — top-right corner
+            val logoUrl = ScreenSaverManager.companyIconUrl
+            if (!logoUrl.isNullOrEmpty()) {
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(1500)),
+                    exit = fadeOut(animationSpec = tween(800)),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 24.dp, end = 28.dp)
+                ) {
+                    Image(
+                        painter = rememberAsyncImagePainter(model = logoUrl),
+                        contentDescription = "Company Logo",
+                        modifier = Modifier
+                            .size(80.dp)
+                            .drawBehind {
+                                // subtle drop shadow
+                                drawCircle(
+                                    color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.25f),
+                                    radius = size.minDimension / 2f + 4.dp.toPx(),
+                                    center = center.copy(y = center.y + 3.dp.toPx()),
+                                    style = Stroke(width = 0f)
+                                )
+                            },
+                        contentScale = ContentScale.Fit
+                    )
+                }
             }
 
             // Overlay elegant Glassmorphic Welcome Card on top of video or slideshow after 5 seconds delay
@@ -505,11 +655,31 @@ fun ScreenSaverOverlay() {
 }
 
 @Composable
-fun VideoScreenSaver(url: String) {
+fun VideoScreenSaver(url: String, isPlayingAudio: Boolean) {
     val context = LocalContext.current
     var mediaPlayerInstance by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
     var currentSurface by remember { mutableStateOf<android.view.Surface?>(null) }
     var activePath by remember { mutableStateOf("") }
+    
+    // Reactively adjust volume smoothly when isPlayingAudio changes
+    LaunchedEffect(isPlayingAudio, mediaPlayerInstance) {
+        val mp = mediaPlayerInstance ?: return@LaunchedEffect
+        try {
+            val targetVol = if (isPlayingAudio) 0.3f else 1.0f
+            val startVol  = if (isPlayingAudio) 1.0f else 0.3f
+            val steps = 20
+            val stepDelayMs = 50L // total fade duration = 20 * 50ms = 1 second
+            for (i in 1..steps) {
+                val vol = startVol + (targetVol - startVol) * (i.toFloat() / steps)
+                mp.setVolume(vol, vol)
+                delay(stepDelayMs)
+            }
+            mp.setVolume(targetVol, targetVol) // ensure exact target at end
+            Log.d("VideoScreenSaver", "Smooth volume fade complete → $targetVol")
+        } catch (e: Exception) {
+            Log.e("VideoScreenSaver", "Error during smooth volume fade: ${e.message}")
+        }
+    }
     
     // Manage MediaPlayer lifecycle
     DisposableEffect(url) {
@@ -551,6 +721,8 @@ fun VideoScreenSaver(url: String) {
                                     setDataSource(ctx, android.net.Uri.parse(url))
                                 }
                                 
+                                val initialVol = if (isPlayingAudio) 0.3f else 1.0f
+                                setVolume(initialVol, initialVol)
                                 setOnPreparedListener { 
                                     start() 
                                 }
@@ -684,7 +856,7 @@ fun GlassmorphicWelcomeCard(
                 .padding(16.dp) // Applied padding internally to Column to keep text aligned safely!
         ) {
             Text(
-                text = "Welcome, ${formatName(guestName)}",
+                text = "Welcome, $guestName",
                 color = Color(0xFF292A2C),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,

@@ -31,7 +31,12 @@ data class WelcomeData(
     val roomImageAlignX: Float = 1.0f,
     val roomImageAlignY: Float = 0.0f,
     val voEnAudioUrl: String = "",
-    val voIdAudioUrl: String = ""
+    val voIdAudioUrl: String = "",
+    val voEnVoiceName: String = "",
+    val voIdVoiceName: String = "",
+    val zoom: Float = 1.0f,
+    val offsetX: Float = 0.0f,
+    val offsetY: Float = 0.0f
 )
 
 @Serializable

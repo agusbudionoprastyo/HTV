@@ -109,21 +109,33 @@ fun isValidImageUrl(url: String?): Boolean {
 }
 
 fun formatNameID(fname: String, gender: String? = null): String {
+    val cleanName = fname.replace("Mr. ", "", ignoreCase = true)
+                         .replace("Mrs. ", "", ignoreCase = true)
+                         .replace("Mr ", "", ignoreCase = true)
+                         .replace("Mrs ", "", ignoreCase = true)
+                         .replace("Bapak ", "", ignoreCase = true)
+                         .replace("Ibu ", "", ignoreCase = true)
     val prefix = when (gender?.lowercase()) {
         "male" -> "Bapak "
         "female" -> "Ibu "
         else -> ""
     }
-    return prefix + fname
+    return prefix + cleanName
 }
 
 fun formatNameEN(fname: String, gender: String? = null): String {
+    val cleanName = fname.replace("Mr. ", "", ignoreCase = true)
+                         .replace("Mrs. ", "", ignoreCase = true)
+                         .replace("Mr ", "", ignoreCase = true)
+                         .replace("Mrs ", "", ignoreCase = true)
+                         .replace("Bapak ", "", ignoreCase = true)
+                         .replace("Ibu ", "", ignoreCase = true)
     val prefix = when (gender?.lowercase()) {
         "male" -> "Mr. "
         "female" -> "Mrs. "
         else -> ""
     }
-    return prefix + fname
+    return prefix + cleanName
 }
 
 @Composable
@@ -326,7 +338,8 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                     roomnight = roomnightVal,
                                     roomtype = dataSnapshot.child("roomtype").getValue(String::class.java) ?: "",
                                     guestImageUrl = dataSnapshot.child("guestImageUrl").getValue(String::class.java) ?: "",
-                                    isSmoking = dataSnapshot.child("isSmoking").getValue(Boolean::class.java) == true
+                                    isSmoking = dataSnapshot.child("isSmoking").getValue(Boolean::class.java) == true,
+                                    gender = dataSnapshot.child("gender").getValue(String::class.java) ?: ""
                                 )
                             } catch (manualEx: Exception) {
                                 Log.e("WelcomeScreen", "Failed manual parse of GuestInfo", manualEx)
@@ -521,12 +534,18 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
         // English sequence
         if (welcomeData.voEn.isNotEmpty()) {
             val greetingEn = "Hello! ${formatNameEN(name, guestInfo?.gender)}."
-            Log.d("WelcomeScreen", "Synthesizing dynamic English greeting: $greetingEn")
+            val voiceNameEn = if (welcomeData.voEnVoiceName.isNotEmpty()) welcomeData.voEnVoiceName else "en-US-Neural2-F"
+            val languageCodeEn = if (voiceNameEn.contains("-")) {
+                voiceNameEn.split("-").take(2).joinToString("-")
+            } else {
+                "en-US"
+            }
+            Log.d("WelcomeScreen", "Synthesizing dynamic English greeting: $greetingEn with voice: $voiceNameEn, lang: $languageCodeEn")
             val enGreetingFile = GoogleTtsHelper.synthesizeSpeech(
                 context = context,
                 text = greetingEn,
-                languageCode = "en-US",
-                voiceName = "en-US-Neural2-F"
+                languageCode = languageCodeEn,
+                voiceName = voiceNameEn
             )
             if (enGreetingFile != null && !hasNavigatedState.value && !audioDisabledState.value) {
                 playAudioFile(context, enGreetingFile)
@@ -542,12 +561,18 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
         // Indonesian sequence
         if (welcomeData.voId.isNotEmpty()) {
             val greetingId = "Halo! ${formatNameID(name, guestInfo?.gender)}."
-            Log.d("WelcomeScreen", "Synthesizing dynamic Indonesian greeting: $greetingId")
+            val voiceNameId = if (welcomeData.voIdVoiceName.isNotEmpty()) welcomeData.voIdVoiceName else "id-ID-Wavenet-B"
+            val languageCodeId = if (voiceNameId.contains("-")) {
+                voiceNameId.split("-").take(2).joinToString("-")
+            } else {
+                "id-ID"
+            }
+            Log.d("WelcomeScreen", "Synthesizing dynamic Indonesian greeting: $greetingId with voice: $voiceNameId, lang: $languageCodeId")
             val idGreetingFile = GoogleTtsHelper.synthesizeSpeech(
                 context = context,
                 text = greetingId,
-                languageCode = "id-ID",
-                voiceName = "id-ID-Neural2-B"
+                languageCode = languageCodeId,
+                voiceName = voiceNameId
             )
             if (idGreetingFile != null && !hasNavigatedState.value && !audioDisabledState.value) {
                 playAudioFile(context, idGreetingFile)
@@ -758,11 +783,21 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
             androidx.compose.ui.BiasAlignment(welcomeData.roomImageAlignX, welcomeData.roomImageAlignY)
         }
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val guestImageTransX = remember(guestImageOffsetX, density) {
-            with(density) { guestImageOffsetX.dp.toPx() }
+        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+        val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+        val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+
+        val guestImageTransX = remember(guestImageOffsetX, screenWidthPx) {
+            (guestImageOffsetX / 1920f) * screenWidthPx
         }
-        val guestImageTransY = remember(guestImageOffsetY, density) {
-            with(density) { guestImageOffsetY.dp.toPx() }
+        val guestImageTransY = remember(guestImageOffsetY, screenHeightPx) {
+            (guestImageOffsetY / 1080f) * screenHeightPx
+        }
+        val roomImageTransX = remember(welcomeData.offsetX, screenWidthPx) {
+            (welcomeData.offsetX / 1920f) * screenWidthPx
+        }
+        val roomImageTransY = remember(welcomeData.offsetY, screenHeightPx) {
+            (welcomeData.offsetY / 1080f) * screenHeightPx
         }
 
         // 1. Draw the Room Image fallback as the base underlay (occupies full screen)
@@ -771,28 +806,41 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
             contentDescription = "Room Image fallback",
             modifier = Modifier
                 .fillMaxSize()
-                .alpha(roomImageAlpha),
+                .alpha(roomImageAlpha)
+                .graphicsLayer(
+                    scaleX = welcomeData.zoom,
+                    scaleY = welcomeData.zoom,
+                    translationX = roomImageTransX,
+                    translationY = roomImageTransY
+                ),
             contentScale = ContentScale.Crop,
             alignment = roomImageAlignment
         )
 
-        // 2. Draw the Guest Image on top if guestImageUrl is not empty (occupies full screen)
+        // 2. Draw the Guest Image on top if guestImageUrl is not empty (occupies right 45% screen)
         if (guestImageUrl.isNotEmpty()) {
-            Image(
-                painter = guestImage,
-                contentDescription = "Guest Image",
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .alpha(guestImageAlpha)
-                    .graphicsLayer(
-                        scaleX = guestImageZoom,
-                        scaleY = guestImageZoom,
-                        translationX = guestImageTransX,
-                        translationY = guestImageTransY
-                    ),
-                contentScale = ContentScale.Crop,
-                alignment = Alignment.CenterEnd
-            )
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.50f)
+                    .align(Alignment.CenterEnd)
+            ) {
+                Image(
+                    painter = guestImage,
+                    contentDescription = "Guest Image",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .alpha(guestImageAlpha)
+                        .graphicsLayer(
+                            scaleX = guestImageZoom,
+                            scaleY = guestImageZoom,
+                            translationX = guestImageTransX,
+                            translationY = guestImageTransY
+                        ),
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.Center
+                )
+            }
         }
 
         // 3. Background Layer (CMS Background Image or Solid Fallback Color) drawn ON TOP of the images.
@@ -929,7 +977,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Dear ${formatName(guestInfo?.fname ?: "Guest Name", guestInfo?.gender)}",
+                        text = "Dear ${formatNameEN(guestInfo?.fname ?: "Guest Name", guestInfo?.gender)}",
                         modifier = Modifier
                             .padding(0.dp),
                         color = Color.White,
@@ -979,7 +1027,6 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                  fontWeight = FontWeight.Bold,
                                  textAlign = TextAlign.Center
                              )
- 
                              if (welcomeData.signUrl.isNotEmpty()) {
                                  val signImage = rememberCachedPainter(welcomeData.signUrl, null)
                                  android.util.Log.d("WelcomeScreen", "Signature image state: URL='${welcomeData.signUrl}', State=${signImage.state}")
@@ -988,8 +1035,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                      contentDescription = "sign",
                                      modifier = Modifier
                                          .width(130.dp)
-                                         .height(75.dp)
-                                         .offset(y = 16.dp),
+                                         .height(75.dp),
                                      contentScale = ContentScale.Fit,
                                      colorFilter = ColorFilter.tint(Color.White)
                                  )
