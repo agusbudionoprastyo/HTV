@@ -181,3 +181,21 @@ data class TelegramMessageRequest(
     @SerialName("parse_mode")
     val parse_mode: String
 )
+
+@Serializable
+data class FcmV1Notification(
+    val title: String,
+    val body: String
+)
+
+@Serializable
+data class FcmV1Message(
+    val topic: String,
+    val notification: FcmV1Notification,
+    val data: Map<String, String>? = null
+)
+
+@Serializable
+data class FcmV1MessageRequest(
+    val message: FcmV1Message
+)

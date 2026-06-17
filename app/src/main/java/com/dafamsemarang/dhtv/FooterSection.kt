@@ -3832,6 +3832,21 @@ Status ini menandakan bahwa tamu tidak ingin diganggu untuk sementara waktu. Sta
 
                                     Log.d("FooterSection", "Step 3: Calling sendPostDnDToApi with message")
                                     sendPostDnDToApi(context, message)
+                                    
+                                    // Trigger FCM Notification
+                                    val dndTitle = if (release) "DND Status Dibatalkan" else "DND Status Aktif"
+                                    val dndBody = "Kamar $escapedRoom " + (if (release) "tidak lagi dalam status 'Do Not Disturb'." else "sekarang dalam status 'Do Not Disturb'.")
+                                    FcmHelper.sendFcmNotification(
+                                        context = context,
+                                        type = "DND",
+                                        title = dndTitle,
+                                        bodyText = dndBody,
+                                        additionalData = mapOf(
+                                            "room" to escapedRoom,
+                                            "guestName" to escapedFname,
+                                            "release" to release.toString()
+                                        )
+                                    )
                                 } else {
                                     Log.e("sendFolioDetails", "Data guest tidak ditemukan")
                                 }

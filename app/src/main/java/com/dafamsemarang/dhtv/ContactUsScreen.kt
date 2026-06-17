@@ -1654,6 +1654,21 @@ fun sendRequestToDatabase(
            branchId,
            gender
        )
+       
+       // Trigger FCM Notification
+       FcmHelper.sendFcmNotification(
+           context = context,
+           type = "REQUEST",
+           title = "Request Baru",
+           bodyText = "Kamar $guestRoom - $guestName meminta: " + (requests.firstOrNull()?.request_title ?: ""),
+           additionalData = mapOf(
+               "requestId" to requestId,
+               "room" to guestRoom,
+               "guestName" to guestName,
+               "requestTitle" to (requests.firstOrNull()?.request_title ?: ""),
+               "note" to note
+           )
+       )
    }.addOnFailureListener {
        Log.e("DHTV_CONTACT", "Failed to save request to Firebase")
    }

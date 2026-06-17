@@ -786,7 +786,25 @@ fun sendOrderToDatabase(context: Context, folioId: Int, guestName: String, guest
     )
 
     val ordersRef = database.child("BRANCHES").child(branchId!!).child("ORDERS").push()
-    ordersRef.setValue(order)
+    ordersRef.setValue(order).addOnSuccessListener {
+        // Trigger FCM Notification
+        val itemNames = selectedItems.joinToString(", ") { it.item.name }
+        FcmHelper.sendFcmNotification(
+            context = context,
+            type = "ROOM_SERVICE",
+            title = "Pesanan Baru",
+            bodyText = "Kamar $guestRoom - $guestName memesan: $itemNames",
+            additionalData = mapOf(
+                "orderId" to orderId,
+                "room" to guestRoom,
+                "guestName" to guestName,
+                "paymentMethod" to paymentMethod,
+                "total" to order.total.toString()
+            )
+        )
+    }.addOnFailureListener { e ->
+        Log.e("DHTV_FOOD", "Failed to save order to Firebase: ${e.message}")
+    }
 }
 
 fun sendPostOrderToApi(
