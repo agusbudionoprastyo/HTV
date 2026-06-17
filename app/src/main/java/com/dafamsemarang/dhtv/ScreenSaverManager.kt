@@ -577,29 +577,35 @@ fun ScreenSaverOverlay() {
 
             // Company logo overlay — top-right corner
             val logoUrl = ScreenSaverManager.companyIconUrl
-            if (!logoUrl.isNullOrEmpty()) {
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn(animationSpec = tween(1500)),
-                    exit = fadeOut(animationSpec = tween(800)),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 24.dp, end = 28.dp)
-                ) {
-                    Image(
-                        painter = rememberAsyncImagePainter(model = logoUrl),
+            val logoContext = LocalContext.current
+            val svgAwareImageLoader = remember(logoContext) {
+                coil.ImageLoader.Builder(logoContext)
+                    .components { add(coil.decode.SvgDecoder.Factory()) }
+                    .build()
+            }
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(1500)),
+                exit = fadeOut(animationSpec = tween(800)),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 24.dp, end = 28.dp)
+            ) {
+                if (logoUrl.isNullOrEmpty()) {
+                    Text(
+                        text = "Your Logo Company",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp,
+                        letterSpacing = 1.5.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                } else {
+                    coil.compose.AsyncImage(
+                        model = logoUrl,
+                        imageLoader = svgAwareImageLoader,
                         contentDescription = "Company Logo",
-                        modifier = Modifier
-                            .size(80.dp)
-                            .drawBehind {
-                                // subtle drop shadow
-                                drawCircle(
-                                    color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.25f),
-                                    radius = size.minDimension / 2f + 4.dp.toPx(),
-                                    center = center.copy(y = center.y + 3.dp.toPx()),
-                                    style = Stroke(width = 0f)
-                                )
-                            },
+                        modifier = Modifier.size(80.dp),
                         contentScale = ContentScale.Fit
                     )
                 }
