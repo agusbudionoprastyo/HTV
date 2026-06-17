@@ -69,6 +69,7 @@ object ScreenSaverManager {
     var welcomeMessage by mutableStateOf("")
     var signUrl by mutableStateOf("")
     var gmName by mutableStateOf("")
+    var gmTitle by mutableStateOf("General Manager")
     var companyIconUrl by mutableStateOf<String?>(null)
     
     // Video Caching States
@@ -200,11 +201,13 @@ object ScreenSaverManager {
                         welcomeMessage = snapshot.child("welcomeMessage").getValue(String::class.java) ?: ""
                         signUrl = snapshot.child("signUrl").getValue(String::class.java) ?: ""
                         gmName = snapshot.child("gm").getValue(String::class.java) ?: ""
+                        gmTitle = snapshot.child("gmTitle").getValue(String::class.java) ?: "General Manager"
                         Log.d("ScreenSaverManager", "Welcome letter loaded for screensaver. Message: $welcomeMessage, Sign: $signUrl")
                     } else {
                         welcomeMessage = ""
                         signUrl = ""
                         gmName = ""
+                        gmTitle = "General Manager"
                     }
                 } catch (e: Exception) {
                     Log.e("ScreenSaverManager", "Error parsing WELCOME_LETTER: ${e.message}")
@@ -233,6 +236,7 @@ object ScreenSaverManager {
         screensaverRef.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 try {
+                    android.util.Log.d("ScreenSaverManager", "SCREEN_SAVER raw snapshot: ${snapshot.value}")
                     if (!snapshot.exists()) {
                         Log.w("ScreenSaverManager", "Screensaver setting path does not exist in Firebase")
                         return
@@ -256,9 +260,18 @@ object ScreenSaverManager {
                         }
                     }
                     
-                    // Parse Welcome Screen Setting
+                    // Parse Welcome Screen Setting (with fallbacks for key variations)
                     val welcomeSnapshot = snapshot.child("WELCOME_SCREEN")
-                    val newWelcomeActive = welcomeSnapshot.child("ACTIVE").getValue(Boolean::class.java) ?: false
+                    var newWelcomeActive = welcomeSnapshot.child("ACTIVE").getValue(Boolean::class.java) ?: false
+                    
+                    if (!newWelcomeActive) {
+                        val welcomeLetterSnapshot = snapshot.child("WELCOME_LETTER")
+                        newWelcomeActive = welcomeLetterSnapshot.child("ACTIVE").getValue(Boolean::class.java) ?: false
+                    }
+                    if (!newWelcomeActive) {
+                        val welcomeOnlySnapshot = snapshot.child("WELCOME")
+                        newWelcomeActive = welcomeOnlySnapshot.child("ACTIVE").getValue(Boolean::class.java) ?: false
+                    }
                     
                     // CRITICAL: Only update states if values have ACTUALLY changed.
                     // This prevents infinite recomposition/rendering loops!
@@ -458,6 +471,7 @@ fun ScreenSaverOverlay() {
                             welcomeMessage = ScreenSaverManager.welcomeMessage,
                             signUrl = ScreenSaverManager.signUrl,
                             gmName = ScreenSaverManager.gmName,
+                            gmTitle = ScreenSaverManager.gmTitle,
                             guestImageUrl = ScreenSaverManager.guestImageUrl
                         )
                     }
@@ -635,6 +649,7 @@ fun GlassmorphicWelcomeCard(
     welcomeMessage: String,
     signUrl: String,
     gmName: String,
+    gmTitle: String,
     guestImageUrl: String
 ) {
     Box(
@@ -740,23 +755,22 @@ fun GlassmorphicWelcomeCard(
                     Spacer(modifier = Modifier.height(44.dp))
                 }
 
-                Text(
-                    text = "General Manager",
-                    color = Color(0xFF292A2C),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Start
-                )
                 if (gmName.isNotEmpty()) {
                     Text(
                         text = gmName,
-                        color = Color(0xFF292A2C).copy(alpha = 0.8f),
-                        fontSize = 11.sp,
+                        color = Color(0xFF292A2C),
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.offset(y = (-12).dp)
+                        textAlign = TextAlign.Start
                     )
                 }
+                Text(
+                    text = if (gmTitle.isNullOrEmpty()) "General Manager" else gmTitle,
+                    color = Color(0xFF292A2C).copy(alpha = 0.8f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Start
+                )
             }
         }
     }

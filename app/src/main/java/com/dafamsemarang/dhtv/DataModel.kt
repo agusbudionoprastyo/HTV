@@ -26,7 +26,12 @@ data class WelcomeData(
     val roomImageUrl: String = "",
     val backgroundUrl: String = "",
     val gm: String = "",
-    val signUrl: String = ""
+    val signUrl: String = "",
+    val gmTitle: String = "General Manager",
+    val roomImageAlignX: Float = 1.0f,
+    val roomImageAlignY: Float = 0.0f,
+    val voEnAudioUrl: String = "",
+    val voIdAudioUrl: String = ""
 )
 
 @Serializable

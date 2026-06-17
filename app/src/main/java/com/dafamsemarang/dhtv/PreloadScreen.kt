@@ -72,6 +72,9 @@ fun PreloadScreen(onPreloadFinished: () -> Unit) {
                     if (url.endsWith(".mp4")) {
                         // Video
                          preloadVideo(context, url)
+                    } else if (url.contains(".mp3") || url.contains("audio")) {
+                        // Audio
+                        preloadAudio(context, url)
                     } else {
                         // Image
                         preloadImage(context, url)
@@ -177,6 +180,8 @@ private suspend fun fetchAllContentUrls(context: Context, branchId: String): Lis
                 welcomeRef.child("backgroundUrl").getValue(String::class.java)?.let { if (it.isNotEmpty()) urls.add(it) }
                 welcomeRef.child("roomImageUrl").getValue(String::class.java)?.let { if (it.isNotEmpty()) urls.add(it) }
                 welcomeRef.child("signUrl").getValue(String::class.java)?.let { if (it.isNotEmpty()) urls.add(it) }
+                welcomeRef.child("voEnAudioUrl").getValue(String::class.java)?.let { if (it.isNotEmpty()) urls.add(it) }
+                welcomeRef.child("voIdAudioUrl").getValue(String::class.java)?.let { if (it.isNotEmpty()) urls.add(it) }
 
                 // 7. Company Icon
                 val iconUrl = snapshot.child("SETTING").child("COMPANY_ICON").child("iconUrl").getValue(String::class.java)
@@ -251,4 +256,8 @@ private suspend fun preloadVideo(context: Context, url: String) = suspendCorouti
             }
         )
     }
+}
+
+private suspend fun preloadAudio(context: Context, url: String) {
+    AudioCacheHelper.downloadAndCacheAudio(context, url)
 }

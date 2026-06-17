@@ -1,8 +1,6 @@
 package com.dafamsemarang.dhtv
 
-import android.speech.tts.TextToSpeech
 import android.content.Context
-import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -46,6 +44,8 @@ import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import java.util.Locale
+import java.io.File
+import kotlin.coroutines.resume
 import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -152,15 +152,16 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
 
     var guestInfo by remember(pairingSessionKey) { mutableStateOf<GuestInfo?>(null) }
     var guestImageUrl by remember(pairingSessionKey) { mutableStateOf("") }
+    var guestImageZoom by remember(pairingSessionKey) { mutableStateOf(1.0f) }
+    var guestImageOffsetX by remember(pairingSessionKey) { mutableStateOf(0.0f) }
+    var guestImageOffsetY by remember(pairingSessionKey) { mutableStateOf(0.0f) }
     var isGuestDataLoaded by remember(pairingSessionKey) { mutableStateOf(false) }
 
     var welcomeData by remember(pairingSessionKey) { mutableStateOf(WelcomeData()) }
 
-    // Initialize Text-to-Speech
-    var textToSpeech by remember(pairingSessionKey) { mutableStateOf<TextToSpeech?>(null) }
-    var isTTSInitialized by remember(pairingSessionKey) { mutableStateOf(false) }
-    // Flag to completely disable TTS operations - checked in all TTS callbacks
-    var ttsDisabled by remember(pairingSessionKey) { mutableStateOf(false) }
+    // MediaPlayer for vocal greeting and static welcome audio playback
+    var mediaPlayer by remember(pairingSessionKey) { mutableStateOf<android.media.MediaPlayer?>(null) }
+    var audioDisabled by remember(pairingSessionKey) { mutableStateOf(false) }
 
     var showPinDialog by remember(pairingSessionKey) { mutableStateOf(false) }
     var pinInput by remember(pairingSessionKey) { mutableStateOf("") }
@@ -168,9 +169,24 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
     var isExitDialog by remember(pairingSessionKey) { mutableStateOf(false) }
     var hasNavigated by remember(pairingSessionKey) { mutableStateOf(false) }
     
-    // Use rememberUpdatedState to ensure callbacks always see the latest hasNavigated value
+    // Use rememberUpdatedState to ensure callbacks always see the latest values
     val hasNavigatedState = rememberUpdatedState(hasNavigated)
-    val ttsDisabledState = rememberUpdatedState(ttsDisabled)
+    val audioDisabledState = rememberUpdatedState(audioDisabled)
+
+    fun stopAndReleaseAudio() {
+        audioDisabled = true
+        val player = mediaPlayer
+        mediaPlayer = null
+        if (player != null) {
+            try {
+                player.stop()
+                player.release()
+                Log.d("WelcomeScreen", "MediaPlayer stopped and released successfully")
+            } catch (e: Exception) {
+                Log.e("WelcomeScreen", "Error releasing MediaPlayer: ${e.message}")
+            }
+        }
+    }
     
     // Focus requester to ensure Box always has focus for key events
     val focusRequester = remember { FocusRequester() }
@@ -187,17 +203,19 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
     LaunchedEffect(pairingSessionKey) {
         Log.d("WelcomeScreen", "New pairing session: $pairingSessionKey - Resetting all state")
         hasNavigated = false
-        ttsDisabled = false
+        audioDisabled = false
         guestInfo = null
         guestImageUrl = ""
         isGuestDataLoaded = false
         welcomeData = WelcomeData()
         iconUrl = null
-        isTTSInitialized = false
-        // Cleanup old TTS instance if exists
-        textToSpeech?.stop()
-        textToSpeech?.shutdown()
-        textToSpeech = null
+        
+        // Cleanup old MediaPlayer instance if exists
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+        } catch (e: Exception) {}
+        mediaPlayer = null
     }
 
     // Safety fallback timer to prevent infinite loading state if Firebase is slow/offline
@@ -325,17 +343,45 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                         // Setelah mendapatkan guestInfo, ambil data dari GUESTIMAGE
                         guestInfo?.folio?.let { folio ->
                             // Menggunakan folio untuk membangun path yang benar
-                            val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folio.toString()).child("imageUrl")
-                            Log.d("WelcomeScreen", "Fetching guest image from path: BRANCHES/$branchId/GUESTIMAGE/$folio/imageUrl")
+                            val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folio.toString())
+                            Log.d("WelcomeScreen", "Fetching guest image data from path: BRANCHES/$branchId/GUESTIMAGE/$folio")
                             
                             val imageListenerObj = object : ValueEventListener {
                                 override fun onDataChange(imageSnapshot: DataSnapshot) {
                                     // Ambil URL gambar dari child imageUrl
-                                    val imageUrl = imageSnapshot.getValue(String::class.java)
+                                    val imageUrl = imageSnapshot.child("imageUrl").getValue(String::class.java)
+                                    
+                                    // Ambil zoom, offsetX, dan offsetY dari data tamu spesifik ini
+                                    val zoomVal = try {
+                                        imageSnapshot.child("zoom").getValue(Float::class.java)
+                                    } catch (e: Exception) {
+                                        try {
+                                            imageSnapshot.child("zoom").getValue(String::class.java)?.toFloatOrNull()
+                                        } catch (e2: Exception) { null }
+                                    }
+                                    val offsetXVal = try {
+                                        imageSnapshot.child("offsetX").getValue(Float::class.java)
+                                    } catch (e: Exception) {
+                                        try {
+                                            imageSnapshot.child("offsetX").getValue(String::class.java)?.toFloatOrNull()
+                                        } catch (e2: Exception) { null }
+                                    }
+                                    val offsetYVal = try {
+                                        imageSnapshot.child("offsetY").getValue(Float::class.java)
+                                    } catch (e: Exception) {
+                                        try {
+                                            imageSnapshot.child("offsetY").getValue(String::class.java)?.toFloatOrNull()
+                                        } catch (e2: Exception) { null }
+                                    }
+
+                                    guestImageZoom = zoomVal ?: 1.0f
+                                    guestImageOffsetX = offsetXVal ?: 0.0f
+                                    guestImageOffsetY = offsetYVal ?: 0.0f
+
                                     // Simpan URL gambar ke dalam state guestImageUrl, falling back to direct guestImageUrl from FOGUEST if null/empty
                                     val resolvedUrl = if (!imageUrl.isNullOrBlank()) imageUrl else (guest?.guestImageUrl ?: "")
                                     guestImageUrl = if (isValidImageUrl(resolvedUrl)) resolvedUrl else ""
-                                    Log.d("WelcomeScreen", "Guest image URL received: $guestImageUrl")
+                                    Log.d("WelcomeScreen", "Guest image data received: $guestImageUrl, zoom: $guestImageZoom, offsetX: $guestImageOffsetX, offsetY: $guestImageOffsetY")
                                     isGuestDataLoaded = true
                                 }
 
@@ -343,6 +389,9 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                     Log.e("WelcomeScreen", "Error fetching guest image: ${imageError.message}")
                                     val rawFallback = guest?.guestImageUrl ?: ""
                                     guestImageUrl = if (isValidImageUrl(rawFallback)) rawFallback else ""
+                                    guestImageZoom = 1.0f
+                                    guestImageOffsetX = 0.0f
+                                    guestImageOffsetY = 0.0f
                                     isGuestDataLoaded = true
                                 }
                             }
@@ -396,7 +445,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 // Cleanup image listener if it was created
                 imageListener?.let { listener ->
                     guestInfo?.folio?.let { folio ->
-                        val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folio.toString()).child("imageUrl")
+                        val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folio.toString())
                         imageRef.removeEventListener(listener)
                     }
                 }
@@ -414,147 +463,111 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
         }
     }
 
-    // TTS Initialization - reset when pairing session changes
-    // Track if TTS is being initialized to prevent duplication
-    var ttsInitializing by remember(pairingSessionKey) { mutableStateOf(false) }
-    
-    LaunchedEffect(pairingSessionKey) {
-        // Cleanup old TTS instance first
-        val oldTts = textToSpeech
-        if (oldTts != null) {
-            try {
-                oldTts.setOnUtteranceProgressListener(null) // Remove listener first
-                oldTts.stop()
-                oldTts.shutdown()
-                Log.d("WelcomeScreen", "Old TTS instance cleaned up")
-            } catch (e: Exception) {
-                Log.e("WelcomeScreen", "Error cleaning up old TTS: ${e.message}")
-            }
+    // Suspend function to play a single audio file and wait until completion
+    suspend fun playAudioFile(context: Context, file: File) = kotlinx.coroutines.suspendCancellableCoroutine<Unit> { continuation ->
+        val player = android.media.MediaPlayer().apply {
+            setDataSource(file.absolutePath)
+            prepare()
         }
-        textToSpeech = null
-        isTTSInitialized = false
-        ttsInitializing = false
-        
-        // Only initialize TTS if we haven't navigated yet and TTS is not disabled
-        if (!hasNavigated && !ttsDisabled) {
-            // Check if already initializing to prevent duplication
-            if (ttsInitializing) {
-                Log.d("WelcomeScreen", "TTS already initializing - skipping duplicate initialization")
-                return@LaunchedEffect
+        mediaPlayer = player
+        player.setOnPreparedListener {
+            player.start()
+        }
+        player.setOnCompletionListener {
+            player.release()
+            if (mediaPlayer == player) {
+                mediaPlayer = null
             }
-            
-            // Mark as initializing BEFORE initializing to prevent race condition
-            ttsInitializing = true
-            Log.d("WelcomeScreen", "Initializing Text-to-Speech for session: $pairingSessionKey")
-        textToSpeech = TextToSpeech(context) { status ->
-                // Use updated state to check if navigation happened during initialization
-                if (status == TextToSpeech.SUCCESS && !hasNavigatedState.value && !ttsDisabledState.value) {
-                Log.d("WelcomeScreen", "TTS initialized successfully")
-                // Set the initial language to English (or any default language)
-                val result = textToSpeech?.setLanguage(Locale("en", "US"))
-                when (result) {
-                    TextToSpeech.LANG_MISSING_DATA, TextToSpeech.LANG_NOT_SUPPORTED -> {
-                        Log.e("WelcomeScreen", "Language not supported for TTS")
-                    }
-                }
-
-                    // Mark TTS as initialized only if still not disabled
-                    if (!ttsDisabledState.value) {
-                textToSpeech?.setSpeechRate(1f)
-                textToSpeech?.setPitch(1.2f)
-                isTTSInitialized = true
-                Log.d("WelcomeScreen", "TTS settings configured")
-
-                // Set the UtteranceProgressListener
-                        // Store reference to TTS instance for callback
-                        val currentTTS = textToSpeech
-                        currentTTS?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {
-                                // Check navigation status before logging
-                                if (hasNavigatedState.value || ttsDisabledState.value) {
-                                    Log.d("WelcomeScreen", "TTS started but navigation already occurred - ignoring")
-                                    return
-                                }
-                        Log.d("WelcomeScreen", "Started speaking: $utteranceId")
-                    }
-
-                    override fun onDone(utteranceId: String?) {
-                        Log.d("WelcomeScreen", "Finished speaking: $utteranceId")
-                                // Use updated state to check current navigation status - check FIRST before any operations
-                                if (hasNavigatedState.value || ttsDisabledState.value || currentTTS == null) {
-                                    Log.d("WelcomeScreen", "Skipping next TTS message - hasNavigated: ${hasNavigatedState.value}, TTS disabled: ${ttsDisabledState.value}, TTS null: ${currentTTS == null}")
-                                    return
-                                }
-                        // Check if we finished speaking the English message
-                                if (utteranceId == "english" && currentTTS != null && !hasNavigatedState.value && !ttsDisabledState.value) {
-                                    try {
-                            // After English, switch to Indonesian language and speak
-                                        currentTTS.language = Locale("id", "ID")
-                            val indonesianMessage = "Halo! ${formatNameID(guestInfo?.fname ?: "Nama Tamu", guestInfo?.gender)}. ${welcomeData.voId.replace("\\n", "")}"
-                            Log.d("WelcomeScreen", "Speaking Indonesian message: $indonesianMessage")
-                                        currentTTS.speak(indonesianMessage, TextToSpeech.QUEUE_FLUSH, null, "indonesian")
-                                    } catch (e: Exception) {
-                                        Log.e("WelcomeScreen", "Error speaking Indonesian TTS: ${e.message}")
-                                    }
-                        }
-                    }
-
-                    override fun onError(utteranceId: String?) {
-                        Log.e("WelcomeScreen", "Error in TTS for utterance: $utteranceId")
-                    }
-
-                    override fun onStop(utteranceId: String?, interrupted: Boolean) {
-                        Log.d("WelcomeScreen", "TTS stopped for utterance: $utteranceId, interrupted: $interrupted")
-                    }
-                })
-                        ttsInitializing = false
-                    } else {
-                        Log.d("WelcomeScreen", "TTS initialization completed but TTS was disabled during init")
-                    }
-                } else {
-                    if (hasNavigatedState.value || ttsDisabledState.value) {
-                        Log.d("WelcomeScreen", "TTS initialization skipped - already navigated or disabled")
-            } else {
-                Log.e("WelcomeScreen", "Failed to initialize TTS, status: $status")
+            continuation.resume(Unit)
+        }
+        player.setOnErrorListener { _, _, _ ->
+            player.release()
+            if (mediaPlayer == player) {
+                mediaPlayer = null
             }
-                }
+            continuation.resume(Unit)
+            true
+        }
+        continuation.invokeOnCancellation {
+            try {
+                player.stop()
+                player.release()
+            } catch (e: Exception) {}
+            if (mediaPlayer == player) {
+                mediaPlayer = null
             }
-        } else {
-            Log.d("WelcomeScreen", "Skipping TTS initialization - already navigated or disabled")
         }
     }
 
-    // Speak guest's name twice (English first, then Indonesian)
-    // Include isTTSInitialized as dependency to trigger when TTS becomes ready
-    LaunchedEffect(guestInfo, isTTSInitialized, welcomeData.voEn, hasNavigated, ttsDisabled, pairingSessionKey) {
-        // Don't speak if user already navigated, TTS is disabled, or TTS is null
-        if (hasNavigated || ttsDisabled || textToSpeech == null) {
-            Log.d("WelcomeScreen", "Skipping TTS - hasNavigated: $hasNavigated, TTS disabled: $ttsDisabled, TTS null: ${textToSpeech == null}")
-            return@LaunchedEffect
-        }
-        
-        // Wait for both TTS to be initialized AND guestInfo to be available
-        if (isTTSInitialized && !guestInfo?.fname.isNullOrBlank() && textToSpeech != null && !ttsDisabled && welcomeData.voEn.isNotEmpty()) {
-            val messageEn = welcomeData.voEn.replace("\\n", "")
-            // Prepare the message for English
-            val englishMessage = "Hello! ${formatNameEN(guestInfo?.fname ?: "Guest Name", guestInfo?.gender)}. $messageEn"
-            Log.d("WelcomeScreen", "Speaking English message: $englishMessage")
-            // Speak the message in English and tag it with "english" as an utterance ID
-            try {
-            textToSpeech?.speak(englishMessage, TextToSpeech.QUEUE_FLUSH, null, "english")
-            } catch (e: Exception) {
-                Log.e("WelcomeScreen", "Error speaking TTS: ${e.message}")
-            }
+    suspend fun playAudioUrl(context: Context, url: String) {
+        val file = AudioCacheHelper.getAudioCacheFile(context, url)
+        if (file.exists() && file.length() > 0) {
+            playAudioFile(context, file)
         } else {
-            Log.w("WelcomeScreen", "Cannot speak message: TTS initialized: $isTTSInitialized, Guest name: ${guestInfo?.fname}, TTS: ${textToSpeech != null}, TTS disabled: $ttsDisabled, Welcome message: ${welcomeData.voEn.isNotEmpty()}")
+            val downloadedFile = AudioCacheHelper.downloadAndCacheAudio(context, url)
+            if (downloadedFile != null) {
+                playAudioFile(context, downloadedFile)
+            }
         }
     }
 
-    // Remember to clean up TTS when composable is disposed
+    // Sequence of audio playback for both English and Indonesian greetings + static messages
+    LaunchedEffect(guestInfo, welcomeData, hasNavigated, audioDisabled, pairingSessionKey) {
+        if (hasNavigated || audioDisabled || guestInfo == null) return@LaunchedEffect
+        
+        val name = guestInfo?.fname ?: ""
+        if (name.isEmpty()) return@LaunchedEffect
+
+        // English sequence
+        if (welcomeData.voEn.isNotEmpty()) {
+            val greetingEn = "Hello! ${formatNameEN(name, guestInfo?.gender)}."
+            Log.d("WelcomeScreen", "Synthesizing dynamic English greeting: $greetingEn")
+            val enGreetingFile = GoogleTtsHelper.synthesizeSpeech(
+                context = context,
+                text = greetingEn,
+                languageCode = "en-US",
+                voiceName = "en-US-Neural2-F"
+            )
+            if (enGreetingFile != null && !hasNavigatedState.value && !audioDisabledState.value) {
+                playAudioFile(context, enGreetingFile)
+                try { enGreetingFile.delete() } catch (e: Exception) {}
+            }
+        }
+        
+        if (welcomeData.voEnAudioUrl.isNotEmpty() && !hasNavigatedState.value && !audioDisabledState.value) {
+            Log.d("WelcomeScreen", "Playing static English welcome audio: ${welcomeData.voEnAudioUrl}")
+            playAudioUrl(context, welcomeData.voEnAudioUrl)
+        }
+
+        // Indonesian sequence
+        if (welcomeData.voId.isNotEmpty()) {
+            val greetingId = "Halo! ${formatNameID(name, guestInfo?.gender)}."
+            Log.d("WelcomeScreen", "Synthesizing dynamic Indonesian greeting: $greetingId")
+            val idGreetingFile = GoogleTtsHelper.synthesizeSpeech(
+                context = context,
+                text = greetingId,
+                languageCode = "id-ID",
+                voiceName = "id-ID-Neural2-B"
+            )
+            if (idGreetingFile != null && !hasNavigatedState.value && !audioDisabledState.value) {
+                playAudioFile(context, idGreetingFile)
+                try { idGreetingFile.delete() } catch (e: Exception) {}
+            }
+        }
+
+        if (welcomeData.voIdAudioUrl.isNotEmpty() && !hasNavigatedState.value && !audioDisabledState.value) {
+            Log.d("WelcomeScreen", "Playing static Indonesian welcome audio: ${welcomeData.voIdAudioUrl}")
+            playAudioUrl(context, welcomeData.voIdAudioUrl)
+        }
+    }
+
     DisposableEffect(context) {
         onDispose {
-            textToSpeech?.stop()
-            textToSpeech?.shutdown()
+            try {
+                mediaPlayer?.stop()
+                mediaPlayer?.release()
+            } catch (e: Exception) {}
+            mediaPlayer = null
         }
     }
 
@@ -696,38 +709,16 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                     val startTime = System.currentTimeMillis()
                     Log.d("WelcomeScreen", "OK button pressed from remote - hasNavigated: $hasNavigated")
                     if (!hasNavigated) {
-                        // Set flags FIRST to prevent any TTS operations
+                        // Set flags FIRST to prevent any audio operations
                         hasNavigated = true
-                        ttsDisabled = true
-                        Log.d("WelcomeScreen", "OK pressed - disabling TTS and navigating immediately")
+                        stopAndReleaseAudio()
+                        Log.d("WelcomeScreen", "OK pressed - disabling audio and navigating immediately")
                         
-                        // Navigate IMMEDIATELY - don't wait for TTS to stop
+                        // Navigate IMMEDIATELY - don't wait for MediaPlayer to stop
                         val navStartTime = System.currentTimeMillis()
                         onNavigateToHome()
                         val navDuration = System.currentTimeMillis() - navStartTime
                         Log.d("WelcomeScreen", "Navigation call completed in ${navDuration}ms")
-                        
-                        // Stop TTS immediately and aggressively (don't block navigation)
-                        val tts = textToSpeech
-                        textToSpeech = null // Clear reference FIRST
-                        // Remove listener before stopping to prevent callbacks
-                        try {
-                            tts?.setOnUtteranceProgressListener(null)
-                        } catch (e: Exception) {
-                            Log.e("WelcomeScreen", "Error removing TTS listener: ${e.message}")
-                        }
-                        // Stop TTS in background thread
-                        Handler(Looper.getMainLooper()).post {
-                            try {
-                                if (tts != null) {
-                                    tts.stop()
-                                    tts.shutdown()
-                                    Log.d("WelcomeScreen", "TTS stopped and shutdown in background")
-                                }
-                            } catch (e: Exception) {
-                                Log.e("WelcomeScreen", "Error stopping TTS: ${e.message}")
-                            }
-                        }
                         
                         val totalDuration = System.currentTimeMillis() - startTime
                         Log.d("WelcomeScreen", "Total OK button handling time: ${totalDuration}ms")
@@ -744,36 +735,16 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                     val startTime = System.currentTimeMillis()
                     Log.d("WelcomeScreen", "Screen clicked - hasNavigated: $hasNavigated")
                     if (!hasNavigated) {
-                        // Set flags FIRST to prevent any TTS operations
+                        // Set flags FIRST to prevent any audio operations
                         hasNavigated = true
-                        ttsDisabled = true
-                        Log.d("WelcomeScreen", "OK pressed - disabling TTS and navigating immediately")
+                        stopAndReleaseAudio()
+                        Log.d("WelcomeScreen", "Screen clicked - disabling audio and navigating immediately")
                         
-                        // Navigate IMMEDIATELY - don't wait for TTS to stop
+                        // Navigate IMMEDIATELY - don't wait for MediaPlayer to stop
                         val navStartTime = System.currentTimeMillis()
                         onNavigateToHome()
                         val navDuration = System.currentTimeMillis() - navStartTime
                         Log.d("WelcomeScreen", "Navigation call completed in ${navDuration}ms")
-                        
-                        // Stop TTS immediately and aggressively (don't block navigation)
-                        val tts = textToSpeech
-                        textToSpeech = null // Clear reference FIRST
-                        // Stop TTS immediately on main thread to prevent callbacks
-                        Handler(Looper.getMainLooper()).post {
-                            try {
-                                if (tts != null) {
-                                    // Stop TTS FIRST to interrupt any ongoing speech
-                                    tts.stop()
-                                    // Remove listener AFTER stopping to prevent any queued callbacks
-                                    tts.setOnUtteranceProgressListener(null)
-                                    // Shutdown TTS
-                                    tts.shutdown()
-                                    Log.d("WelcomeScreen", "TTS stopped and shutdown - listener removed")
-                                }
-                            } catch (e: Exception) {
-                                Log.e("WelcomeScreen", "Error stopping TTS: ${e.message}")
-                            }
-                        }
                         
                         val totalDuration = System.currentTimeMillis() - startTime
                         Log.d("WelcomeScreen", "Total click handling time: ${totalDuration}ms")
@@ -783,34 +754,49 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 interactionSource = remember { MutableInteractionSource() }
             )
     ) {
-        // 1. Draw the Room Image fallback as the base underlay (occupies right 45% of the screen width)
+        val roomImageAlignment = remember(welcomeData.roomImageAlignX, welcomeData.roomImageAlignY) {
+            androidx.compose.ui.BiasAlignment(welcomeData.roomImageAlignX, welcomeData.roomImageAlignY)
+        }
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val guestImageTransX = remember(guestImageOffsetX, density) {
+            with(density) { guestImageOffsetX.dp.toPx() }
+        }
+        val guestImageTransY = remember(guestImageOffsetY, density) {
+            with(density) { guestImageOffsetY.dp.toPx() }
+        }
+
+        // 1. Draw the Room Image fallback as the base underlay (occupies full screen)
         Image(
             painter = roomImage,
             contentDescription = "Room Image fallback",
             modifier = Modifier
-                .fillMaxHeight()
-                .align(Alignment.CenterEnd)
-                .fillMaxWidth(0.45f)
+                .fillMaxSize()
                 .alpha(roomImageAlpha),
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Crop,
+            alignment = roomImageAlignment
         )
 
-        // 2. Draw the Guest Image on top if guestImageUrl is not empty (occupies right 45% of the screen width)
+        // 2. Draw the Guest Image on top if guestImageUrl is not empty (occupies full screen)
         if (guestImageUrl.isNotEmpty()) {
             Image(
                 painter = guestImage,
                 contentDescription = "Guest Image",
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .align(Alignment.CenterEnd)
-                    .fillMaxWidth(0.45f)
-                    .alpha(guestImageAlpha),
-                contentScale = ContentScale.Crop
+                    .fillMaxSize()
+                    .alpha(guestImageAlpha)
+                    .graphicsLayer(
+                        scaleX = guestImageZoom,
+                        scaleY = guestImageZoom,
+                        translationX = guestImageTransX,
+                        translationY = guestImageTransY
+                    ),
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.CenterEnd
             )
         }
 
         // 3. Background Layer (CMS Background Image or Solid Fallback Color) drawn ON TOP of the images.
-        // We apply a PorterDuff DstIn mask to make it transparent on the right, letting the images show through!
+        // We apply a PorterDuff DstOut mask on the right-hand path to make it transparent, letting the images show through!
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -819,49 +805,64 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                     // 1. Draw the background content (image or color)
                     drawContent()
                     
-                    // 2. Apply the curved mask using BlendMode.DstIn
-                    // On the left side, we want it to be solid Black (retaining the background)
-                    // On the right side, we want it to be Transparent (showing the images underneath)
+                    // 2. Apply the reversed S-curve mask by clearing the right side using BlendMode.DstOut
                     val w = size.width
                     val h = size.height
                     
-                    val curvedMask = Brush.radialGradient(
-                        colorStops = arrayOf(
-                            0.0f to Color.Transparent,
-                            0.38f to Color.Transparent,       // Right side is transparent (90% screen width)
-                            0.63f to Color.Black,             // Left side is solid Black (60% screen width)
-                            1.0f to Color.Black
-                        ),
-                        center = Offset(w * 1.35f, h * 0.5f), // Center offscreen to the right
-                        radius = w * 1.20f
-                    )
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(w, 0f)
+                        lineTo(w * 0.65f, 0f)
+                        cubicTo(
+                            w * 0.78f, h * 0.3f, // control point 1 (pulls curve right)
+                            w * 0.42f, h * 0.7f, // control point 2 (pulls curve left)
+                            w * 0.58f, h        // end point
+                        )
+                        lineTo(w, h)
+                        close()
+                    }
                     
-                    drawRect(
-                        brush = curvedMask,
-                        blendMode = BlendMode.DstIn
+                    drawPath(
+                        path = path,
+                        color = Color.Black,
+                        blendMode = BlendMode.DstOut
                     )
                 }
         ) {
             // Render the Background Content inside the masked Box
             if (hasBackgroundImage) {
-                Image(
-                    painter = welcomeBackground,
-                    contentDescription = "CMS Background Image",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Image(
+                        painter = welcomeBackground,
+                        contentDescription = "CMS Background Image",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    // Dark semi-transparent overlay to ensure white text is highly readable
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.55f))
+                    )
+                }
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(animatedDominantColor)
-                )
+                ) {
+                    // Apply dark overlay over dominant color background for text readability
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.5f))
+                    )
+                }
             }
         }
 
         Column(
             modifier = Modifier
-                .fillMaxWidth(.6f)
+                .fillMaxWidth(.5f)
                 .fillMaxHeight()
                 .padding(16.dp)
                 .wrapContentSize(Alignment.TopStart),
@@ -880,8 +881,9 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                         .components { add(SvgDecoder.Factory()) }
                         .build()
                 }
-                var isIconLoadError by remember(iconUrl) { mutableStateOf(false) }
-                if (iconUrl != null && iconUrl!!.isNotEmpty()) {
+                val sanitizedIconUrl = remember(iconUrl) { iconUrl?.replace(" ", "%20") ?: "" }
+                var isIconLoadError by remember(sanitizedIconUrl) { mutableStateOf(false) }
+                if (sanitizedIconUrl.isNotEmpty()) {
                     if (isIconLoadError) {
                         Text(
                             text = "Your Company Logo",
@@ -894,14 +896,18 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                         )
                     } else {
                         AsyncImage(
-                            model = iconUrl,
+                            model = sanitizedIconUrl,
                             imageLoader = svgAwareImageLoader,
                             contentDescription = "Company Logo",
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(24.dp),
+                                .height(48.dp),
                             contentScale = ContentScale.Fit,
-                            onError = { isIconLoadError = true }
+                            colorFilter = ColorFilter.tint(Color.White),
+                            onError = { state ->
+                                Log.e("WelcomeScreen", "Failed to load company logo. URL: $sanitizedIconUrl, Error: ${state.result.throwable.message}", state.result.throwable)
+                                isIconLoadError = true
+                            }
                         )
                     }
                 } else {
@@ -926,13 +932,16 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                         text = "Dear ${formatName(guestInfo?.fname ?: "Guest Name", guestInfo?.gender)}",
                         modifier = Modifier
                             .padding(0.dp),
-                        color = Color(0xFF292A2C),
+                        color = Color.White,
                         textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(top = 0.dp),
-                        color = Color(0xFF292A2C),
+                        color = Color.White.copy(alpha = 0.5f),
                         thickness = .5.dp
                     )
                 }
@@ -945,13 +954,13 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = welcomeData.welcomeMessage.replace("\\n", "\n"),
-                        color = Color(0xFF292A2C).copy(alpha = 0.8f),
+                        color = Color.White.copy(alpha = 0.85f),
                         maxLines = Int.MAX_VALUE,
                         overflow = TextOverflow.Visible,
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
                     )
-
+ 
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(0.5f)
@@ -960,17 +969,17 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                     ) {
                         Column(
                             modifier = Modifier
-                                .align(Alignment.BottomStart),
-                            horizontalAlignment = Alignment.Start
+                                .align(Alignment.BottomCenter),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                              Text(
                                  text = "Warm Regards,",
-                                 color = Color(0xFF292A2C).copy(alpha = 0.8f),
+                                 color = Color.White.copy(alpha = 0.85f),
                                  fontSize = 11.sp,
                                  fontWeight = FontWeight.Bold,
-                                 textAlign = TextAlign.Start
+                                 textAlign = TextAlign.Center
                              )
-
+ 
                              if (welcomeData.signUrl.isNotEmpty()) {
                                  val signImage = rememberCachedPainter(welcomeData.signUrl, null)
                                  android.util.Log.d("WelcomeScreen", "Signature image state: URL='${welcomeData.signUrl}', State=${signImage.state}")
@@ -980,33 +989,31 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                      modifier = Modifier
                                          .width(130.dp)
                                          .height(75.dp)
-                                         .offset(y = (16).dp)
-                                         .offset(x = (-16).dp)
-                                         .border(1.5.dp, Color.White.copy(alpha = 0.3f)),
+                                         .offset(y = 16.dp),
                                      contentScale = ContentScale.Fit,
-                                     colorFilter = ColorFilter.tint(Color(0xFF292A2C))
+                                     colorFilter = ColorFilter.tint(Color.White)
                                  )
                              } else {
                                  Spacer(modifier = Modifier.height(44.dp))
                              }
-
-                             Text(
-                                 text = "General Manager",
-                                 color = Color(0xFF292A2C),
-                                 fontSize = 12.sp,
-                                 fontWeight = FontWeight.Bold,
-                                 textAlign = TextAlign.Start
-                             )
+ 
                              if (welcomeData.gm.isNotEmpty()) {
                                  Text(
                                      text = welcomeData.gm,
-                                     color = Color(0xFF292A2C).copy(alpha = 0.8f),
-                                     fontSize = 11.sp,
+                                     color = Color.White,
+                                     fontSize = 12.sp,
                                      fontWeight = FontWeight.Bold,
-                                     textAlign = TextAlign.Start,
-                                     modifier = Modifier.offset(y = (-12).dp)
+                                     textAlign = TextAlign.Center
                                  )
                              }
+                             Text(
+                                 text = if (welcomeData.gmTitle.isNullOrEmpty()) "General Manager" else welcomeData.gmTitle,
+                                 color = Color.White.copy(alpha = 0.85f),
+                                 fontSize = 11.sp,
+                                 fontWeight = FontWeight.Bold,
+                                 textAlign = TextAlign.Center,
+                                 modifier = Modifier.offset(y = (-8).dp)
+                             )
                         }
                     }
                 }
