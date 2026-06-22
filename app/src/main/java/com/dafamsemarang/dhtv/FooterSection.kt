@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -938,7 +940,9 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                 GlobalFocusTracker.lastFocusedItem = "footer_home"
                                 GlobalFocusTracker.lastFocusedFooterItem = "footer_home"
                             }
-                        }
+                        },
+                        useOriginalTint = true,
+                        isHome3D = true
                     )
 
                     Spacer(modifier = Modifier.width(4.dp))
@@ -1092,6 +1096,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         (slideInVertically(animationSpec = tween(500)) { height -> height } + fadeIn(animationSpec = tween(500)))
                             .togetherWith(slideOutVertically(animationSpec = tween(500)) { height -> -height } + fadeOut(animationSpec = tween(500)))
                     },
+                    contentAlignment = Alignment.CenterEnd,
                     label = "SocMedTransition"
                 ) { item ->
                     if (item != null) {
@@ -1440,8 +1445,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.75f)),
+                    .fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -1617,8 +1621,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.75f)),
+                    .fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -2444,7 +2447,6 @@ fun NotificationButtonDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.4f))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -2923,7 +2925,9 @@ fun SmallServiceButton(
     isActive: Boolean = false,
     focusRequester: FocusRequester? = null,
     onFocusStateChange: ((Boolean) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useOriginalTint: Boolean = false,
+    isHome3D: Boolean = false
 ) {
     var isClicked by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
@@ -2946,6 +2950,71 @@ fun SmallServiceButton(
             boxModifier = boxModifier.focusRequester(focusRequester)
         }
 
+        val bgModifier = if (isHome3D) {
+            Modifier
+                .drawBehind {
+                    // Outer Soft Dark Shadow (Bottom-Right)
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.18f),
+                        radius = (this.size.width / 2) - 1.dp.toPx(),
+                        center = Offset(this.size.width / 2 + 2.dp.toPx(), this.size.height / 2 + 2.dp.toPx())
+                    )
+                    // Outer Soft Light Highlight Shadow (Top-Left)
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.5f),
+                        radius = (this.size.width / 2) - 1.dp.toPx(),
+                        center = Offset(this.size.width / 2 - 2.dp.toPx(), this.size.height / 2 - 2.dp.toPx())
+                    )
+                }
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = if (isFocused) {
+                            listOf(Color(0xFFFFFFFF), Color(0xFFE2E8F0))
+                        } else {
+                            listOf(Color(0xFFE2E8F0), Color(0xFFCBD5E1))
+                        }
+                    ),
+                    shape = CircleShape
+                )
+                .drawBehind {
+                    // Inner Embossed Soft Bubble Highlight (Top-Left gloss)
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color.White.copy(alpha = 0.85f), Color.Transparent),
+                            center = Offset(this.size.width * 0.28f, this.size.height * 0.28f),
+                            radius = this.size.width * 0.35f
+                        )
+                    )
+                    // Bottom-Right Inner Shadow Edge
+                    drawArc(
+                        color = Color.Black.copy(alpha = 0.12f),
+                        startAngle = 0f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        style = Stroke(width = 1.5.dp.toPx())
+                    )
+                    // Top-Left Inner Highlight Edge
+                    drawArc(
+                        color = Color.White.copy(alpha = 0.9f),
+                        startAngle = 180f,
+                        sweepAngle = 180f,
+                        useCenter = false,
+                        style = Stroke(width = 1.5.dp.toPx())
+                    )
+                }
+        } else {
+            Modifier.background(
+                color = if (isFocused) {
+                    Color(0xFFCFDFED)
+                } else if (isActive) {
+                    Color.White.copy(alpha = 0.15f)
+                } else {
+                    Color.Transparent
+                },
+                shape = CircleShape
+            )
+        }
+
         Box(
             modifier = boxModifier
                 .onFocusChanged { 
@@ -2955,16 +3024,7 @@ fun SmallServiceButton(
                         onFocusAction?.invoke()
                     }
                 }
-                .background(
-                    color = if (isFocused) {
-                        Color(0xFFCFDFED)
-                    } else if (isActive) {
-                        Color.White.copy(alpha = 0.15f)
-                    } else {
-                        Color.Transparent
-                    },
-                    shape = CircleShape
-                )
+                .then(bgModifier)
                 .clickable(
                     onClick = {
                         onClick()
@@ -2979,7 +3039,7 @@ fun SmallServiceButton(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
                 modifier = Modifier.size(20.dp), // Balanced icon size
-                tint = if (isFocused) Color(0xFF1C1D24) else buttonColor // Google TV High-Contrast Dynamic Switch
+                tint = if (useOriginalTint) Color.Unspecified else (if (isFocused) Color(0xFF1C1D24) else buttonColor) // Google TV High-Contrast Dynamic Switch
             )
         }
 
@@ -3164,8 +3224,7 @@ fun WifiQRCodeDialog(onDismiss: () -> Unit) {
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.8f)),
+                .fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             if (!loading) {
@@ -3463,7 +3522,6 @@ fun WaQRCodeDialog(onDismiss: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.8f))
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
@@ -4104,7 +4162,7 @@ fun generateWifiQRCode(ssid: String, password: String): ImageBitmap {
 
     for (y in 0 until height) {
         for (x in 0 until width) {
-            pixels[y * width + x] = if (bitMatrix.get(x, y)) FooterText.toArgb() else Color.Transparent.toArgb()
+            pixels[y * width + x] = if (bitMatrix.get(x, y)) Color.Black.toArgb() else Color.White.toArgb()
         }
     }
 
@@ -4126,7 +4184,7 @@ fun generateWaQRCode(phone: String, message: String, room: String): ImageBitmap 
 
     for (y in 0 until height) {
         for (x in 0 until width) {
-            pixels[y * width + x] = if (bitMatrix.get(x, y)) FooterText.toArgb() else Color.Transparent.toArgb()
+            pixels[y * width + x] = if (bitMatrix.get(x, y)) Color.Black.toArgb() else Color.White.toArgb()
         }
     }
 

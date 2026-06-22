@@ -949,7 +949,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                             contentDescription = "Company Logo",
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp),
+                                .height(32.dp),
                             contentScale = ContentScale.Fit,
                             colorFilter = ColorFilter.tint(Color.White),
                             onError = { state ->
@@ -963,7 +963,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                         text = "Your Company Logo",
                         color = Color.White.copy(alpha = 0.5f),
                         fontWeight = FontWeight.Medium,
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
                         letterSpacing = 1.5.sp,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
@@ -973,17 +973,21 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
             Spacer(modifier = Modifier.height(64.dp))
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(.5f)
+                    .fillMaxWidth(1f)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
                         text = "Dear ${formatNameEN(guestInfo?.fname ?: "Guest Name", guestInfo?.gender)}",
                         modifier = Modifier
+                            .fillMaxWidth()
                             .padding(0.dp),
                         color = Color.White,
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = 32.sp,
+                            fontSize = 24.sp,
                             fontWeight = FontWeight.Bold
                         )
                     )
@@ -1013,6 +1017,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth(0.5f)
                             .wrapContentHeight()
+                            .padding(top = 24.dp)
                             .align(Alignment.CenterHorizontally)
                     ) {
                         Column(
@@ -1035,12 +1040,13 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                      contentDescription = "sign",
                                      modifier = Modifier
                                          .width(130.dp)
-                                         .height(75.dp),
+                                         .height(50.dp)
+                                         .offset(y = (-6).dp),
                                      contentScale = ContentScale.Fit,
                                      colorFilter = ColorFilter.tint(Color.White)
                                  )
                              } else {
-                                 Spacer(modifier = Modifier.height(44.dp))
+                                 Spacer(modifier = Modifier.height(24.dp))
                              }
  
                              if (welcomeData.gm.isNotEmpty()) {

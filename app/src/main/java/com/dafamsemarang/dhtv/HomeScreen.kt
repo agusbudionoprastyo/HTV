@@ -2701,7 +2701,6 @@ fun PinDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.8f))
                 .onKeyEvent { event ->
                     // Catch physical remote keyboard numbers globally on this screen
                     if (event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
@@ -3049,7 +3048,6 @@ fun AppDrawer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f)) // Dim background
                     .clickable { closeWithAnimation() }
             ) {} // Empty content for Scrim
         

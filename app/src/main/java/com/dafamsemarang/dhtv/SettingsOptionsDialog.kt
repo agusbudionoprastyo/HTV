@@ -53,7 +53,6 @@ fun SettingsOptionsDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.8f)) // Match PIN dialog overlay
                 .onPreviewKeyEvent { keyEvent ->
                     if (keyEvent.type == KeyEventType.KeyDown) {
                         val nativeCode = keyEvent.nativeKeyEvent.keyCode
@@ -99,15 +98,6 @@ fun SettingsOptionsDialog(
                             icon = R.drawable.ic_accessibility_custom,
                             onClick = {
                                 openAccessibilitySettings(context)
-                                onDismiss()
-                            }
-                        ),
-                        SettingsOptionItem(
-                            title = "Jadikan Default Launcher",
-                            desc = "Atur aplikasi ini sebagai beranda utama televisi",
-                            icon = R.drawable.ic_home,
-                            onClick = {
-                                openHomeSettings(context)
                                 onDismiss()
                             }
                         ),
@@ -276,22 +266,7 @@ private fun openAccessibilitySettings(context: Context) {
     }
 }
  
-private fun openHomeSettings(context: Context) {
-    try {
-        val intent = Intent(Settings.ACTION_HOME_SETTINGS)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        try {
-            val intent = Intent(Settings.ACTION_SETTINGS)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            context.startActivity(intent)
-            Toast.makeText(context, "Cari 'Aplikasi Beranda' di Menu Pengaturan", Toast.LENGTH_LONG).show()
-        } catch (e2: Exception) {
-            Toast.makeText(context, "Gagal membuka pengaturan Beranda", Toast.LENGTH_SHORT).show()
-        }
-    }
-}
+
  
 private fun openAndroidSettings(context: Context) {
     try {

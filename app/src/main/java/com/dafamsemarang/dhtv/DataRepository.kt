@@ -579,6 +579,9 @@ object DataRepository {
                     // Parse Arrivals
                     val arrivalsList = mutableListOf<Flight>()
                     val arrivalsSnap = airportSnapshot.child("arrivals")
+                    val currentTimeMillis = System.currentTimeMillis()
+                    val filterThreshold = currentTimeMillis - (15 * 60 * 1000L) // 15-minute buffer
+                    
                     for (flightSnap in arrivalsSnap.children) {
                         try {
                             val scheduled = flightSnap.child("scheduledTime").getValue(String::class.java) ?: ""
@@ -586,7 +589,7 @@ object DataRepository {
                             val timeStr = revised.ifEmpty { scheduled }
                             
                             val flightDate = parseUtcToWib(timeStr)
-                            if (flightDate != null && isSameDayInWib(flightDate)) {
+                            if (flightDate != null && isSameDayInWib(flightDate) && flightDate.time >= filterThreshold) {
                                 val f = Flight(
                                     flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
                                     airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
@@ -603,8 +606,8 @@ object DataRepository {
                         } catch (e: Exception) {}
                     }
                     arrivalsList.sortBy { 
-                        val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
-                        parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
+                         val timeStr = it.revisedTime.ifEmpty { it.scheduledTime }
+                         parseUtcToWib(timeStr)?.time ?: Long.MAX_VALUE
                     }
                     flightArrivals.value = arrivalsList
  
@@ -618,7 +621,7 @@ object DataRepository {
                             val timeStr = revised.ifEmpty { scheduled }
                             
                             val flightDate = parseUtcToWib(timeStr)
-                            if (flightDate != null && isSameDayInWib(flightDate)) {
+                            if (flightDate != null && isSameDayInWib(flightDate) && flightDate.time >= filterThreshold) {
                                 val f = Flight(
                                     flightNumber = flightSnap.child("flightNumber").getValue(String::class.java) ?: "",
                                     airline = flightSnap.child("airline").getValue(String::class.java) ?: "",
