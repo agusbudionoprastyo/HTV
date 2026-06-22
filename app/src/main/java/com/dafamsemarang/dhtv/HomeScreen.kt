@@ -2259,7 +2259,7 @@ fun HomeScreen(navController: NavHostController) {
                             Icon(
                                 painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
                                 contentDescription = "DND Active Indicator",
-                                modifier = Modifier.size(168.dp),
+                                modifier = Modifier.size(220.dp),
                                 tint = Color.White.copy(alpha = 0.2f)
                             )
                         }
