@@ -73,7 +73,7 @@ fun WallpaperSection() {
                     val url = snapshot.getValue(String::class.java)
                     imageUrl = url
                     if (!url.isNullOrEmpty()) {
-                        val fileName = "wallpaper_${currentBranchId}.jpg"
+                        val fileName = "wallpaper_${currentBranchId}_${url.hashCode().toString().replace("-", "n")}.jpg"
                         val file = File(context.cacheDir, fileName)
                         if (!file.exists() || sharedPreferences.getString("cached_wallpaper_url", null) != url) {
                             CoroutineScope(Dispatchers.IO).launch {
@@ -83,6 +83,12 @@ fun WallpaperSection() {
                                     if (res is SuccessResult) {
                                         val bMap = (res.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
                                         bMap?.let {
+                                            // Delete old wallpaper files for this branch to save space
+                                            context.cacheDir.listFiles()?.forEach { oldFile ->
+                                                if (oldFile.name.startsWith("wallpaper_${currentBranchId}_") && oldFile.name != fileName) {
+                                                    oldFile.delete()
+                                                }
+                                            }
                                             FileOutputStream(file).use { out ->
                                                 it.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
                                             }
@@ -91,14 +97,18 @@ fun WallpaperSection() {
                                             withContext(Dispatchers.Main) { localWallpaperPath = file.absolutePath }
                                         }
                                     }
-                                } catch (e: Exception) { }
+                                } catch (e: Exception) {
+                                    Log.e("WallpaperSection", "Failed to cache wallpaper: ${e.message}", e)
+                                }
                             }
                         } else {
                             localWallpaperPath = file.absolutePath
                         }
                     }
                 }
-                override fun onCancelled(error: com.google.firebase.database.DatabaseError) { }
+                override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                    Log.e("WallpaperSection", "Firebase load cancelled: ${error.message}")
+                }
             }
             activeRef = ref
             activeListener = listener
@@ -113,7 +123,16 @@ fun WallpaperSection() {
     }
 
     // Local cached fallback logic
-    val wallpaperFilePath = localWallpaperPath ?: sharedPreferences.getString("cached_wallpaper_path", null)
+    // Only fall back to local file if the current image URL matches the cached URL.
+    // If the URL changes (e.g. changed in CMS), we do not use the old cached file.
+    val isUrlMatched = remember(imageUrl) {
+        imageUrl != null && imageUrl == sharedPreferences.getString("cached_wallpaper_url", null)
+    }
+    val wallpaperFilePath = if (isUrlMatched) {
+        localWallpaperPath ?: sharedPreferences.getString("cached_wallpaper_path", null)
+    } else {
+        localWallpaperPath
+    }
     val wallpaperFile = wallpaperFilePath?.let { File(it) }
     val useLocal = wallpaperFile?.exists() == true
 

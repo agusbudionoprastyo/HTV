@@ -213,8 +213,29 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
     }
 
     override fun onPairingModeRequired() {
-        Log.d("MainActivity", "Pairing mode required, navigating to pairing screen")
-        shouldShowPairing = true
+        Log.d("MainActivity", "Pairing mode required, clearing data and restarting to pairing screen")
+        
+        // Clear pairing information from SharedPreferences
+        val sharedPrefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        sharedPrefs.edit().run {
+            remove("deviceID")
+            remove("branchId")
+            remove("room")
+            apply()
+        }
+        
+        // Clear all cached files (images, audio, videos) to completely clean up local storage
+        try {
+            cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+            Log.d("MainActivity", "Successfully cleared application cache")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to clear cache: ${e.message}")
+        }
+        
+        // Restart the activity to completely reset navigation and clear memory references
+        val intent = intent
+        finish()
+        startActivity(intent)
     }
 
     override fun onPairingSuccess() {

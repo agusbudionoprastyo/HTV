@@ -316,10 +316,14 @@ fun parseUtcToWib(timeStr: String): Date? {
     if (timeStr.isEmpty()) return null
     var cleanStr = timeStr.trim()
     val formats = listOf(
+        "yyyy-MM-dd HH:mmXXX",
         "yyyy-MM-dd HH:mm'Z'",
         "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
         "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
         "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd'T'HH:mmXXX",
         "yyyy-MM-dd'T'HH:mm'Z'"
     )
     for (format in formats) {

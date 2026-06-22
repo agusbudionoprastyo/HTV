@@ -62,6 +62,9 @@ object DataRepository {
     val guestInfo = mutableStateOf<GuestInfo?>(null)
     val isDndActive = mutableStateOf(false)
     val instagramHandle = mutableStateOf<String?>(null)
+    val facebookHandle = mutableStateOf<String?>(null)
+    val tiktokHandle = mutableStateOf<String?>(null)
+    val websiteUrl = mutableStateOf<String?>(null)
     val branchLatLng = mutableStateOf<String?>(null)  // Format: "lat,lng" from LONGLAT_BRANCH
 
  
@@ -424,8 +427,11 @@ object DataRepository {
         activeContactRef = contactRef
         contactListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                instagramHandle.value = snapshot.child("INSTAGRAM").getValue(String::class.java)
-                Log.d("DataRepository", "Instagram handle loaded: ${instagramHandle.value}")
+                instagramHandle.value = snapshot.child("INSTAGRAM").getValue(String::class.java) ?: snapshot.child("instagram").getValue(String::class.java)
+                facebookHandle.value = snapshot.child("FACEBOOK").getValue(String::class.java) ?: snapshot.child("facebook").getValue(String::class.java)
+                tiktokHandle.value = snapshot.child("TIKTOK").getValue(String::class.java) ?: snapshot.child("tiktok").getValue(String::class.java)
+                websiteUrl.value = snapshot.child("WEBSITE").getValue(String::class.java) ?: snapshot.child("website").getValue(String::class.java) ?: snapshot.child("WEB").getValue(String::class.java) ?: snapshot.child("web").getValue(String::class.java)
+                Log.d("DataRepository", "Social handles loaded: IG=${instagramHandle.value}, FB=${facebookHandle.value}, TT=${tiktokHandle.value}, WEB=${websiteUrl.value}")
             }
             override fun onCancelled(error: DatabaseError) {
                 Log.e("DataRepository", "Contact preload failed: ${error.message}")
@@ -551,8 +557,9 @@ object DataRepository {
         flightInfoListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 try {
-                    val airportSnapshot = snapshot.child(icaoCode)
-                    val airportCode = airportSnapshot.key ?: icaoCode
+                    val upperIcao = icaoCode.uppercase(Locale.US)
+                    val airportSnapshot = snapshot.child(upperIcao)
+                    val airportCode = airportSnapshot.key ?: upperIcao
                     
                     var name = when (icaoCode.uppercase(Locale.US)) {
                         "WARS" -> "Ahmad Yani Airport"
@@ -772,6 +779,9 @@ object DataRepository {
         guestInfo.value = null
         isDndActive.value = false
         instagramHandle.value = null
+        facebookHandle.value = null
+        tiktokHandle.value = null
+        websiteUrl.value = null
         branchLatLng.value = null
     }
 

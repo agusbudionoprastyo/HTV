@@ -1059,25 +1059,62 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             val instagram = DataRepository.instagramHandle.value
-            if (!instagram.isNullOrEmpty()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.logo_instagram),
-                        contentDescription = "Instagram Logo",
-                        tint = Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = instagram,
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+            val facebook = DataRepository.facebookHandle.value
+            val tiktok = DataRepository.tiktokHandle.value
+            val website = DataRepository.websiteUrl.value
+
+            data class SocMedItem(val iconRes: Int, val text: String)
+            val socMedItems = remember(instagram, facebook, tiktok, website) {
+                val list = mutableListOf<SocMedItem>()
+                if (!instagram.isNullOrEmpty()) list.add(SocMedItem(R.drawable.logo_instagram, instagram))
+                if (!facebook.isNullOrEmpty()) list.add(SocMedItem(R.drawable.logo_facebook, facebook))
+                if (!tiktok.isNullOrEmpty()) list.add(SocMedItem(R.drawable.logo_tiktok, tiktok))
+                if (!website.isNullOrEmpty()) list.add(SocMedItem(R.drawable.logo_website, website))
+                list
+            }
+
+            if (socMedItems.isNotEmpty()) {
+                var currentSocMedIndex by remember { mutableIntStateOf(0) }
+                LaunchedEffect(socMedItems) {
+                    if (socMedItems.size > 1) {
+                        while (true) {
+                            delay(10000)
+                            currentSocMedIndex = (currentSocMedIndex + 1) % socMedItems.size
+                        }
+                    } else {
+                        currentSocMedIndex = 0
+                    }
                 }
-                
+
+                AnimatedContent(
+                    targetState = socMedItems.getOrNull(currentSocMedIndex),
+                    transitionSpec = {
+                        (slideInVertically(animationSpec = tween(500)) { height -> height } + fadeIn(animationSpec = tween(500)))
+                            .togetherWith(slideOutVertically(animationSpec = tween(500)) { height -> -height } + fadeOut(animationSpec = tween(500)))
+                    },
+                    label = "SocMedTransition"
+                ) { item ->
+                    if (item != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = item.iconRes),
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.55f),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = item.text,
+                                color = Color.White.copy(alpha = 0.55f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.width(4.dp))
             }
 
