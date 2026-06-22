@@ -1039,9 +1039,9 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                      painter = signImage,
                                      contentDescription = "sign",
                                      modifier = Modifier
-                                         .width(130.dp)
-                                         .height(50.dp)
-                                         .offset(y = (-6).dp),
+                                         .width(150.dp)
+                                         .height(80.dp)
+                                         .offset(y = (-14).dp),
                                      contentScale = ContentScale.Fit,
                                      colorFilter = ColorFilter.tint(Color.White)
                                  )

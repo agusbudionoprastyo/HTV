@@ -319,6 +319,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     var isCartFocused by remember { mutableStateOf(false) }
     var isOrderFocused by remember { mutableStateOf(false) }
     var fnbButtonBoundsInRoot by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var homeButtonBoundsInRoot by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
 
     // Floating My Request state – hoisted here
     var isMyRequestFocused by remember { mutableStateOf(false) }
@@ -920,6 +921,9 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 ) {
                     SmallServiceButton(
                         iconRes = R.drawable.ic_home,
+                        modifier = Modifier.onGloballyPositioned { coords ->
+                            homeButtonBoundsInRoot = coords.boundsInRoot()
+                        },
                         onClick = {
                             if (currentRoute != "home") navController?.navigate("home") {
                                 popUpTo("home") { saveState = true }
@@ -1171,12 +1175,19 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             val btnSize = with(density) { 36.dp.toPx() }
             val gap = with(density) { 8.dp.toPx() }
 
-            // Cart – kiri dari center F&B
+            val homeBounds = homeButtonBoundsInRoot
+            val cartX = if (homeBounds != null) {
+                (homeBounds.left + homeBounds.width / 2 - btnSize / 2).toInt()
+            } else {
+                (btnCenterX - btnSize - gap / 2).toInt()
+            }
+
+            // Cart – diatas Home
             Box(
                 modifier = Modifier
                     .absoluteOffset {
                         IntOffset(
-                            x = (btnCenterX - btnSize - gap / 2).toInt(),
+                            x = cartX,
                             y = (btnTop + slideOffsetYPx).toInt()
                         )
                     }
@@ -1261,12 +1272,14 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 }
             }
 
-            // My Order – kanan dari center F&B
+            val orderX = (btnCenterX - btnSize / 2).toInt()
+
+            // My Order – diatas F&B (Room Service)
             Box(
                 modifier = Modifier
                     .absoluteOffset {
                         IntOffset(
-                            x = (btnCenterX + gap / 2).toInt(),
+                            x = orderX,
                             y = (btnTop + slideOffsetYPx).toInt()
                         )
                     }
