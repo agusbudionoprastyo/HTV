@@ -82,21 +82,27 @@ fun CheckoutReminder() {
     
     // Fetch guest info
     LaunchedEffect(deviceID, branchId) {
+        Log.d("CheckoutReminder", "LaunchedEffect: deviceID=$deviceID, branchId=$branchId")
         if (deviceID != null && branchId != null) {
             listenForGuestInfo(context, deviceID, branchId) { info ->
+                Log.d("CheckoutReminder", "Received guestInfo: room=${info?.room}, name=${info?.fname}, dateco=${info?.dateco}")
                 guestInfo = info
                 hasLoadedGuestInfo = true
             }
+        } else {
+            Log.d("CheckoutReminder", "LaunchedEffect bypassed because deviceID or branchId is null!")
         }
     }
     
     // Check Status Loop
     LaunchedEffect(hasLoadedGuestInfo, guestInfo, lastUnlockTime) {
         val FORCE_DEV_MODE = true // Ubah ke false jika ingin menggunakan data real-time jam 11:30
+        Log.d("CheckoutReminder", "Check Status Loop: hasLoadedGuestInfo=$hasLoadedGuestInfo, guestInfoIsNull=${guestInfo == null}, lastUnlockTime=$lastUnlockTime")
         
         if (hasLoadedGuestInfo) {
             if (guestInfo == null) {
                 // Kamar tidak ada tamu / kosong -> Langsung Kunci
+                Log.d("CheckoutReminder", "GuestInfo is null, locking room (Expired)")
                 reminderState = ReminderState.Expired
             } else {
                 while (true) {
@@ -104,24 +110,33 @@ fun CheckoutReminder() {
                     
                     val isPast = isCheckoutDatePast(guestInfo!!.dateco)
                     val isToday = isCheckoutDateToday(guestInfo!!.dateco)
+                    Log.d("CheckoutReminder", "Loop run - Dateco: ${guestInfo!!.dateco}, isPast: $isPast, isToday: $isToday")
                     
-                    if (FORCE_DEV_MODE) {
-                        // MODE DEV: Langsung bypass ke Warning dengan jeda dismiss 2 menit
-                        val lastDismissTime = sharedPreferences.getLong("checkout_warning_dismiss_time", 0L)
-                        val TWO_MINUTES_MS = 120000L // 2 Menit (120,000 ms)
-                        val timeSinceDismiss = System.currentTimeMillis() - lastDismissTime
-                        
-                        if (timeSinceDismiss > TWO_MINUTES_MS) {
-                            reminderState = ReminderState.Warning
-                        } else {
-                            reminderState = ReminderState.None
-                        }
-                    } else {
-                        // MODE REAL-TIME (JAM 11:30 & 12:00)
-                        if (isPast) {
-                            // Tanggal checkout sudah lewat kemarin atau sebelumnya
-                            reminderState = ReminderState.Expired
-                        } else if (isToday) {
+                     if (isPast) {
+                         // Tanggal checkout sudah lewat kemarin atau sebelumnya
+                         val timeSinceUnlock = now.timeInMillis - lastUnlockTime
+                         val ONE_HOUR_MS = 3600000L // 1 Hour
+                         Log.d("CheckoutReminder", "isPast = true. timeSinceUnlock = $timeSinceUnlock ms")
+                         
+                         if (timeSinceUnlock > ONE_HOUR_MS) {
+                             reminderState = ReminderState.Expired
+                         } else {
+                             reminderState = ReminderState.None
+                         }
+                     } else if (FORCE_DEV_MODE) {
+                         // MODE DEV: Langsung bypass ke Warning dengan jeda dismiss 2 menit
+                         val lastDismissTime = sharedPreferences.getLong("checkout_warning_dismiss_time", 0L)
+                         val TWO_MINUTES_MS = 120000L // 2 Menit (120,000 ms)
+                         val timeSinceDismiss = System.currentTimeMillis() - lastDismissTime
+                         
+                         if (timeSinceDismiss > TWO_MINUTES_MS) {
+                             reminderState = ReminderState.Warning
+                         } else {
+                             reminderState = ReminderState.None
+                         }
+                     } else {
+                         // MODE REAL-TIME (JAM 11:30 & 12:00)
+                         if (isToday) {
                             val warningStart = Calendar.getInstance().apply {
                                  set(Calendar.HOUR_OF_DAY, 11)
                                  set(Calendar.MINUTE, 30)

@@ -112,6 +112,8 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import androidx.core.graphics.createBitmap
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -2365,7 +2367,9 @@ fun NotificationButtonDialog(
     }
 
     // Focus management
-    val focusRequester = remember { FocusRequester() }
+    val firstItemFocusRequester = remember { FocusRequester() }
+    val closeButtonFocusRequester = remember { FocusRequester() }
+    var hasFocusedInitialItem by remember { mutableStateOf(false) }
 
     var currentTime by remember { mutableStateOf(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())) }
     var currentDate by remember { mutableStateOf(SimpleDateFormat("EEE, MMM dd", Locale.getDefault()).format(Date())) }
@@ -2373,18 +2377,31 @@ fun NotificationButtonDialog(
     // Enter animation, clock tick, & Focus
     LaunchedEffect(Unit) {
         isVisible = true
-        scope.launch {
-            delay(350) // Wait for animation
-            try {
-                focusRequester.requestFocus()
-            } catch (e: Exception) {
-                Log.e("NotificationDialog", "Failed to request focus", e)
-            }
-        }
         while(true) {
             currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
             currentDate = SimpleDateFormat("EEE, MMM dd", Locale.getDefault()).format(Date())
             delay(60000)
+        }
+    }
+
+    LaunchedEffect(isVisible, notifications.isNotEmpty()) {
+        if (isVisible) {
+            if (notifications.isNotEmpty() && !hasFocusedInitialItem) {
+                delay(350) // Wait for animation
+                try {
+                    firstItemFocusRequester.requestFocus()
+                    hasFocusedInitialItem = true
+                } catch (e: Exception) {
+                    Log.e("NotificationDialog", "Failed to request focus on first notification", e)
+                }
+            } else if (notifications.isEmpty()) {
+                delay(350) // Wait for animation
+                try {
+                    closeButtonFocusRequester.requestFocus()
+                } catch (e: Exception) {
+                    Log.e("NotificationDialog", "Failed to request focus on close button", e)
+                }
+            }
         }
     }
 
@@ -2466,6 +2483,7 @@ fun NotificationButtonDialog(
                             .fillMaxHeight()
                             .width(380.dp) // Side drawer width (exactly like cart!)
                             .padding(top = 16.dp, bottom = 16.dp, start = 16.dp) // Float off the edges (exactly like cart!)
+                            .graphicsLayer(clip = false) // Mencegah pemotongan visual konten di luar drawer
                             .clickable(enabled = false) {}, // Intercept clicks
                         shape = RoundedCornerShape(28.dp),
                         color = Color(0xFF1E2026),
@@ -2475,12 +2493,13 @@ fun NotificationButtonDialog(
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(24.dp)
+                                .padding(top = 24.dp, bottom = 24.dp)
+                                .graphicsLayer(clip = false) // Mencegah pemotongan visual konten di luar column
                                 .focusGroup()
                         ) {
                             // Header (Title left, Close/Clear button right)
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -2496,6 +2515,7 @@ fun NotificationButtonDialog(
 
                                 Box(
                                     modifier = Modifier
+                                        .focusRequester(closeButtonFocusRequester)
                                         .clip(CircleShape)
                                         .let {
                                             if (isClearClicked) {
@@ -2557,9 +2577,13 @@ fun NotificationButtonDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f)
-                                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                                    .graphicsLayer { 
+                                        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                                        clip = false
+                                    }
                                     .drawWithContent {
                                         drawContent()
+                                        // 1. Kabut Atas - Bawah
                                         drawRect(
                                             brush = Brush.verticalGradient(
                                                 0f to Color.Transparent,
@@ -2569,8 +2593,18 @@ fun NotificationButtonDialog(
                                             ),
                                             blendMode = BlendMode.DstIn
                                         )
+                                        // 2. Kabut Kiri (Statis di area padding 24.dp pertama)
+                                        val fadeEndPx = 24.dp.toPx()
+                                        val fadeEndRatio = if (size.width > 0) fadeEndPx / size.width else 0.08f
+                                        drawRect(
+                                            brush = Brush.horizontalGradient(
+                                                0f to Color.Transparent,
+                                                fadeEndRatio to Color.Black
+                                            ),
+                                            blendMode = BlendMode.DstIn
+                                        )
                                     },
-                                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
+                                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 itemsIndexed(sortedNotifications) { index, notification ->
@@ -2582,14 +2616,34 @@ fun NotificationButtonDialog(
                                         },
                                         onFocused = {
                                             focusedIndex = index
-                                        }
+                                        },
+                                        modifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier
                                     )
                                 }
                             }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            Text(
+                                text = "Hold Dpad Left to delete notification",
+                                color = Color.White.copy(alpha = 0.4f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 4.dp)
+                            )
                         }
                     }
                 }
             }
+        }
+        
+        if (selectedNotification != null) {
+            NotificationDialog(
+                context = context,
+                notification = selectedNotification!!,
+                onDismiss = { selectedNotification = null }
+            )
         }
     }
 }
@@ -2599,13 +2653,26 @@ fun NotificationItem(
     notification: Notification,
     deleteNotification: (Notification) -> Unit,
     onNotificationClick: (Notification) -> Unit,
-    onFocused: () -> Unit
+    onFocused: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var formattedTimestamp by remember { mutableStateOf(getTimeAgo(notification.timestamp)) }
-    var clickCount by remember { mutableIntStateOf(0) }  // Track the number of clicks
+    var showDeleteButton by remember { mutableStateOf(false) }
 
     var isFocused by remember { mutableStateOf(false) }
     val focusPulseAlpha = remember { Animatable(0.0f) }
+
+    // Animasi pergeseran offset card notifikasi
+    val offsetX by animateDpAsState(
+        targetValue = if (showDeleteButton) (-120).dp else 0.dp,
+        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+    )
+
+    // Animasi memudar (alpha) card notifikasi diset tetap 1.0f agar hanya gradien tepi kiri yang bekerja
+    val alphaVal by animateFloatAsState(
+        targetValue = 1.0f,
+        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+    )
 
     LaunchedEffect(notification.timestamp) {
         while (true) {
@@ -2629,45 +2696,105 @@ fun NotificationItem(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .border(
-                width = 2.dp,
-                color = Color.White.copy(alpha = if (isFocused) focusPulseAlpha.value else 0f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clip(RoundedCornerShape(16.dp))
             .onFocusChanged { focusState ->
                 isFocused = focusState.isFocused
                 if (focusState.isFocused) {
                     onFocused()
                 } else {
-                    clickCount = 0
+                    showDeleteButton = false
+                }
+            }
+            .onKeyEvent { event ->
+                if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) {
+                    if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                        // Jika D-pad kiri ditekan tahan (repeatCount >= 1)
+                        if (event.nativeKeyEvent.repeatCount >= 1) {
+                            showDeleteButton = true
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT && showDeleteButton) {
+                    if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                        showDeleteButton = false
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
                 }
             }
             .clickable(
                 onClick = {
-                    onNotificationClick(notification)
-                    clickCount += 1
-                    if (clickCount == 2) {
+                    if (showDeleteButton) {
                         deleteNotification(notification)
-                        clickCount = 0
+                        showDeleteButton = false
+                    } else {
+                        onNotificationClick(notification)
                     }
                 },
-                indication = ripple(color = Color.White),
+                indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             )
             .focusable(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.CenterStart
     ) {
+        // Tombol delete merah berada di belakang/luar card di sebelah kanan (CenterEnd)
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showDeleteButton,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .border(
+                        width = 2.dp,
+                        color = Color.White.copy(alpha = focusPulseAlpha.value),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable {
+                        deleteNotification(notification)
+                        showDeleteButton = false
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = rememberAsyncImagePainter(R.drawable.ic_trash),
+                    contentDescription = "Delete Icon",
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .fillMaxSize(),
+                    tint = Color.White
+                )
+            }
+        }
+
+        // Card Notifikasi utama yang bergeser ke kiri (menggunakan offset, background, dan border)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(4.dp) // Beautiful transparent gap between card and selection border!
+                .offset(x = offsetX)
+                .border(
+                    width = 2.dp,
+                    color = Color.White.copy(alpha = if (isFocused && !showDeleteButton) focusPulseAlpha.value else 0f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .padding(4.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(
-                    color = if (isFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.05f),
+                    color = Color.White.copy(alpha = 0.05f),
                     shape = RoundedCornerShape(12.dp)
                 )
         ) {
@@ -2682,18 +2809,16 @@ fun NotificationItem(
                         .size(40.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
-                            color = if (isFocused) Color.White.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.1f),
+                            color = Color.White.copy(alpha = 0.1f),
                             shape = RoundedCornerShape(12.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Show the appropriate icon based on the click count
-                    val iconRes = when {
-                        clickCount == 1 -> R.drawable.ic_trash // Show delete icon after first click
-                        notification.type == "DND" -> R.drawable.ic_dnd
-                        notification.type == "ROOM_SERVICE" -> R.drawable.ic_room_service
-                        notification.type == "GUEST_REQUEST" -> R.drawable.ic_request_service
-                        else -> R.drawable.ic_notifications // Default icon
+                    val iconRes = when (notification.type) {
+                        "DND" -> R.drawable.ic_dnd
+                        "ROOM_SERVICE" -> R.drawable.ic_room_service
+                        "GUEST_REQUEST" -> R.drawable.ic_request_service
+                        else -> R.drawable.ic_notifications
                     }
 
                     Icon(
@@ -2702,7 +2827,7 @@ fun NotificationItem(
                         modifier = Modifier
                             .padding(10.dp)
                             .fillMaxSize(),
-                        tint = if (isFocused) Color(0xFF1C1D24) else Color.White
+                        tint = Color.White
                     )
                 }
 
@@ -2715,19 +2840,19 @@ fun NotificationItem(
                         text = notification.title,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (isFocused) Color(0xFF1C1D24) else Color.White
+                        color = Color.White
                     )
                     Text(
                         text = notification.message,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isFocused) Color(0xFF1C1D24).copy(alpha = 0.8f) else Color.White.copy(alpha = 0.7f),
+                        color = Color.White.copy(alpha = 0.7f),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = formattedTimestamp,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isFocused) Color(0xFF1C1D24).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.5f)
+                        color = Color.White.copy(alpha = 0.5f)
                     )
                 }
             }
