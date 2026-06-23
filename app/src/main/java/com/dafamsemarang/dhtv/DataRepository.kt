@@ -66,8 +66,85 @@ object DataRepository {
     val tiktokHandle = mutableStateOf<String?>(null)
     val websiteUrl = mutableStateOf<String?>(null)
     val branchLatLng = mutableStateOf<String?>(null)  // Format: "lat,lng" from LONGLAT_BRANCH
+    val branchName = mutableStateOf<String?>(null)
 
- 
+    // Subscription Status & Expiry Lock States
+    val isAppLocked = mutableStateOf(false)
+    val lockMessage = mutableStateOf("")
+
+    private var branchNameListener: ValueEventListener? = null
+    private var activeBranchNameRef: DatabaseReference? = null
+
+    private var subStatusBranch: String? = null
+    private var subStatusSetting: String? = null
+    private var subExpiredBranch: Any? = null
+    private var subExpiredSetting: Any? = null
+
+    private var subscriptionStatusListener: ValueEventListener? = null
+    private var subscriptionExpiredListener: ValueEventListener? = null
+    private var subscriptionSettingStatusListener: ValueEventListener? = null
+    private var subscriptionSettingExpiredListener: ValueEventListener? = null
+
+    private var activeSubscriptionStatusRef: DatabaseReference? = null
+    private var activeSubscriptionExpiredRef: DatabaseReference? = null
+    private var activeSubscriptionSettingStatusRef: DatabaseReference? = null
+    private var activeSubscriptionSettingExpiredRef: DatabaseReference? = null
+
+    private fun updateSubscriptionState() {
+        val status = subStatusBranch ?: subStatusSetting ?: "active"
+        val expired = subExpiredBranch ?: subExpiredSetting
+
+        val isStatusActive = status == "active"
+        val isExpired = try {
+            if (expired == null) {
+                false
+            } else {
+                when (expired) {
+                    is Long -> System.currentTimeMillis() > expired
+                    is String -> {
+                        if (expired.trim().isEmpty()) {
+                            false
+                        } else {
+                            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                            val expiredDate = sdf.parse(expired)
+                            if (expiredDate != null) {
+                                val calCurrent = java.util.Calendar.getInstance()
+                                calCurrent.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                                calCurrent.set(java.util.Calendar.MINUTE, 0)
+                                calCurrent.set(java.util.Calendar.SECOND, 0)
+                                calCurrent.set(java.util.Calendar.MILLISECOND, 0)
+                                
+                                val calExpired = java.util.Calendar.getInstance()
+                                calExpired.time = expiredDate
+                                calExpired.set(java.util.Calendar.HOUR_OF_DAY, 23)
+                                calExpired.set(java.util.Calendar.MINUTE, 59)
+                                calExpired.set(java.util.Calendar.SECOND, 59)
+                                
+                                calCurrent.after(calExpired)
+                            } else {
+                                false
+                            }
+                        }
+                    }
+                    else -> false
+                }
+            }
+        } catch (e: Exception) {
+            false
+        }
+
+        if (!isStatusActive) {
+            isAppLocked.value = true
+            lockMessage.value = "Layanan Dinonaktifkan\nStatus Langganan Tidak Aktif"
+        } else if (isExpired) {
+            isAppLocked.value = true
+            lockMessage.value = "Layanan Sudah Berakhir\nMasa Berlaku Langganan Telah Habis"
+        } else {
+            isAppLocked.value = false
+            lockMessage.value = ""
+        }
+    }
+
     private var menuListener: ValueEventListener? = null
     private var requestListener: ValueEventListener? = null
     private var hotelFacilitiesListener: ValueEventListener? = null
@@ -452,6 +529,92 @@ object DataRepository {
             }
         }
         branchLatLngRef.addValueEventListener(branchLatLngListener!!)
+
+        // Preload Subscription Config from BRANCHES/{branchId}/SUBSCRIPTION_STATUS & EXPIRED_DATE
+        val subStatusBranchRef = db.child("BRANCHES").child(branchId).child("SUBSCRIPTION_STATUS")
+        activeSubscriptionStatusRef = subStatusBranchRef
+        subscriptionStatusListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                subStatusBranch = snapshot.getValue(String::class.java)
+                updateSubscriptionState()
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "subStatusBranch preload failed: ${error.message}")
+            }
+        }
+        subStatusBranchRef.addValueEventListener(subscriptionStatusListener!!)
+
+        val subExpiredBranchRef = db.child("BRANCHES").child(branchId).child("EXPIRED_DATE")
+        activeSubscriptionExpiredRef = subExpiredBranchRef
+        subscriptionExpiredListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                subExpiredBranch = snapshot.value
+                updateSubscriptionState()
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "subExpiredBranch preload failed: ${error.message}")
+            }
+        }
+        subExpiredBranchRef.addValueEventListener(subscriptionExpiredListener!!)
+
+        // Preload Subscription Config from BRANCHES/{branchId}/SETTING/SUBSCRIPTION_STATUS & EXPIRED_DATE
+        val subStatusSettingRef = db.child("BRANCHES").child(branchId).child("SETTING").child("SUBSCRIPTION_STATUS")
+        activeSubscriptionSettingStatusRef = subStatusSettingRef
+        subscriptionSettingStatusListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                subStatusSetting = snapshot.getValue(String::class.java)
+                updateSubscriptionState()
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "subStatusSetting preload failed: ${error.message}")
+            }
+        }
+        subStatusSettingRef.addValueEventListener(subscriptionSettingStatusListener!!)
+
+        val subExpiredSettingRef = db.child("BRANCHES").child(branchId).child("SETTING").child("EXPIRED_DATE")
+        activeSubscriptionSettingExpiredRef = subExpiredSettingRef
+        subscriptionSettingExpiredListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                subExpiredSetting = snapshot.value
+                updateSubscriptionState()
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "subExpiredSetting preload failed: ${error.message}")
+            }
+        }
+        subExpiredSettingRef.addValueEventListener(subscriptionSettingExpiredListener!!)
+
+        // Preload Branch Name
+        val branchNameRef = db.child("BRANCHES").child(branchId).child("BRANCH_NAME")
+        activeBranchNameRef = branchNameRef
+        branchNameListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (snapshot.exists()) {
+                    branchName.value = snapshot.getValue(String::class.java)
+                } else {
+                    // Fallback to name, NAME or branchId
+                    db.child("BRANCHES").child(branchId).child("name").addListenerForSingleValueEvent(object : ValueEventListener {
+                        override fun onDataChange(nameSnapshot: DataSnapshot) {
+                            if (nameSnapshot.exists()) {
+                                branchName.value = nameSnapshot.getValue(String::class.java)
+                            } else {
+                                db.child("BRANCHES").child(branchId).child("NAME").addListenerForSingleValueEvent(object : ValueEventListener {
+                                    override fun onDataChange(nameSnapshot2: DataSnapshot) {
+                                        branchName.value = nameSnapshot2.getValue(String::class.java) ?: branchId
+                                    }
+                                    override fun onCancelled(error: DatabaseError) {}
+                                })
+                            }
+                        }
+                        override fun onCancelled(error: DatabaseError) {}
+                    })
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "BranchName preload failed: ${error.message}")
+            }
+        }
+        branchNameRef.addValueEventListener(branchNameListener!!)
     }
 
     private fun setupWeatherListeners(db: DatabaseReference, city: String?) {
@@ -699,6 +862,11 @@ object DataRepository {
         activeGuestInfoRef?.let { ref -> guestInfoListener?.let { ref.removeEventListener(it) } }
         activeDndRef?.let { ref -> dndListener?.let { ref.removeEventListener(it) } }
         activeContactRef?.let { ref -> contactListener?.let { ref.removeEventListener(it) } }
+        activeSubscriptionStatusRef?.let { ref -> subscriptionStatusListener?.let { ref.removeEventListener(it) } }
+        activeSubscriptionExpiredRef?.let { ref -> subscriptionExpiredListener?.let { ref.removeEventListener(it) } }
+        activeSubscriptionSettingStatusRef?.let { ref -> subscriptionSettingStatusListener?.let { ref.removeEventListener(it) } }
+        activeSubscriptionSettingExpiredRef?.let { ref -> subscriptionSettingExpiredListener?.let { ref.removeEventListener(it) } }
+        activeBranchNameRef?.let { ref -> branchNameListener?.let { ref.removeEventListener(it) } }
  
         menuListener = null
         requestListener = null
@@ -720,6 +888,11 @@ object DataRepository {
         dndListener = null
         contactListener = null
         branchLatLngListener = null
+        subscriptionStatusListener = null
+        subscriptionExpiredListener = null
+        subscriptionSettingStatusListener = null
+        subscriptionSettingExpiredListener = null
+        branchNameListener = null
 
  
         activeMenuRef = null
@@ -742,6 +915,11 @@ object DataRepository {
         activeDndRef = null
         activeContactRef = null
         activeBranchLatLngRef = null
+        activeSubscriptionStatusRef = null
+        activeSubscriptionExpiredRef = null
+        activeSubscriptionSettingStatusRef = null
+        activeSubscriptionSettingExpiredRef = null
+        activeBranchNameRef = null
 
  
         activeBranchId = null
@@ -786,6 +964,7 @@ object DataRepository {
         tiktokHandle.value = null
         websiteUrl.value = null
         branchLatLng.value = null
+        branchName.value = null
     }
 
     private fun preloadVideos(context: android.content.Context, urls: List<String>) {

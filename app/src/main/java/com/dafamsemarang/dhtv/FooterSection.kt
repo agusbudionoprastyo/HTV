@@ -8,15 +8,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.BorderStroke
@@ -38,7 +35,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.ui.text.PlatformTextStyle
@@ -88,7 +84,6 @@ import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -112,10 +107,7 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import androidx.core.graphics.createBitmap
@@ -126,18 +118,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.KeyboardType
 import android.content.Intent
-import android.provider.Settings
 import android.widget.Toast
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.core.content.edit
-import androidx.compose.ui.text.input.ImeAction
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
@@ -145,7 +129,6 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
 
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.draw.drawBehind
 
 //// Function to set system volume
 //fun setSystemVolume(context: Context, isMuted: Boolean) {
@@ -228,7 +211,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     val navBackStackEntry = navController?.currentBackStackEntryAsState()?.value
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val baseAlpha = 0.40f
+    val baseAlpha = 0.15f
 
     var isNotifFocused by remember { mutableStateOf(false) }
     var isSettingsFocused by remember { mutableStateOf(false) }
@@ -276,7 +259,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     var showMyRequestsDrawer by remember { mutableStateOf(false) }
     var showCartDrawer by remember { mutableStateOf(false) }
     var showOrderDrawer by remember { mutableStateOf(false) }
-    var showSettingsMenu by remember { mutableStateOf(false) }
     var selectedOrderForDetail by remember { mutableStateOf<Order?>(null) }
     var showOrderDetailDialog by remember { mutableStateOf(false) }
 
@@ -661,7 +643,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     modifier = Modifier.padding(4.dp)
                 ) {
                     SmallServiceButtonWithBadge(
-                        iconRes = R.drawable.notifications_svgrepo_com,
+                        iconRes = R.drawable.ic_notifications,
                         badgeCount = notificationCount,
                         onClick = { showNotificationButtonDialog = true },
                         title = "Notifications",
@@ -711,7 +693,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     modifier = Modifier.padding(4.dp)
                 ) {
                     SmallServiceButton(
-                        iconRes = R.drawable.setting_svgrepo_com,
+                        iconRes = R.drawable.ic_setting,
                         onClick = { showPinDialog = true },
                         title = "Settings",
                         isActive = true,
@@ -854,7 +836,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     Spacer(modifier = Modifier.width(8.dp))
 
                     SmallServiceButton(
-                        iconRes = R.drawable.wifi_rounded_svgrepo_com,
+                        iconRes = R.drawable.ic_wifi_rounded,
                         onClick = { showDialog = true },
                         title = "Wi-Fi",
                         isActive = true,
@@ -870,7 +852,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     Spacer(modifier = Modifier.width(8.dp))
 
                     SmallServiceButton(
-                        iconRes = R.drawable.whatsapp_svgrepo_com,
+                        iconRes = R.drawable.ic_whatsapp,
                         onClick = { showWaDialog = true },
                         title = "WhatsApp",
                         isActive = true,
@@ -938,6 +920,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             }
                         },
                         isActive = currentRoute == "home",
+                        showBackgroundWhenActive = true,
                         focusRequester = homeFocusRequester,
                         onFocusStateChange = { isFocused ->
                             if (isFocused) {
@@ -946,7 +929,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             }
                         },
                         useOriginalTint = true,
-                        isHome3D = true
+                        isHome3D = false
                     )
 
                     Spacer(modifier = Modifier.width(4.dp))
@@ -960,7 +943,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             .wrapContentSize()
                     ) {
                         SmallServiceButton(
-                            iconRes = R.drawable.room_service_3_svgrepo_com,
+                            iconRes = R.drawable.ic_room_service,
                             onClick = {
                                 if (currentRoute != "cantingfood") navController?.navigate("cantingfood") {
                                     popUpTo("home") { saveState = true }
@@ -1023,7 +1006,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     Spacer(modifier = Modifier.width(4.dp))
 
                     SmallServiceButton(
-                        iconRes = R.drawable.info_circle_svgrepo_com,
+                        iconRes = R.drawable.ic_info_circle,
                         onClick = {
                             if (currentRoute != "hotel_guide") navController?.navigate("hotel_guide") {
                                 popUpTo("home") { saveState = true }
@@ -1466,7 +1449,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         .width(420.dp)
                         .clip(RoundedCornerShape(28.dp))
                         .background(Color(0xFF1E2026), shape = RoundedCornerShape(28.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(28.dp))
                         .padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -1642,7 +1624,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         .width(420.dp)
                         .clip(RoundedCornerShape(28.dp))
                         .background(Color(0xFF1E2026), shape = RoundedCornerShape(28.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(28.dp))
                         .padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -1803,8 +1784,14 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             onPinConfirmed = { submittedPin ->
                 if (storedPin != null) {
                     if (submittedPin == storedPin) {
-                        showSettingsMenu = true
                         showPinDialog = false
+                        try {
+                            val intent = Intent(android.provider.Settings.ACTION_SETTINGS)
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Gagal membuka Pengaturan", Toast.LENGTH_SHORT).show()
+                        }
                     } else {
                         Toast.makeText(context, "Access Denied.", Toast.LENGTH_SHORT).show()
                     }
@@ -1815,10 +1802,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             },
             confirmEnabled = pinInput.length == 4 && storedPin != null
         )
-    }
-
-    if (showSettingsMenu) {
-        SettingsOptionsDialog(onDismiss = { showSettingsMenu = false })
     }
 
     if (showMyRequestsDrawer) {
@@ -2706,12 +2689,11 @@ fun NotificationItem(
                 ) {
                     // Show the appropriate icon based on the click count
                     val iconRes = when {
-                        clickCount == 1 -> R.drawable.delete_alt_svgrepo_com // Show delete icon after first click
+                        clickCount == 1 -> R.drawable.ic_trash // Show delete icon after first click
                         notification.type == "DND" -> R.drawable.ic_dnd
-                        notification.type == "LAUNDRY" -> R.drawable.hotel_coat_check_svgrepo_com
-                        notification.type == "ROOM_SERVICE" -> R.drawable.room_service_3_svgrepo_com
+                        notification.type == "ROOM_SERVICE" -> R.drawable.ic_room_service
                         notification.type == "GUEST_REQUEST" -> R.drawable.ic_request_service
-                        else -> R.drawable.notifications_svgrepo_com // Default icon
+                        else -> R.drawable.ic_notifications // Default icon
                     }
 
                     Icon(
@@ -2940,7 +2922,8 @@ fun SmallServiceButton(
     onFocusStateChange: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
     useOriginalTint: Boolean = false,
-    isHome3D: Boolean = false
+    isHome3D: Boolean = false,
+    showBackgroundWhenActive: Boolean = true
 ) {
     var isClicked by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
@@ -3019,7 +3002,7 @@ fun SmallServiceButton(
             Modifier.background(
                 color = if (isFocused) {
                     Color(0xFFCFDFED)
-                } else if (isActive) {
+                } else if (isActive && showBackgroundWhenActive) {
                     Color.White.copy(alpha = 0.15f)
                 } else {
                     Color.Transparent
@@ -3278,7 +3261,7 @@ fun WifiQRCodeDialog(onDismiss: () -> Unit) {
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    painter = painterResource(id = R.drawable.wifi_rounded_svgrepo_com),
+                                    painter = painterResource(id = R.drawable.ic_wifi_rounded),
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp),
                                     tint = Color.White
@@ -3582,7 +3565,7 @@ fun WaQRCodeDialog(onDismiss: () -> Unit) {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        painter = painterResource(id = R.drawable.whatsapp_svgrepo_com),
+                                        painter = painterResource(id = R.drawable.ic_whatsapp),
                                         contentDescription = null,
                                         modifier = Modifier.size(20.dp),
                                         tint = Color.Green
@@ -3604,7 +3587,7 @@ fun WaQRCodeDialog(onDismiss: () -> Unit) {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        painter = painterResource(id = R.drawable.phone_rounded_svgrepo_com),
+                                        painter = painterResource(id = R.drawable.ic_phone),
                                         contentDescription = null,
                                         modifier = Modifier.size(20.dp),
                                         tint = Color.White
@@ -5113,7 +5096,7 @@ fun OrderDrawer(
                                                             contentAlignment = Alignment.Center
                                                         ) {
                                                             Icon(
-                                                                painter = painterResource(id = R.drawable.room_service_3_svgrepo_com),
+                                                                painter = painterResource(id = R.drawable.ic_room_service),
                                                                 contentDescription = null,
                                                                 modifier = Modifier.size(20.dp),
                                                                 tint = Color.White.copy(alpha = 0.5f)

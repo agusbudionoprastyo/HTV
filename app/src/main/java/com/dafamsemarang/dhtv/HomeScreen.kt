@@ -29,7 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,10 +56,7 @@ import androidx.navigation.NavHostController
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.*
 import okio.sink
 import java.io.File
@@ -81,7 +77,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1831,31 +1826,64 @@ fun VideoAndSlideshowSection(
 
                     // 3. Flight/FIDS Dash/Icon Indicators
                     if (fidsActive) {
-                        repeat(fidsSlidesCount) { fidsIdx ->
-                            val actualIdx = imageList.size + fidsIdx
-                            val isActive = actualIdx == currentImageIndex
+                        if (fidsSlidesCount <= 10) {
+                            repeat(fidsSlidesCount) { fidsIdx ->
+                                val actualIdx = imageList.size + fidsIdx
+                                val isActive = actualIdx == currentImageIndex
+                                
+                                if (isActive) {
+                                    // Active Flight Page: Show flight icon, flip horizontally when navigating left
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_flight),
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .graphicsLayer { scaleX = if (isNavigatingLeft) -1f else 1f }
+                                    )
+                                } else {
+                                    // Inactive Flight Page: Show dash (-)
+                                    val alphaCoeff by animateFloatAsState(
+                                        targetValue = 0.4f,
+                                        animationSpec = tween(durationMillis = 300),
+                                        label = "flight_dash_alpha"
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 6.dp, height = 2.dp)
+                                            .background(Color.White.copy(alpha = alphaCoeff), shape = RoundedCornerShape(1.dp))
+                                    )
+                                }
+                            }
+                        } else {
+                            // If more than 10 pages, show a badge count
+                            val activeFidsIdx = if (currentImageIndex >= imageList.size) {
+                                (currentImageIndex - imageList.size)
+                            } else {
+                                0
+                            }
+                            val isFidsSectionActive = currentImageIndex >= imageList.size
                             
-                            if (isActive) {
-                                // Active Flight Page: Show flight icon, flip horizontally when navigating left
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_flight),
                                     contentDescription = null,
-                                    tint = Color.White,
+                                    tint = if (isFidsSectionActive) Color.White else Color.White.copy(alpha = 0.5f),
                                     modifier = Modifier
-                                        .size(8.dp)
-                                        .graphicsLayer { scaleX = if (isNavigatingLeft) -1f else 1f }
+                                        .size(10.dp)
+                                        .graphicsLayer { scaleX = if (isNavigatingLeft && isFidsSectionActive) -1f else 1f }
                                 )
-                            } else {
-                                // Inactive Flight Page: Show dash (-)
-                                val alphaCoeff by animateFloatAsState(
-                                    targetValue = 0.4f,
-                                    animationSpec = tween(durationMillis = 300),
-                                    label = "flight_dash_alpha"
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .size(width = 6.dp, height = 2.dp)
-                                        .background(Color.White.copy(alpha = alphaCoeff), shape = RoundedCornerShape(1.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${activeFidsIdx + 1}/$fidsSlidesCount",
+                                    color = if (isFidsSectionActive) Color.White else Color.White.copy(alpha = 0.5f),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    style = TextStyle(
+                                        platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                                    )
                                 )
                             }
                         }
@@ -2257,10 +2285,12 @@ fun HomeScreen(navController: NavHostController) {
                             modifier = Modifier
                         ) {
                             Icon(
-                                painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
+                                painter = painterResource(id = R.drawable.ic_dnd),
                                 contentDescription = "DND Active Indicator",
-                                modifier = Modifier.size(220.dp),
-                                tint = Color.White.copy(alpha = 0.2f)
+                                modifier = Modifier
+                                    .requiredSize(100.dp)
+                                    .offset(x = 60.dp),
+                                tint = Color.White.copy(alpha = 0.3f)
                             )
                         }
                     }
@@ -2421,7 +2451,7 @@ fun HomeScreen(navController: NavHostController) {
                     // Room Number Group (Door icon + Number)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            painter = painterResource(id = R.drawable.nest_doorbell_visitor_24dp_e8eaed_fill0_wght400_grad0_opsz24),
+                            painter = painterResource(id = R.drawable.ic_room),
                             contentDescription = "Room Icon",
                             modifier = Modifier.size(12.dp),
                             tint = Color.White
@@ -2463,9 +2493,9 @@ fun HomeScreen(navController: NavHostController) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val isSmoking = guestInfo?.isSmoking ?: false
                         val smokeIconRes = if (isSmoking) {
-                            R.drawable.cigarette_with_smoke_svgrepo_com
+                            R.drawable.ic_smoking
                         } else {
-                            R.drawable.i_no_smoking_svgrepo_com
+                            R.drawable.ic_nonsmoking
                         }
                         val smokeLabel = if (isSmoking) "Smoking" else "Non-Smoking"
 
@@ -2885,7 +2915,7 @@ fun ServiceButtonsSection(
                         ServiceButtonWithPackageBanner(
                             packageName = effectivePackageName,
                             label = label,
-                            fallbackIconRes = R.drawable.circle_information_svgrepo_com,
+                            fallbackIconRes = R.drawable.ic_info_circle,
                             onClick = {
                                 if (effectivePackageName == "EMPTY_SLOT") {
                                     onChangeOption(index)
@@ -2953,7 +2983,7 @@ fun ServiceButtonsSection(
                         ServiceButtonWithPackageBanner(
                             packageName = effectivePackageName,
                             label = label,
-                            fallbackIconRes = R.drawable.circle_information_svgrepo_com,
+                            fallbackIconRes = R.drawable.ic_info_circle,
                             onClick = {
                                 if (effectivePackageName == "EMPTY_SLOT") {
                                     onChangeOption(index)

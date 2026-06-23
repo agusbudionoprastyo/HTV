@@ -1030,7 +1030,8 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                  color = Color.White.copy(alpha = 0.85f),
                                  fontSize = 11.sp,
                                  fontWeight = FontWeight.Bold,
-                                 textAlign = TextAlign.Center
+                                 textAlign = TextAlign.Center,
+                                 modifier = Modifier.offset(y = 16.dp)
                              )
                              if (welcomeData.signUrl.isNotEmpty()) {
                                  val signImage = rememberCachedPainter(welcomeData.signUrl, null)
@@ -1041,7 +1042,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                                      modifier = Modifier
                                          .width(150.dp)
                                          .height(80.dp)
-                                         .offset(y = (-14).dp),
+                                         .offset(y = 8.dp),
                                      contentScale = ContentScale.Fit,
                                      colorFilter = ColorFilter.tint(Color.White)
                                  )

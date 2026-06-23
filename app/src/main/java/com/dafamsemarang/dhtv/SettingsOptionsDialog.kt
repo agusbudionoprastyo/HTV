@@ -37,87 +37,139 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import android.view.KeyEvent
  
+import androidx.compose.ui.focus.focusProperties
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+
 @Composable
 fun SettingsOptionsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     
+    // Animation control
+    var isVisible by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // Function to animate out and then dismiss
+    fun animateAndDismiss() {
+        isVisible = false
+        scope.launch {
+            delay(300) // Wait for exit animation
+            onDismiss()
+        }
+    }
+
+    // Focus management
+    val focusRequester = remember { FocusRequester() }
+
+    // Enter animation & Focus
+    LaunchedEffect(Unit) {
+        isVisible = true
+        scope.launch {
+            delay(350) // Wait for animation
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {}
+        }
+    }
+    
     androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { animateAndDismiss() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            dismissOnClickOutside = true
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            decorFitsSystemWindows = false
         )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .onPreviewKeyEvent { keyEvent ->
-                    if (keyEvent.type == KeyEventType.KeyDown) {
-                        val nativeCode = keyEvent.nativeKeyEvent.keyCode
-                        if (nativeCode == KeyEvent.KEYCODE_BACK || keyEvent.key == Key.Back) {
-                            onDismiss()
-                            return@onPreviewKeyEvent true
-                        }
-                    }
-                    false
-                }
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss // Clicking outside dialog content dismisses it
-                ),
-            contentAlignment = Alignment.Center
+                .focusProperties { canFocus = false } // Prevent D-pad from focusing the background
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+            // Dim/scrim background
+            Box(
                 modifier = Modifier
-                    .width(520.dp)
-                    .wrapContentHeight()
-                    .clickable(enabled = false) {} // Consume clicks inside modal
-                    .padding(28.dp)
-            ) {                
-                // Options List Section
-                val focusRequester = remember { FocusRequester() }
-                
-                LaunchedEffect(Unit) {
-                    try {
-                        focusRequester.requestFocus()
-                    } catch (e: Exception) {}
-                }
-                
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { animateAndDismiss() } // Close on background click
+            )
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isVisible,
+                enter = androidx.compose.animation.slideInHorizontally(
+                    initialOffsetX = { -it }, // Slide in from Left (exactly like notification drawer)
+                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 400, easing = androidx.compose.animation.core.LinearOutSlowInEasing)
+                ) + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.slideOutHorizontally(
+                    targetOffsetX = { -it }, // Slide out to Left
+                    animationSpec = androidx.compose.animation.core.tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                ) + androidx.compose.animation.fadeOut(),
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                androidx.compose.material3.Surface(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(380.dp) // Side drawer width (exactly like notification drawer!)
+                        .padding(top = 16.dp, bottom = 16.dp, start = 16.dp) // Float off the edges (exactly like notification drawer!)
+                        .clickable(enabled = false) {}, // Intercept clicks
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color(0xFF1E2026),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp
                 ) {
-                    val options = listOf(
-                        SettingsOptionItem(
-                            title = "Aksesibilitas (Auto Tombol Home)",
-                            desc = "Mengaktifkan proteksi tombol Home secara permanen",
-                            icon = R.drawable.ic_accessibility_custom,
-                            onClick = {
-                                openAccessibilitySettings(context)
-                                onDismiss()
-                            }
-                        ),
-                        SettingsOptionItem(
-                            title = "Pengaturan Android (Sistem)",
-                            desc = "Membuka konfigurasi Wi-Fi, Aplikasi, dan sistem OS",
-                            icon = R.drawable.ic_setting_system_custom,
-                            onClick = {
-                                openAndroidSettings(context)
-                                onDismiss()
-                            }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        // Title/Header (similar style to Notification drawer)
+                        Text(
+                            text = "Pengaturan",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            modifier = Modifier.padding(bottom = 24.dp, start = 4.dp)
                         )
-                    )
-                    
-                    options.forEachIndexed { index, option ->
-                        val isFirst = index == 0
-                        SettingsOptionRow(
-                            item = option,
-                            modifier = if (isFirst) Modifier.focusRequester(focusRequester) else Modifier
-                        )
+
+                        // Options List Section
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            val options = listOf(
+                                SettingsOptionItem(
+                                    title = "Aksesibilitas (Auto Tombol Home)",
+                                    desc = "Mengaktifkan proteksi tombol Home secara permanen",
+                                    icon = R.drawable.ic_accessibility_custom,
+                                    onClick = {
+                                        openAccessibilitySettings(context)
+                                        animateAndDismiss()
+                                    }
+                                ),
+                                SettingsOptionItem(
+                                    title = "Pengaturan Android (Sistem)",
+                                    desc = "Membuka konfigurasi Wi-Fi, Aplikasi, dan sistem OS",
+                                    icon = R.drawable.ic_setting,
+                                    onClick = {
+                                        openAndroidSettings(context)
+                                        animateAndDismiss()
+                                    }
+                                )
+                            )
+                            
+                            options.forEachIndexed { index, option ->
+                                val isFirst = index == 0
+                                SettingsOptionRow(
+                                    item = option,
+                                    modifier = if (isFirst) Modifier.focusRequester(focusRequester) else Modifier
+                                )
+                            }
+                        }
                     }
                 }
             }

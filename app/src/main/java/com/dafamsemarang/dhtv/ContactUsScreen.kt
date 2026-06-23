@@ -1316,7 +1316,7 @@ fun RequestDialog(
                             modifier = Modifier
                                 .padding(4.dp)
                                 .size(24.dp),
-                            painter = painterResource(id = R.drawable.date_outline_badged_svgrepo_com),
+                            painter = painterResource(id = R.drawable.ic_date_time),
                             contentDescription = "Choose Date"
                         )
                     }
@@ -1334,7 +1334,7 @@ fun RequestDialog(
                             modifier = Modifier
                                 .padding(4.dp)
                                 .size(24.dp),
-                            painter = painterResource(id = R.drawable.clock_circle_svgrepo_com),
+                            painter = painterResource(id = R.drawable.ic_date_time),
                             contentDescription = "Choose Time"
                         )
                     }

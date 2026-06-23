@@ -35,6 +35,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -51,6 +52,11 @@ import com.google.firebase.database.database
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.rememberLottieComposition
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
 
 /**
  * Composable untuk menampilkan reminder checkout yang bisa digunakan di semua screen
@@ -65,6 +71,7 @@ fun CheckoutReminder() {
     val branchId = sharedPreferences.getString("branchId", null)
     
     var guestInfo by remember { mutableStateOf<GuestInfo?>(null) }
+    var hasLoadedGuestInfo by remember { mutableStateOf(false) }
     var reminderState by remember { mutableStateOf(ReminderState.None) }
     
     // Persist unlock time to handle screen changes
@@ -73,64 +80,90 @@ fun CheckoutReminder() {
         mutableStateOf(sharedPreferences.getLong(unlockTimeKey, 0L)) 
     }
     
-    var warningDismissed by remember { mutableStateOf(false) } // Track if warning was dismissed
-    
     // Fetch guest info
     LaunchedEffect(deviceID, branchId) {
         if (deviceID != null && branchId != null) {
             listenForGuestInfo(context, deviceID, branchId) { info ->
                 guestInfo = info
+                hasLoadedGuestInfo = true
             }
         }
     }
     
     // Check Status Loop
-    LaunchedEffect(guestInfo, lastUnlockTime, warningDismissed) {
-        if (guestInfo != null) {
-            while (true) {
-                val now = Calendar.getInstance()
-                
-                // Parse date relative to Today
-                val isToday = isCheckoutDateToday(guestInfo!!.dateco)
-                
-                if (isToday) {
-                    val warningStart = Calendar.getInstance().apply {
-                         set(Calendar.HOUR_OF_DAY, 11)
-                         set(Calendar.MINUTE, 30)
-                         set(Calendar.SECOND, 0)
-                    }
-                    val checkoutDeadline = Calendar.getInstance().apply {
-                         set(Calendar.HOUR_OF_DAY, 12) // Critical Deadline
-                         set(Calendar.MINUTE, 0)
-                         set(Calendar.SECOND, 0)
-                    }
+    LaunchedEffect(hasLoadedGuestInfo, guestInfo, lastUnlockTime) {
+        val FORCE_DEV_MODE = true // Ubah ke false jika ingin menggunakan data real-time jam 11:30
+        
+        if (hasLoadedGuestInfo) {
+            if (guestInfo == null) {
+                // Kamar tidak ada tamu / kosong -> Langsung Kunci
+                reminderState = ReminderState.Expired
+            } else {
+                while (true) {
+                    val now = Calendar.getInstance()
                     
-                    if (now.after(checkoutDeadline)) {
-                        // Check if unlocked recently (1 Hour Logic)
-                        val timeSinceUnlock = now.timeInMillis - lastUnlockTime
-                        val ONE_HOUR_MS = 3600000L // 1 Hour
+                    val isPast = isCheckoutDatePast(guestInfo!!.dateco)
+                    val isToday = isCheckoutDateToday(guestInfo!!.dateco)
+                    
+                    if (FORCE_DEV_MODE) {
+                        // MODE DEV: Langsung bypass ke Warning dengan jeda dismiss 2 menit
+                        val lastDismissTime = sharedPreferences.getLong("checkout_warning_dismiss_time", 0L)
+                        val TWO_MINUTES_MS = 120000L // 2 Menit (120,000 ms)
+                        val timeSinceDismiss = System.currentTimeMillis() - lastDismissTime
                         
-                        if (timeSinceUnlock > ONE_HOUR_MS) {
-                            reminderState = ReminderState.Expired
-                            warningDismissed = false 
-                        } else {
-                            // Within grace period
-                            reminderState = ReminderState.None
-                        }
-                    } else if (now.after(warningStart)) {
-                        if (!warningDismissed) {
+                        if (timeSinceDismiss > TWO_MINUTES_MS) {
                             reminderState = ReminderState.Warning
                         } else {
                             reminderState = ReminderState.None
                         }
                     } else {
-                        reminderState = ReminderState.None
+                        // MODE REAL-TIME (JAM 11:30 & 12:00)
+                        if (isPast) {
+                            // Tanggal checkout sudah lewat kemarin atau sebelumnya
+                            reminderState = ReminderState.Expired
+                        } else if (isToday) {
+                            val warningStart = Calendar.getInstance().apply {
+                                 set(Calendar.HOUR_OF_DAY, 11)
+                                 set(Calendar.MINUTE, 30)
+                                 set(Calendar.SECOND, 0)
+                            }
+                            val checkoutDeadline = Calendar.getInstance().apply {
+                                 set(Calendar.HOUR_OF_DAY, 12) // Critical Deadline
+                                 set(Calendar.MINUTE, 0)
+                                 set(Calendar.SECOND, 0)
+                            }
+                            
+                            if (now.after(checkoutDeadline)) {
+                                 // Check if unlocked recently (1 Hour Logic)
+                                 val timeSinceUnlock = now.timeInMillis - lastUnlockTime
+                                 val ONE_HOUR_MS = 3600000L // 1 Hour
+                                 
+                                 if (timeSinceUnlock > ONE_HOUR_MS) {
+                                     reminderState = ReminderState.Expired
+                                 } else {
+                                     // Within grace period
+                                     reminderState = ReminderState.None
+                                 }
+                            } else if (now.after(warningStart)) {
+                                 val lastDismissTime = sharedPreferences.getLong("checkout_warning_dismiss_time", 0L)
+                                 val TWO_MINUTES_MS = 120000L // 2 Menit
+                                 val timeSinceDismiss = System.currentTimeMillis() - lastDismissTime
+                                 
+                                 if (timeSinceDismiss > TWO_MINUTES_MS) {
+                                     reminderState = ReminderState.Warning
+                                 } else {
+                                     reminderState = ReminderState.None
+                                 }
+                            } else {
+                                 reminderState = ReminderState.None
+                            }
+                        } else {
+                            reminderState = ReminderState.None
+                        }
                     }
-                } else {
-                    reminderState = ReminderState.None
+                    
+                    delay(5000) // Check status setiap 5 detik agar lebih responsif saat testing
                 }
-                
-                delay(10000) // Check every 10 seconds
             }
         }
     }
@@ -139,18 +172,19 @@ fun CheckoutReminder() {
     when (reminderState) {
         ReminderState.Warning -> {
             CheckoutReminderDialog(
-                guestName = guestInfo!!.fname,
-                roomNumber = guestInfo!!.room,
-                checkoutDate = guestInfo!!.dateco,
+                guestName = guestInfo?.fname ?: "Guest",
+                roomNumber = guestInfo?.room ?: "",
+                checkoutDate = guestInfo?.dateco ?: "Today",
                 onDismiss = { 
-                    warningDismissed = true 
+                    // Simpan waktu dismissal ke SharedPreferences
+                    sharedPreferences.edit().putLong("checkout_warning_dismiss_time", System.currentTimeMillis()).apply()
                     reminderState = ReminderState.None
                 }
             )
         }
         ReminderState.Expired -> {
             CheckoutBlockerDialog(
-                guestName = guestInfo!!.fname,
+                guestName = guestInfo?.fname ?: "Dev Guest",
                 onUnlock = { 
                     val currentTime = System.currentTimeMillis()
                     lastUnlockTime = currentTime
@@ -278,6 +312,53 @@ private fun isCheckoutDateToday(checkoutDate: String): Boolean {
 }
 
 /**
+ * Fungsi helper untuk mengecek apakah checkout date sudah terlewat (kemarin atau sebelumnya)
+ */
+private fun isCheckoutDatePast(checkoutDate: String): Boolean {
+    if (checkoutDate.isEmpty()) {
+        return false
+    }
+    
+    val dateFormats = listOf(
+        "dd/MM/yyyy",
+        "yyyy-MM-dd",
+        "dd-MM-yyyy",
+        "MM/dd/yyyy",
+        "dd MMM yyyy",
+        "EEEE, dd MMMM yyyy"
+    )
+    
+    var checkoutCalendar: Calendar? = null
+    for (format in dateFormats) {
+        try {
+            val sdf = SimpleDateFormat(format, Locale.getDefault())
+            val date = sdf.parse(checkoutDate)
+            if (date != null) {
+                checkoutCalendar = Calendar.getInstance().apply {
+                    time = date
+                    // Set ke akhir hari checkout tersebut (23:59:59)
+                    set(Calendar.HOUR_OF_DAY, 23)
+                    set(Calendar.MINUTE, 59)
+                    set(Calendar.SECOND, 59)
+                    set(Calendar.MILLISECOND, 999)
+                }
+                break
+            }
+        } catch (e: Exception) {
+            // Try next format
+        }
+    }
+    
+    if (checkoutCalendar == null) {
+        return false
+    }
+    
+    val now = Calendar.getInstance()
+    return now.after(checkoutCalendar)
+}
+
+
+/**
  * Fungsi untuk mengecek apakah perlu menampilkan reminder checkout
  * Reminder akan muncul mulai jam 11:30 sampai jam checkout lewat (15:00)
  * Hanya untuk tamu yang checkout hari ini
@@ -345,207 +426,118 @@ fun CheckoutReminderDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             dismissOnBackPress = true,
-            dismissOnClickOutside = false
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
         )
     ) {
-        // Glassmorphism container dengan backdrop blur effect
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp)
-                .liquidGlass(
-                    cornerRadius = 24.dp,
-                    glassColor = Color.White,
-                    alphaInitial = 0.3f,
-                    alphaFinal = 0f,
-                    hasTopRimLight = true,
-                    isFullBorder = false,
-                    borderWidth = 1.dp
-                )
-        ) {
-            // (Inner glow removed - handled by liquidGlass)
-            
-            // Close button di pojok kanan atas
-            // Close button (Liquid Glass Focused)
-            var isCloseFocused by remember { mutableStateOf(false) }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .size(36.dp) // Smaller size
-                    .clip(RoundedCornerShape(18.dp))
-                    .onFocusChanged { isCloseFocused = it.isFocused }
-                    .focusable() 
-                    .clickable { onDismiss() }
-                    .liquidGlass(
-                        cornerRadius = 18.dp,
-                        glassColor = if (isCloseFocused) Color.White else Color.Transparent, // Water Style
-                        alphaInitial = if (isCloseFocused) 0.3f else 0f,
-                        alphaFinal = if (isCloseFocused) 0.1f else 0f,
-                        hasTopRimLight = true, // Droplet Lighting
-                        isFullBorder = false,
-                        borderAlpha = if (isCloseFocused) 0.8f else 0f
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "\uF057", // Close icon
-                    fontSize = 20.sp, // Smaller icon
-                    color = if (isCloseFocused) Color.White else Color.White.copy(alpha = 0.5f), // Black Icon
-                    fontFamily = FontFamily(Font(R.font.icons))
-                )
-            }
-            
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) { 
-                // Title dengan glassmorphism text style
-                Text(
-                    text = "Checkout Reminder",
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    textAlign = TextAlign.Center
-                )
-                
-                // Message dengan glassmorphism text style
-                Text(
-                    text = buildAnnotatedString {
-                        // Nama tamu center aligned dan bold
-                        withStyle(style = ParagraphStyle(textAlign = TextAlign.Left)) {
-                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 18.sp)) {
-                                append("This is a reminder that your checkout time is at 12:00 PM today. Please ensure all your belongings are packed and ready for checkout.\n")
-                            }
-                        }
-                        // Teks di bawah left aligned
-                        withStyle(style = ParagraphStyle(textAlign = TextAlign.Left)) {
-                            append("Ini adalah pengingat bahwa waktu checkout Anda adalah pukul 12:00 siang hari ini. Mohon pastikan semua barang Anda sudah dikemas dan siap untuk checkout.")
-                        }
-                    },
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White.copy(alpha = 0.8f),
-                    lineHeight = 20.sp,
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Countdown checkout timer
-                CheckoutCountdown()
-            }
-        }
-    }
-}
-
-/**
- * Composable untuk menampilkan countdown checkout timer
- */
-@Composable
-fun CheckoutCountdown() {
-    // Fungsi untuk menghitung waktu tersisa
-    fun calculateTimeRemaining(): String {
-        val now = Calendar.getInstance()
-        val checkoutTime = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 12) // Jam checkout 12:00 PM
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        
-        // Jika sudah lewat jam 12:00 hari ini, set ke 18:00 (6:00 PM) hari ini
-        // Atau jika sudah lewat jam 18:00, set ke 12:00 esok hari
-        if (now.after(checkoutTime)) {
-            val checkoutTime18 = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 12) // Jam checkout 18:00 (6:00 PM)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            
-            if (now.after(checkoutTime18)) {
-                // Sudah lewat jam 18:00, set ke 12:00 esok hari
-                checkoutTime.add(Calendar.DAY_OF_YEAR, 1)
-            } else {
-                // Masih sebelum jam 18:00, gunakan jam 18:00 hari ini
-                checkoutTime.set(Calendar.HOUR_OF_DAY, 12)
-            }
-        }
-        
-        val diff = checkoutTime.timeInMillis - now.timeInMillis
-        
-        if (diff > 0) {
-            val hours = diff / (1000 * 60 * 60)
-            val minutes = (diff % (1000 * 60 * 60)) / (1000 * 60)
-            val seconds = (diff % (1000 * 60)) / 1000
-            
-            return String.format(
-                "%02d:%02d:%02d",
-                hours,
-                minutes,
-                seconds
-            )
-        } else {
-            return "00:00:00"
-        }
-    }
-    
-    // Initialize dengan nilai awal
-    var timeRemaining by remember { mutableStateOf(calculateTimeRemaining()) }
-    
-    LaunchedEffect(Unit) {
-        while (true) {
-            timeRemaining = calculateTimeRemaining()
-            delay(1000) // Update setiap detik
-        }
-    }
-    
-    if (timeRemaining.isNotEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 16.dp)
-//                .liquidGlass(
-//                    cornerRadius = 12.dp,
-//                    glassColor = Color.White,
-//                    alphaInitial = 0.05f,
-//                    hasTopRimLight = true,
-//                    isFullBorder = false,
-//                    borderAlpha = 0.3f
-//                )
-                .padding(16.dp),
+                .fillMaxSize()
+                .padding(vertical = 32.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier
+                    .width(540.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Color(0xFF1E2026), shape = RoundedCornerShape(28.dp))
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "Time until checkout",
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "Waktu hingga checkout",
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.6f)
-                )
-                Text(
-                    text = timeRemaining,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    letterSpacing = 2.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Checkout Reminder",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Start
+                        )
+
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(style = ParagraphStyle(textAlign = TextAlign.Start)) {
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)) {
+                                        append("This is a reminder that your checkout time is at 12:00 PM today. Please ensure all your belongings are packed and ready for checkout.\n\n")
+                                    }
+                                }
+                                withStyle(style = ParagraphStyle(textAlign = TextAlign.Start)) {
+                                    append("Ini adalah pengingat bahwa waktu checkout Anda adalah pukul 12:00 siang hari ini. Mohon pastikan semua barang Anda sudah dikemas dan siap untuk checkout.")
+                                }
+                            },
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.7f),
+                            lineHeight = 18.sp
+                        )
+                    }
+
+                    // Header Warning Icon (Lottie) di Kanan
+                    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.check_out))
+                    val progress by animateLottieCompositionAsState(
+                        composition = composition,
+                        iterations = LottieConstants.IterateForever
+                    )
+                    Box(
+                        modifier = Modifier.size(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LottieAnimation(
+                            composition = composition,
+                            progress = { progress },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Confirm button
+                var isButtonFocused by remember { mutableStateOf(false) }
+                val focusRequester = remember { FocusRequester() }
+                
+                LaunchedEffect(Unit) {
+                    delay(100)
+                    try {
+                        focusRequester.requestFocus()
+                    } catch (e: Exception) {}
+                }
+
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(120.dp)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isButtonFocused) Color.White else Color.White.copy(alpha = 0.05f))
+                            .onFocusChanged { isButtonFocused = it.isFocused }
+                            .focusRequester(focusRequester)
+                            .clickable { onDismiss() }
+                            .focusable(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "OK",
+                            color = if (isButtonFocused) Color.Black else Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
             }
         }
     }
 }
+
 
 @Composable
 fun CheckoutBlockerDialog(

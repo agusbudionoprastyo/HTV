@@ -31,6 +31,27 @@ import androidx.lifecycle.lifecycleScope
 import com.dafamsemarang.dhtv.ui.components.UpdateProgress
 import com.dafamsemarang.dhtv.ui.theme.dhtvTheme
 import kotlinx.coroutines.launch
+import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 
 class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
@@ -163,8 +184,12 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         }
                     }
 
-                    // Use shouldShowPairing state to control navigation
-                    if (shouldShowPairing) {
+                    val isAppLocked by remember { DataRepository.isAppLocked }
+                    val lockMessage by remember { DataRepository.lockMessage }
+
+                    if (isPaired && isAppLocked) {
+                        LockOverlay(message = lockMessage)
+                    } else if (shouldShowPairing) {
                         Log.d("MainActivity", "Showing pairing screen")
                         PairingScreen(
                             onDeviceIdSaved = { deviceId ->
@@ -185,7 +210,7 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                     }
 
                     // Render screensaver inside the app overlay when active
-                    val isScreenSaverActive = ScreenSaverManager.isScreenSaverActive
+                    val isScreenSaverActive = ScreenSaverManager.isScreenSaverActive && !isAppLocked
                     LaunchedEffect(isScreenSaverActive) {
                         val window = this@MainActivity.window
                         try {
@@ -376,6 +401,14 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         }
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (DataRepository.isAppLocked.value) {
+            // Block all input actions (like D-pad navigation, back button, home triggers) when app is locked due to expired subscription
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             Log.d("MainActivity", "Global BACK key pressed - Forcing native Screensaver via Somnambulator")
@@ -408,5 +441,93 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         super.onStop()
         // Update device status to offline when app goes to background
         deviceManager?.handleDeviceShutdown()
+    }
+}
+
+@androidx.compose.runtime.Composable
+fun LockOverlay(message: String) {
+    val context = LocalContext.current
+    val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    val deviceId = sharedPrefs.getString("deviceID", "Unknown") ?: "Unknown"
+    val branchId = sharedPrefs.getString("branchId", "Unknown") ?: "Unknown"
+    val room = sharedPrefs.getString("room", "Unknown") ?: "Unknown"
+    
+    val branchNameState by remember { DataRepository.branchName }
+    val displayBranchName = branchNameState ?: branchId
+
+    val deviceName = remember { "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}" }
+    val ipAddress = remember { DeviceManager(context).getIpAddress() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0F1013)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            // Circle block with DND icon as a lock/no-entry representation
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(40.dp))
+                    .background(Color(0xFFEF4444).copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_lock),
+                    contentDescription = "Locked",
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(28.dp))
+            
+            Text(
+                text = "SUBSCRIPTION EXPIRED",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+                textAlign = TextAlign.Center
+            )
+            
+            Spacer(modifier = Modifier.height(14.dp))
+            
+            Text(
+                text = message,
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = 16.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 22.sp
+            )
+            
+            Spacer(modifier = Modifier.height(48.dp))
+            
+            // Device Information Box
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.05f))
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = "INFORMASI PERANGKAT",
+                    color = Color.White.copy(alpha = 0.4f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(text = "$room", color = Color.White.copy(alpha = 0.9f), fontSize = 23.sp)
+                Text(text = displayBranchName, color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
+                Text(text = "$deviceName • $ipAddress", color = Color.White.copy(alpha = 0.9f), fontSize = 8.sp)
+            }
+        }
     }
 }
