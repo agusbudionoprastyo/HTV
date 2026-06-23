@@ -4046,9 +4046,6 @@ Status ini menandakan bahwa tamu tidak ingin diganggu untuk sementara waktu. Sta
                                         """.trimIndent()
                                     }
 
-                                    Log.d("FooterSection", "Step 3: Calling sendPostDnDToApi with message")
-                                    sendPostDnDToApi(context, message)
-                                    
                                     // Trigger FCM Notification
                                     val dndTitle = if (release) "DND Status Dibatalkan" else "DND Status Aktif"
                                     val dndBody = "Kamar $escapedRoom " + (if (release) "tidak lagi dalam status 'Do Not Disturb'." else "sekarang dalam status 'Do Not Disturb'.")
@@ -4100,114 +4097,6 @@ Status ini menandakan bahwa tamu tidak ingin diganggu untuk sementara waktu. Sta
     })
 }
 
-fun sendPostDnDToApi(context: Context, message: String) {
-    val database = Firebase.database.reference
-    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-    val branchId = sharedPreferences.getString("branchId", null)
-    
-    Log.d("TelegramGatewayHandler", "Starting Telegram API call with branchId: $branchId")
-    
-    val telegramGatewayRef = database.child("BRANCHES").child(branchId ?: "").child("SETTING").child("TELEGRAM_REQUEST")
-    Log.d("TelegramGatewayHandler", "Firebase path: ${telegramGatewayRef.toString()}")
-
-    telegramGatewayRef.addListenerForSingleValueEvent(object : ValueEventListener {
-        override fun onDataChange(snapshot: DataSnapshot) {
-            Log.d("TelegramGatewayHandler", "Received Firebase data: ${snapshot.exists()}")
-            
-            // Firebase structure: chatId = chat ID (group ID), tokenBot = bot token
-            val chatId = snapshot.child("chatId").getValue(Any::class.java) // Can be Long or Number
-            val botToken = snapshot.child("tokenBot").getValue(String::class.java)
-
-            Log.d("TelegramGatewayHandler", "Configuration values:")
-            Log.d("TelegramGatewayHandler", "chatId: $chatId")
-            Log.d("TelegramGatewayHandler", "botToken: $botToken")
-
-            if (chatId != null && botToken != null) {
-                // Build Telegram Bot API endpoint URL
-                val endpointUrl = "https://api.telegram.org/bot$botToken/sendMessage"
-                
-                Log.d("TelegramGatewayHandler", "Endpoint URL: $endpointUrl")
-                Log.d("TelegramGatewayHandler", "Message to API: $message")
-
-                // Convert chat_id to Long (Telegram group IDs are always numbers)
-                val chatIdNumber: Long = when (chatId) {
-                    is Long -> chatId
-                    is Number -> chatId.toLong()
-                    is String -> {
-                        try {
-                            chatId.toLong()
-                        } catch (e: NumberFormatException) {
-                            Log.e("TelegramGatewayHandler", "chatId is not a valid number: $chatId")
-                            throw IllegalArgumentException("chatId must be a number, got: $chatId")
-                        }
-                    }
-                    else -> {
-                        Log.e("TelegramGatewayHandler", "chatId has unsupported type: ${chatId.javaClass}")
-                        throw IllegalArgumentException("chatId must be a number, got: ${chatId.javaClass}")
-                    }
-                }
-                
-                // Create request body using data class for proper serialization
-                val requestBody = TelegramMessageRequest(
-                    chat_id = chatIdNumber,  // Telegram group chat ID (Long)
-                    text = message,         // Message text with HTML formatting
-                    parse_mode = "HTML"     // Enable HTML parsing for <b>bold</b> and <i>italic</i>
-                )
-
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val client = HttpClient(Android) {
-                            install(ContentNegotiation) {
-                                json(Json { prettyPrint = true; isLenient = true })
-                            }
-                        }
-
-                        Log.d("TelegramGatewayHandler", "Making API call to: $endpointUrl")
-                        Log.d("TelegramGatewayHandler", "Request body: $requestBody")
-                        
-                        // Serialize to JSON to verify the actual JSON being sent
-                        val jsonSerializer = Json { prettyPrint = false; isLenient = true }
-                        val jsonString = jsonSerializer.encodeToString(TelegramMessageRequest.serializer(), requestBody)
-                        Log.d("TelegramGatewayHandler", "JSON being sent: $jsonString")
-                        
-                        val response = client.post(endpointUrl) {
-                            contentType(ContentType.Application.Json)
-                            setBody(requestBody)
-                        }
-
-                        val responseBody = response.bodyAsText()
-                        Log.d("TelegramGatewayHandler", "Response status: ${response.status}")
-                        Log.d("TelegramGatewayHandler", "Response body: $responseBody")
-
-                        if (response.status == HttpStatusCode.OK) {
-                            Log.d("TelegramGatewayHandler", "Message sent successfully to Telegram")
-                        } else {
-                            Log.e("TelegramGatewayHandler", "Error: ${response.status}")
-                            Log.e("TelegramGatewayHandler", "Response Body: $responseBody")
-                        }
-
-                        client.close()
-
-                    } catch (e: Exception) {
-                        Log.e("TelegramGatewayHandler", "Request failed: ${e.message}")
-                        Log.e("TelegramGatewayHandler", "Exception type: ${e.javaClass.simpleName}")
-                        e.printStackTrace()
-                    }
-                }
-            } else {
-                Log.e("TelegramGatewayHandler", "Incomplete TELEGRAM_REQUEST settings in branch $branchId")
-                Log.e("TelegramGatewayHandler", "Missing values: ${listOfNotNull(
-                    if (chatId == null) "chatId (chat ID)" else null,
-                    if (botToken == null) "tokenBot (bot token)" else null
-                ).joinToString(", ")}")
-            }
-        }
-
-        override fun onCancelled(error: DatabaseError) {
-            Log.e("TelegramGatewayHandler", "Failed to retrieve TELEGRAM_REQUEST settings from branch $branchId", error.toException())
-        }
-    })
-}
 
 fun updateNotificationStatus(context: Context, notification: Notification, folioId: Int, newStatus: String) {
     val database = Firebase.database.reference
@@ -4900,16 +4789,6 @@ fun CartDrawer(
                             val orderId = generateOrderId()
                             sendOrderNotification(context, folioId!!, selectedPaymentMethod.value, orderId, selectedItems)
                             sendOrderToDatabase(context, folioId!!, guestName ?: "", guestPhone ?: "", guestRoom ?: "", selectedPaymentMethod.value, selectedItems, "placed", orderId)
-                            sendPostOrderToApi(
-                                context,
-                                folioId!!,
-                                guestName ?: "",
-                                guestPhone ?: "",
-                                guestRoom ?: "",
-                                selectedPaymentMethod.value,
-                                selectedItems,
-                                orderId
-                            )
                         } else {
                             Toast.makeText(context, "Error: No folio ID found", Toast.LENGTH_SHORT).show()
                         }
