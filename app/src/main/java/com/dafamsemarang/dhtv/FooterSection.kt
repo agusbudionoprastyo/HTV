@@ -267,6 +267,77 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     var orders by remember { mutableStateOf<List<Order>>(emptyList()) }
     val database: DatabaseReference = Firebase.database.reference
 
+    // Pre-fetch Wi-Fi Data
+    var wifiSsid by remember { mutableStateOf("") }
+    var wifiPassword by remember { mutableStateOf("") }
+    var wifiLoading by remember { mutableStateOf(true) }
+    var wifiQrBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+
+    // Pre-fetch WhatsApp/Contact Data
+    var waPhone by remember { mutableStateOf("") }
+    var waExt by remember { mutableStateOf("") }
+    var waTelephone by remember { mutableStateOf("") }
+    var waAddress by remember { mutableStateOf("") }
+    var waMessage by remember { mutableStateOf("") }
+    var waLoading by remember { mutableStateOf(true) }
+    var waQrBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(branchId) {
+        if (branchId != null) {
+            // Fetch Wi-Fi Settings
+            database.child("BRANCHES").child(branchId).child("SETTING/WIFI")
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    wifiSsid = snapshot.child("ssid").getValue(String::class.java) ?: ""
+                    wifiPassword = snapshot.child("password").getValue(String::class.java) ?: ""
+                    wifiLoading = false
+                }
+                .addOnFailureListener {
+                    wifiLoading = false
+                }
+
+            // Fetch Contact Settings
+            database.child("BRANCHES").child(branchId).child("SETTING/CONTACT")
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    waPhone = snapshot.child("PHONE").getValue(String::class.java) ?: ""
+                    val rawMessage = snapshot.child("MESSAGE").getValue(String::class.java) ?: ""
+                    try {
+                        waMessage = java.net.URLEncoder.encode(rawMessage, java.nio.charset.StandardCharsets.UTF_8.toString())
+                    } catch (e: Exception) {
+                        waMessage = rawMessage
+                    }
+                    waExt = snapshot.child("EXT").getValue(String::class.java) ?: ""
+                    waTelephone = snapshot.child("TELEPHONE").getValue(String::class.java) ?: ""
+                    waAddress = snapshot.child("ADDRESS").getValue(String::class.java) ?: ""
+                    waLoading = false
+                }
+                .addOnFailureListener {
+                    waLoading = false
+                }
+        }
+    }
+
+    // Pre-generate Wi-Fi QR Bitmap
+    LaunchedEffect(wifiSsid, wifiPassword) {
+        if (wifiSsid.isNotEmpty()) {
+            val bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                generateWifiQRCode(wifiSsid, wifiPassword)
+            }
+            wifiQrBitmap = bitmap
+        }
+    }
+
+    // Pre-generate WhatsApp QR Bitmap
+    LaunchedEffect(waPhone, waMessage, deviceID) {
+        if (waPhone.isNotEmpty() && deviceID != null) {
+            val bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                generateWaQRCode(waPhone, waMessage, deviceID)
+            }
+            waQrBitmap = bitmap
+        }
+    }
+
     DisposableEffect(folioId, branchId) {
         var activeQuery: com.google.firebase.database.Query? = null
         var activeListener: com.google.firebase.database.ValueEventListener? = null
@@ -1210,7 +1281,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 }
 
                 // Badge jika ada item di cart (angka bertambah realtime setelah dot masuk ke keranjang)
-                val actualCartCount = GlobalCartState.selectedItems.sumOf { it.quantity }
+                val actualCartCount = GlobalCartState.selectedItems.size
                 var displayedCartCount by remember { mutableStateOf(actualCartCount) }
                 val animateTrigger = GlobalCartState.animateTrigger.value
 
@@ -1370,393 +1441,81 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         )
                     }
                     .alpha(requestAlpha)
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(
-                        color = if (isMyRequestFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.15f),
-                        shape = CircleShape
-                    )
-                    .focusRequester(myRequestFocusRequester)
-                    .onFocusChanged { isMyRequestFocused = it.isFocused }
-                    .focusable(enabled = isRequestActive)
-                    .clickable(
-                        enabled = isRequestActive,
-                        onClick = { showMyRequestsDrawer = true },
-                        indication = ripple(color = Color(0xFF88B4D4)),
-                        interactionSource = remember { MutableInteractionSource() }
-                    ),
+                    .size(36.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_request),
-                    contentDescription = "My Request",
-                    modifier = Modifier.size(20.dp),
-                    tint = if (isMyRequestFocused) Color(0xFF1C1D24) else Color.White
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(
+                            color = if (isMyRequestFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.15f),
+                            shape = CircleShape
+                        )
+                        .focusRequester(myRequestFocusRequester)
+                        .onFocusChanged { isMyRequestFocused = it.isFocused }
+                        .focusable(enabled = isRequestActive)
+                        .clickable(
+                            enabled = isRequestActive,
+                            onClick = { showMyRequestsDrawer = true },
+                            indication = ripple(color = Color(0xFF88B4D4)),
+                            interactionSource = remember { MutableInteractionSource() }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_request),
+                        contentDescription = "My Request",
+                        modifier = Modifier.size(20.dp),
+                        tint = if (isMyRequestFocused) Color(0xFF1C1D24) else Color.White
+                    )
+                }
+
                 // Badge jika ada requests
                 if (myRequests.isNotEmpty()) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
                             .align(Alignment.TopEnd)
-                            .offset(x = 2.dp, y = (-2).dp)
-                            .background(Color(0xFFFF5722), CircleShape)
-                    )
-                }
-            }
-        }
-        // ─────────────────────────────────────────────────────────────────────────
-    }
-
-
-    if (showConfirmDialog) {
-        val sliderFocusRequester = remember { FocusRequester() }
-        var targetProgress by remember { mutableFloatStateOf(0f) }
-        val animatedProgress by animateFloatAsState(
-            targetValue = targetProgress,
-            animationSpec = tween(durationMillis = 150, easing = LinearOutSlowInEasing) // Faster animation for manual hold follow!
-        )
-
-        // Automatically trigger activation when slide completes
-        LaunchedEffect(targetProgress) {
-            if (targetProgress == 1f) {
-                delay(350)
-                Log.d("FooterSection", "Confirming DND activation via auto-slide for folioId: $folioId")
-                val currentFolioId = folioId
-                if (currentFolioId != null) {
-                    setDndStatusInFirebase(context, currentFolioId, true)
-                    sendDndNotification(context, currentFolioId, release = false, deviceID = deviceID)
-                }
-                showConfirmDialog = false
-            }
-        }
-
-        // Request focus on launch
-        LaunchedEffect(Unit) {
-            delay(100)
-            sliderFocusRequester.requestFocus()
-        }
-
-        Dialog(
-            onDismissRequest = { showConfirmDialog = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .width(420.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(Color(0xFF1E2026), shape = RoundedCornerShape(28.dp))
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFE91E63).copy(alpha = 0.1f)),
+                            .offset(x = 6.dp, y = (-6).dp)
+                            .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                            .size(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
-                            contentDescription = "DND Icon",
-                            modifier = Modifier.size(32.dp),
-                            tint = Color(0xFFE91E63)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Text(
-                        text = "Set Do Not Disturb",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Hold D-pad Right to activate 'Do Not Disturb'",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    var isSliderFocused by remember { mutableStateOf(false) }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .clip(RoundedCornerShape(28.dp))
-                            .background(Color.White.copy(alpha = 0.05f))
-                            .onFocusChanged { isSliderFocused = it.isFocused }
-                            .focusRequester(sliderFocusRequester)
-                            .onKeyEvent { keyEvent ->
-                                if (keyEvent.key == Key.DirectionRight) {
-                                    if (keyEvent.type == KeyEventType.KeyDown) {
-                                        targetProgress = (targetProgress + 0.08f).coerceAtMost(1f)
-                                        true
-                                    } else if (keyEvent.type == KeyEventType.KeyUp) {
-                                        if (targetProgress < 1f) {
-                                            targetProgress = 0f
-                                        }
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                } else if (keyEvent.key == Key.DirectionLeft) {
-                                    if (keyEvent.type == KeyEventType.KeyDown) {
-                                        showConfirmDialog = false
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                } else {
-                                    false
-                                }
-                            }
-                            .focusable(),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        // Slider fill progress track (nesting the thumb inside the leading edge)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(300.dp * animatedProgress + 56.dp)
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(Color(0xFFE91E63).copy(alpha = 0.3f), Color(0xFFE91E63))
-                                    ),
-                                    shape = RoundedCornerShape(28.dp)
-                                )
-                        )
-
-                        // Placeholder Text in center
                         Text(
-                            text = if (targetProgress == 1f) "Activating..." else "Hold D-pad Right",
-                            color = Color.White.copy(alpha = 0.35f),
-                            style = MaterialTheme.typography.labelLarge,
+                            text = "${myRequests.size}",
+                            color = Color.White,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-
-                        // Circular Slider Thumb (slides based on animatedProgress)
-                        val thumbOffset = with(androidx.compose.ui.platform.LocalDensity.current) {
-                            (300.dp * animatedProgress).toPx()
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .graphicsLayer { translationX = thumbOffset }
-                                .padding(4.dp)
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                        )
-
-                        // Right Target Arrow to show direction
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 16.dp)
-                                .size(24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.ArrowForward,
-                                contentDescription = "Right Arrow",
-                                modifier = Modifier.size(20.dp),
-                                tint = Color.White.copy(alpha = 0.3f)
+                            textAlign = TextAlign.Center,
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(
+                                    includeFontPadding = false
+                                )
                             )
-                        }
+                        )
                     }
                 }
             }
         }
+
+    if (showReleaseConfirmDialog && folioId != null) {
+        DndConfirmDrawer(
+            context = context,
+            isDndActive = true,
+            onDismiss = { showReleaseConfirmDialog = false },
+            folioId = folioId!!,
+            deviceID = deviceID
+        )
     }
 
-    if (showReleaseConfirmDialog) {
-        val sliderFocusRequester = remember { FocusRequester() }
-        var targetProgress by remember { mutableFloatStateOf(1f) }
-        val animatedProgress by animateFloatAsState(
-            targetValue = targetProgress,
-            animationSpec = tween(durationMillis = 150, easing = LinearOutSlowInEasing) // Faster animation for manual hold follow!
+    if (showConfirmDialog && folioId != null) {
+        DndConfirmDrawer(
+            context = context,
+            isDndActive = false,
+            onDismiss = { showConfirmDialog = false },
+            folioId = folioId!!,
+            deviceID = deviceID
         )
-
-        // Automatically trigger release when slide completes
-        LaunchedEffect(targetProgress) {
-            if (targetProgress == 0f) {
-                delay(350)
-                Log.d("FooterSection", "Confirming DND deactivation via auto-slide for folioId: $folioId")
-                val currentFolioId = folioId
-                if (currentFolioId != null) {
-                    setDndStatusInFirebase(context, currentFolioId, false)
-                    sendDndNotification(context, currentFolioId, release = true, deviceID = deviceID)
-                }
-                showReleaseConfirmDialog = false
-            }
-        }
-
-        // Request focus on launch
-        LaunchedEffect(Unit) {
-            delay(100)
-            sliderFocusRequester.requestFocus()
-        }
-
-        Dialog(
-            onDismissRequest = { showReleaseConfirmDialog = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .width(420.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(Color(0xFF1E2026), shape = RoundedCornerShape(28.dp))
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
-                            contentDescription = "DND Icon",
-                            modifier = Modifier.size(32.dp),
-                            tint = Color.White
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Text(
-                        text = "Release Do Not Disturb",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Hold D-pad Left to release 'Do Not Disturb'",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    var isSliderFocused by remember { mutableStateOf(false) }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .clip(RoundedCornerShape(28.dp))
-                            .background(Color.White.copy(alpha = 0.05f))
-                            .onFocusChanged { isSliderFocused = it.isFocused }
-                            .focusRequester(sliderFocusRequester)
-                            .onKeyEvent { keyEvent ->
-                                if (keyEvent.key == Key.DirectionLeft) {
-                                    if (keyEvent.type == KeyEventType.KeyDown) {
-                                        targetProgress = (targetProgress - 0.08f).coerceAtLeast(0f)
-                                        true
-                                    } else if (keyEvent.type == KeyEventType.KeyUp) {
-                                        if (targetProgress > 0f) {
-                                            targetProgress = 1f
-                                        }
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                } else if (keyEvent.key == Key.DirectionRight) {
-                                    if (keyEvent.type == KeyEventType.KeyDown) {
-                                        showReleaseConfirmDialog = false
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                } else {
-                                    false
-                                }
-                            }
-                            .focusable(),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        // Slider fill progress track (nesting the thumb inside the leading edge)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(300.dp * animatedProgress + 56.dp)
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.8f))
-                                    ),
-                                    shape = RoundedCornerShape(28.dp)
-                                )
-                        )
-
-                        // Placeholder Text in center
-                        Text(
-                            text = if (targetProgress == 0f) "Releasing..." else "Hold D-pad Left",
-                            color = Color.White.copy(alpha = 0.35f),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-
-                        // Circular Slider Thumb (slides based on animatedProgress)
-                        val thumbOffset = with(androidx.compose.ui.platform.LocalDensity.current) {
-                            (300.dp * animatedProgress).toPx()
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .graphicsLayer { translationX = thumbOffset }
-                                .padding(4.dp)
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                        )
-
-                        // Left Arrow to show release direction (placed on the left side of track)
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 16.dp)
-                                .size(24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.ArrowForward,
-                                contentDescription = "Left Arrow",
-                                modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = 180f },
-                                tint = Color.White.copy(alpha = 0.3f)
-                            )
-                        }
-                    }
-                }
-            }
-        }
     }
 
     if (showNotificationButtonDialog && folioId != null) {
@@ -1771,11 +1530,25 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     }
 
     if (showDialog) {
-        WifiQRCodeDialog(onDismiss = { showDialog = false })
+        WifiQRCodeDialog(
+            ssid = wifiSsid,
+            password = wifiPassword,
+            loading = wifiLoading,
+            qrCodeBitmap = wifiQrBitmap,
+            onDismiss = { showDialog = false }
+        )
     }
 
     if (showWaDialog) {
-        WaQRCodeDialog(onDismiss = { showWaDialog = false })
+        WaQRCodeDialog(
+            phone = waPhone,
+            ext = waExt,
+            telephone = waTelephone,
+            address = waAddress,
+            loading = waLoading,
+            qrCodeBitmap = waQrBitmap,
+            onDismiss = { showWaDialog = false }
+        )
     }
 
     if (showPinDialog) {
@@ -1872,6 +1645,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     }
     
     FlyingDotOverlay()
+}
 }
 
 @Composable
@@ -2173,23 +1947,75 @@ fun MyRequestsDrawer(onDismiss: () -> Unit, requests: List<Request>, onSelectReq
                                         )
                                     },
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                                contentPadding = PaddingValues(vertical = 24.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 24.dp)
                             ) {
                                 items(requests.size) { index ->
                                     val request = requests[index]
                                     var isItemFocused by remember { mutableStateOf(false) }
-                                    Surface(
+
+                                    // Snappy Google TV focus zoom scale transition
+                                    val scale by animateFloatAsState(
+                                        targetValue = if (isItemFocused) 1.03f else 1.0f,
+                                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+                                        label = "RequestCardScale"
+                                    )
+
+                                    // Smooth fade in/out transition for focus visibility (LED Glow)
+                                    val focusFadeAlpha by animateFloatAsState(
+                                        targetValue = if (isItemFocused) 1.0f else 0.0f,
+                                        animationSpec = tween(durationMillis = 350),
+                                        label = "RequestFocusFadeAlpha"
+                                    )
+
+                                    val pulseAlpha = remember { androidx.compose.animation.core.Animatable(0.0f) }
+
+                                    LaunchedEffect(isItemFocused) {
+                                        if (isItemFocused) {
+                                            pulseAlpha.animateTo(
+                                                targetValue = 1.0f,
+                                                animationSpec = infiniteRepeatable(
+                                                    animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+                                                    repeatMode = RepeatMode.Reverse
+                                                )
+                                            )
+                                        } else {
+                                            pulseAlpha.snapTo(0.0f)
+                                        }
+                                    }
+
+                                    // White border that pulses and fades in smoothly on focus
+                                    val borderModifier = if (isItemFocused) {
+                                        Modifier.border(
+                                            width = 3.dp,
+                                            color = Color.White.copy(alpha = pulseAlpha.value * focusFadeAlpha),
+                                            shape = RoundedCornerShape(19.dp)
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .focusRequester(if (index == 0) firstItemFocusRequester else FocusRequester())
+                                            .graphicsLayer {
+                                                scaleX = scale
+                                                scaleY = scale
+                                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
+                                            }
                                             .onFocusChanged { isItemFocused = it.isFocused }
-                                            .clickable { onSelectRequest(request) },
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = if (isItemFocused) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-                                        tonalElevation = if (isItemFocused) 12.dp else 0.dp,
-                                        border = if (isItemFocused) BorderStroke(2.dp, Color.White.copy(alpha = 0.2f)) else null
+                                            .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
+                                            .clickable { onSelectRequest(request) }
+                                            .then(borderModifier)
+                                            .padding(3.dp)
                                     ) {
-                                        MyRequestItemDrawer(request = request, isFocused = isItemFocused)
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = Color.White.copy(alpha = 0.05f),
+                                            tonalElevation = 0.dp
+                                        ) {
+                                            MyRequestItemDrawer(request = request, isFocused = isItemFocused)
+                                        }
                                     }
                                 }
                             }
@@ -2340,6 +2166,318 @@ private fun FooterPulsingBadge(
                 .size(8.dp)
                 .background(color = color, shape = CircleShape)
         )
+    }
+}
+
+@Composable
+fun DndConfirmDrawer(
+    context: Context,
+    isDndActive: Boolean,
+    onDismiss: () -> Unit,
+    folioId: Int,
+    deviceID: String?
+) {
+    var animateIn by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val sliderFocusRequester = remember { FocusRequester() }
+    val closeButtonFocusRequester = remember { FocusRequester() }
+    var isCloseFocused by remember { mutableStateOf(false) }
+
+    var targetProgress by remember(isDndActive) { mutableFloatStateOf(if (isDndActive) 1f else 0f) }
+    val animatedProgress by animateFloatAsState(
+        targetValue = targetProgress,
+        animationSpec = tween(durationMillis = 150, easing = LinearOutSlowInEasing)
+    )
+
+    LaunchedEffect(Unit) {
+        animateIn = true
+    }
+
+    val animatedAlpha by animateFloatAsState(
+        targetValue = if (animateIn) 1f else 0f,
+        animationSpec = tween(durationMillis = 300)
+    )
+
+    fun dismissWithAnimation() {
+        animateIn = false
+        scope.launch {
+            delay(300)
+            onDismiss()
+        }
+    }
+
+    LaunchedEffect(targetProgress) {
+        val currentFolioId = folioId
+        if (currentFolioId != null) {
+            if (isDndActive && targetProgress == 0f) {
+                delay(350)
+                Log.d("DndConfirmDrawer", "Confirming DND deactivation via auto-slide for folioId: $folioId")
+                setDndStatusInFirebase(context, currentFolioId, false)
+                sendDndNotification(context, currentFolioId, release = true, deviceID = deviceID)
+                dismissWithAnimation()
+            } else if (!isDndActive && targetProgress == 1f) {
+                delay(350)
+                Log.d("DndConfirmDrawer", "Confirming DND activation via auto-slide for folioId: $folioId")
+                setDndStatusInFirebase(context, currentFolioId, true)
+                sendDndNotification(context, currentFolioId, release = false, deviceID = deviceID)
+                dismissWithAnimation()
+            }
+        }
+    }
+
+    LaunchedEffect(animateIn) {
+        if (animateIn) {
+            delay(100)
+            sliderFocusRequester.requestFocus()
+        }
+    }
+
+    Dialog(
+        onDismissRequest = { dismissWithAnimation() },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusProperties { canFocus = false }
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { dismissWithAnimation() }
+            )
+
+            AnimatedVisibility(
+                visible = animateIn,
+                enter = fadeIn(animationSpec = tween(durationMillis = 300)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 300)),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .padding(20.dp)
+                        .graphicsLayer(clip = false)
+                        .clickable(enabled = false) {},
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color(0xFF1E2026),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                            .focusGroup(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Do Not Disturb",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .focusRequester(closeButtonFocusRequester)
+                                    .clip(CircleShape)
+                                    .size(36.dp)
+                                    .onFocusChanged { isCloseFocused = it.isFocused }
+                                    .background(
+                                        color = if (isCloseFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.05f),
+                                        shape = CircleShape
+                                    )
+                                    .clickable(
+                                        onClick = { dismissWithAnimation() },
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    )
+                                    .focusable(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "\uF057",
+                                    color = if (isCloseFocused) Color(0xFF071434) else Color.White.copy(alpha = 0.55f),
+                                    style = TextStyle(fontSize = 18.sp),
+                                    fontFamily = FontFamily(Font(R.font.icons))
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = rememberAsyncImagePainter(R.drawable.ic_dnd),
+                                contentDescription = "DND Icon",
+                                modifier = Modifier.size(32.dp),
+                                tint = Color.White
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = if (isDndActive) "Release Do Not Disturb" else "Activate Do Not Disturb",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = if (isDndActive) "Hold D-pad Left to release 'Do Not Disturb'" else "Hold D-pad Right to activate 'Do Not Disturb'",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        var isSliderFocused by remember { mutableStateOf(false) }
+
+                        Box(
+                            modifier = Modifier
+                                .width(420.dp)
+                                .height(56.dp)
+                                .clip(RoundedCornerShape(28.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .onFocusChanged { isSliderFocused = it.isFocused }
+                                .focusRequester(sliderFocusRequester)
+                                .onKeyEvent { keyEvent ->
+                                    if (isDndActive) {
+                                        if (keyEvent.key == Key.DirectionLeft) {
+                                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                                targetProgress = (targetProgress - 0.08f).coerceAtLeast(0f)
+                                                true
+                                            } else if (keyEvent.type == KeyEventType.KeyUp) {
+                                                if (targetProgress > 0f) {
+                                                    targetProgress = 1f
+                                                }
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        } else if (keyEvent.key == Key.DirectionRight) {
+                                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                                dismissWithAnimation()
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        if (keyEvent.key == Key.DirectionRight) {
+                                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                                targetProgress = (targetProgress + 0.08f).coerceAtMost(1f)
+                                                true
+                                            } else if (keyEvent.type == KeyEventType.KeyUp) {
+                                                if (targetProgress < 1f) {
+                                                    targetProgress = 0f
+                                                }
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        } else if (keyEvent.key == Key.DirectionLeft) {
+                                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                                dismissWithAnimation()
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                }
+                                .focusable(),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(364.dp * animatedProgress + 56.dp)
+                                    .background(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.8f))
+                                        ),
+                                        shape = RoundedCornerShape(28.dp)
+                                    )
+                            )
+
+                            Text(
+                                text = if (isDndActive) {
+                                    if (targetProgress == 0f) "Releasing..." else "Hold D-pad Left"
+                                } else {
+                                    if (targetProgress == 1f) "Activating..." else "Hold D-pad Right"
+                                },
+                                color = Color.White.copy(alpha = 0.35f),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+
+                            val thumbOffset = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                (364.dp * animatedProgress).toPx()
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .graphicsLayer { translationX = thumbOffset }
+                                    .padding(4.dp)
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White)
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .align(if (isDndActive) Alignment.CenterStart else Alignment.CenterEnd)
+                                    .padding(horizontal = 16.dp)
+                                    .size(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowForward,
+                                    contentDescription = if (isDndActive) "Left Arrow" else "Right Arrow",
+                                    modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = if (isDndActive) 180f else 0f },
+                                    tint = Color.White.copy(alpha = 0.3f)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -2540,7 +2678,7 @@ fun NotificationButtonDialog(
                                                     animateAndDismiss() // Close dialog
                                                 }
                                             },
-                                            indication = ripple(color = Color.White),
+                                            indication = null,
                                             interactionSource = remember { MutableInteractionSource() }
                                         )
                                         .focusable(),
@@ -2548,7 +2686,7 @@ fun NotificationButtonDialog(
                                 ) {
                                     Text(
                                         text = if (isClearClicked) "Clear" else "\uF057", // FontAwesome X icon
-                                        color = if (isCloseFocused) Color(0xFF1C1D24) else Color.White.copy(alpha = 0.55f),
+                                        color = if (isCloseFocused) Color(0xFF071434) else Color.White.copy(alpha = 0.55f),
                                         style = if (isClearClicked) MaterialTheme.typography.labelLarge else TextStyle(fontSize = 18.sp),
                                         fontFamily = if (isClearClicked) FontFamily.Default else FontFamily(Font(R.font.icons)),
                                         fontWeight = FontWeight.SemiBold
@@ -2658,6 +2796,7 @@ fun NotificationItem(
 ) {
     var formattedTimestamp by remember { mutableStateOf(getTimeAgo(notification.timestamp)) }
     var showDeleteButton by remember { mutableStateOf(false) }
+    var hasDeletedDuringPress by remember { mutableStateOf(false) }
 
     var isFocused by remember { mutableStateOf(false) }
     val focusPulseAlpha = remember { Animatable(0.0f) }
@@ -2665,12 +2804,6 @@ fun NotificationItem(
     // Animasi pergeseran offset card notifikasi
     val offsetX by animateDpAsState(
         targetValue = if (showDeleteButton) (-120).dp else 0.dp,
-        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
-    )
-
-    // Animasi memudar (alpha) card notifikasi diset tetap 1.0f agar hanya gradien tepi kiri yang bekerja
-    val alphaVal by animateFloatAsState(
-        targetValue = 1.0f,
         animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
     )
 
@@ -2698,6 +2831,7 @@ fun NotificationItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .padding(vertical = 4.dp)
             .onFocusChanged { focusState ->
                 isFocused = focusState.isFocused
@@ -2710,13 +2844,22 @@ fun NotificationItem(
             .onKeyEvent { event ->
                 if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) {
                     if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
-                        // Jika D-pad kiri ditekan tahan (repeatCount >= 1)
-                        if (event.nativeKeyEvent.repeatCount >= 1) {
-                            showDeleteButton = true
-                            true
-                        } else {
-                            false
+                        // Mulai geser card ketika ditahan
+                        showDeleteButton = true
+                        
+                        // Hapus total jika terus ditahan (repeatCount >= 8)
+                        if (event.nativeKeyEvent.repeatCount >= 8 && !hasDeletedDuringPress) {
+                            hasDeletedDuringPress = true
+                            deleteNotification(notification)
+                            showDeleteButton = false
                         }
+                        true
+                    } else if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_UP) {
+                        if (!hasDeletedDuringPress) {
+                            showDeleteButton = false
+                        }
+                        hasDeletedDuringPress = false
+                        false
                     } else {
                         false
                     }
@@ -2746,25 +2889,24 @@ fun NotificationItem(
             .focusable(),
         contentAlignment = Alignment.CenterStart
     ) {
-        // Tombol delete merah berada di belakang/luar card di sebelah kanan (CenterEnd)
+        // Tombol delete dengan background seperti card item di sebelah kanan (CenterEnd)
         androidx.compose.animation.AnimatedVisibility(
             visible = showDeleteButton,
             enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
             exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 12.dp)
+                .fillMaxHeight()
+                .width(100.dp)
+                .padding(4.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .border(
-                        width = 2.dp,
-                        color = Color.White.copy(alpha = focusPulseAlpha.value),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
                         deleteNotification(notification)
                         showDeleteButton = false
                     },
@@ -2773,9 +2915,7 @@ fun NotificationItem(
                 Icon(
                     painter = rememberAsyncImagePainter(R.drawable.ic_trash),
                     contentDescription = "Delete Icon",
-                    modifier = Modifier
-                        .padding(10.dp)
-                        .fillMaxSize(),
+                    modifier = Modifier.size(24.dp),
                     tint = Color.White
                 )
             }
@@ -2873,26 +3013,92 @@ fun NotificationDialog(
     var showRequestDetailDialog by remember { mutableStateOf(false) }
     var requestDetails by remember { mutableStateOf<Request?>(null) }
 
-    // Fetch order or request details based on notification type
-    LaunchedEffect(notification) {
+    val scope = rememberCoroutineScope()
+
+    // Fetch order or request details based on notification type using a real-time listener
+    DisposableEffect(notification) {
+        isLoading = true
+        val database = FirebaseDatabase.getInstance().reference
+        val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val branchId = sharedPreferences.getString("branchId", null)
+
+        var queryListener: ValueEventListener? = null
+        var queryRef: com.google.firebase.database.Query? = null
+
         when (notification.type) {
             "ROOM_SERVICE" -> {
-                getOrderDetailsFromFirebase(context, notification.id) { fetchedOrderDetails ->
-                    orderDetails = fetchedOrderDetails
-                    isLoading = false
-                    showOrderDetailDialog = true
+                val ordersRef = database.child("BRANCHES").child(branchId ?: "").child("ORDERS")
+                val q = ordersRef.orderByChild("orderId").equalTo(notification.id)
+                queryRef = q
+                queryListener = object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        if (snapshot.exists()) {
+                            val order = snapshot.children.firstOrNull()?.getValue(Order::class.java)
+                            if (orderDetails != null && orderDetails?.status != order?.status) {
+                                // If status changes, animate close first, then open with new status details
+                                showOrderDetailDialog = false
+                                scope.launch {
+                                    delay(300)
+                                    orderDetails = order
+                                    showOrderDetailDialog = true
+                                }
+                            } else {
+                                orderDetails = order
+                                isLoading = false
+                                showOrderDetailDialog = true
+                            }
+                        } else {
+                            orderDetails = null
+                            isLoading = false
+                        }
+                    }
+
+                    override fun onCancelled(error: DatabaseError) {
+                        isLoading = false
+                    }
                 }
+                q.addValueEventListener(queryListener)
             }
             "GUEST_REQUEST" -> {
-                getRequestDetailsFromFirebase(context, notification.id) { fetchedRequestDetails ->
-                    requestDetails = fetchedRequestDetails
-                    isLoading = false
-                    showRequestDetailDialog = true
+                val requestsRef = database.child("BRANCHES").child(branchId ?: "").child("REQUEST")
+                val q = requestsRef.orderByChild("requestId").equalTo(notification.id)
+                queryRef = q
+                queryListener = object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        if (snapshot.exists()) {
+                            val request = snapshot.children.firstOrNull()?.getValue(Request::class.java)
+                            if (requestDetails != null && requestDetails?.status != request?.status) {
+                                // If status changes, animate close first, then open with new status details
+                                showRequestDetailDialog = false
+                                scope.launch {
+                                    delay(300)
+                                    requestDetails = request
+                                    showRequestDetailDialog = true
+                                }
+                            } else {
+                                requestDetails = request
+                                isLoading = false
+                                showRequestDetailDialog = true
+                            }
+                        } else {
+                            requestDetails = null
+                            isLoading = false
+                        }
+                    }
+
+                    override fun onCancelled(error: DatabaseError) {
+                        isLoading = false
+                    }
                 }
+                q.addValueEventListener(queryListener)
             }
             else -> {
                 isLoading = false
             }
+        }
+
+        onDispose {
+            queryListener?.let { queryRef?.removeEventListener(it) }
         }
     }
 
@@ -2923,55 +3129,96 @@ fun NotificationDialog(
             }
         } else {
             // Default dialog for other notification types
-            Dialog(onDismissRequest = onDismiss) {
+            Dialog(
+                onDismissRequest = onDismiss,
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = true,
+                    decorFitsSystemWindows = false
+                )
+            ) {
+                var animateIn by remember { mutableStateOf(false) }
+                val scope = rememberCoroutineScope()
+                LaunchedEffect(Unit) {
+                    animateIn = true
+                }
+                val animatedAlpha by animateFloatAsState(
+                    targetValue = if (animateIn) 1f else 0f,
+                    animationSpec = tween(durationMillis = 300)
+                )
+                fun dismissWithAnimation() {
+                    animateIn = false
+                    scope.launch {
+                        delay(300)
+                        onDismiss()
+                    }
+                }
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(20.dp))
-                        .padding(8.dp)
+                        .fillMaxSize()
+                        .focusProperties { canFocus = false },
+                    contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .clickable(onClick = onDismiss)
-                            .align(Alignment.TopEnd)
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { dismissWithAnimation() }
+                    )
+
+                    AnimatedVisibility(
+                        visible = animateIn,
+                        enter = fadeIn(animationSpec = tween(durationMillis = 300)) + scaleIn(animationSpec = tween(durationMillis = 300)),
+                        exit = fadeOut(animationSpec = tween(durationMillis = 300)) + scaleOut(animationSpec = tween(durationMillis = 300))
                     ) {
-                        Text(
-                            text = "\uF057", // Close icon
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.Black,
-                            fontFamily = FontFamily(Font(R.font.icons)),
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    }
-
-                    Column {
-                        // Handling Do Not Disturb and Dn'D Released notifications
-                        if (notification.title == "Do Not Disturb") {
-                            Row(
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(0.6f),
+                            color = Color(0xFFCFDFED),
+                            contentColor = Color(0xFF071434),
+                            shape = RoundedCornerShape(20.dp)
+                        ) {
+                            Column(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.Start,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(16.dp)
                             ) {
-                                DisplayGif(R.drawable.dnd)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                DndInformation(notification)
-                            }
-                        }
+                                // Handling Do Not Disturb and Dn'D Released notifications
+                                if (notification.title == "Do Not Disturb") {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.Start,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        DisplayGif(R.drawable.dnd)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        DndInformation(notification)
+                                    }
+                                }
 
-                        if (notification.title == "Dn'D Released") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.Start,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                DisplayGif(R.drawable.releasednd)
-                                ReleasedDndInformation(notification)
+                                if (notification.title == "Dn'D Released") {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.Start,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        DisplayGif(R.drawable.releasednd)
+                                        ReleasedDndInformation(notification)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "Press Back to close",
+                                    color = Color(0xFF071434).copy(alpha = 0.6f),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                                )
                             }
                         }
                     }
@@ -3311,289 +3558,321 @@ fun SmallServiceButtonWithBadge(
     }
 }
 
-
 @Composable
-fun WifiQRCodeDialog(onDismiss: () -> Unit) {
+fun WifiQRCodeDialog(
+    ssid: String,
+    password: String,
+    loading: Boolean,
+    qrCodeBitmap: ImageBitmap?,
+    onDismiss: () -> Unit
+) {
     val context = LocalContext.current
-    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-    val branchId = sharedPreferences.getString("branchId", null)
-    var ssid by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+    var animateIn by remember { mutableStateOf(false) }
+    val cardFocusRequester = remember { FocusRequester() }
+    val closeButtonFocusRequester = remember { FocusRequester() }
+    var isCloseFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val database: DatabaseReference = Firebase.database.reference
-        database.child("BRANCHES").child(branchId ?: "").child("SETTING/WIFI")
-            .get()
-            .addOnSuccessListener { snapshot ->
-                ssid = snapshot.child("ssid").getValue(String::class.java) ?: ""
-                password = snapshot.child("password").getValue(String::class.java) ?: ""
-                loading = false
-            }
-            .addOnFailureListener {
-                loading = false
-            }
+        animateIn = true
+    }
+
+    LaunchedEffect(animateIn) {
+        if (animateIn) {
+            delay(100)
+            cardFocusRequester.requestFocus()
+        }
+    }
+
+    val animatedAlpha by animateFloatAsState(
+        targetValue = if (animateIn) 1f else 0f,
+        animationSpec = tween(durationMillis = 300)
+    )
+
+    fun dismissWithAnimation() {
+        animateIn = false
+        scope.launch {
+            delay(300)
+            onDismiss()
+        }
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { dismissWithAnimation() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnBackPress = true,
-            dismissOnClickOutside = true
+            dismissOnClickOutside = true,
+            decorFitsSystemWindows = false
         )
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize(),
-            contentAlignment = Alignment.Center
+                .fillMaxSize()
+                .focusProperties { canFocus = false }
         ) {
-            if (!loading) {
-                val qrCodeBitmap = generateWifiQRCode(ssid, password)
-                
-                Row(
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { dismissWithAnimation() }
+            )
+
+            AnimatedVisibility(
+                visible = animateIn,
+                enter = fadeIn(animationSpec = tween(durationMillis = 300)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 300)),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Surface(
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ) {}, 
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .padding(20.dp)
+                        .graphicsLayer(clip = false)
+                        .focusRequester(cardFocusRequester)
+                        .focusable()
+                        .clickable(enabled = false) {},
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color(0xFF1E2026),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp
                 ) {
-                    // Left Side: Text Info
                     Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.Start,
-                        verticalArrangement = Arrangement.Center
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                            .focusGroup()
                     ) {
-                        Text(
-                            "Scan to connect\nto Wi-Fi",
-                            fontSize = 32.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = 36.sp
-                        )
-                        
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        // SSID
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .background(Color.White.copy(0.1f), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_wifi_rounded),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = Color.White
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    "Network",
-                                    fontSize = 12.sp,
-                                    color = Color.White.copy(alpha=0.6f)
-                                )
-                                Text(
-                                    ssid,
-                                    fontSize = 22.sp,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(20.dp))
-                        
-                        // Password
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .background(Color.White.copy(0.1f), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.keyboard),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = Color.White
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    "Password",
-                                    fontSize = 12.sp,
-                                    color = Color.White.copy(alpha=0.6f)
-                                )
-                                Text(
-                                    password,
-                                    fontSize = 22.sp,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        // Speed Test Section - Auto-run on dialog open
-                        var linkSpeed by remember { mutableStateOf(0) }
-                        var speedResult by remember { mutableStateOf<Double?>(null) }
-                        var pingResult by remember { mutableStateOf<Int?>(null) }
-                        var isTesting by remember { mutableStateOf(true) }
-                        var testStatus by remember { mutableStateOf("") }
-
-                        // Auto-run tests when dialog opens
-                        LaunchedEffect(Unit) {
-                            try {
-                                // Get WiFi link speed
-                                val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
-                                linkSpeed = wifiManager?.connectionInfo?.linkSpeed ?: 0
-                                
-                                // Run ping test
-                                testStatus = "Testing ping..."
-                                pingResult = SpeedTestManager.runPingTest()
-                                
-                                // Run download test
-                                testStatus = "Testing download..."
-                                speedResult = SpeedTestManager.runDownloadTest()
-                                
-                                testStatus = ""
-                            } catch (t: Throwable) {
-                                t.printStackTrace()
-                                testStatus = "Test failed"
-                            } finally {
-                                isTesting = false
-                            }
-                        }
-
-                        // Display results
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    Color.White.copy(alpha = 0.1f),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .padding(16.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                // Connection Status Summary
-                                val connectionStatus = when {
-                                    isTesting -> "Testing connection..."
-                                    pingResult == null || speedResult == null -> "Running tests..."
-                                    pingResult!! <= 0 || speedResult!! <= 0 -> "Connection issues detected"
-                                    pingResult!! < 50 && speedResult!! > 20 -> "Connection excellent"
-                                    pingResult!! < 100 && speedResult!! > 10 -> "Connection good"
-                                    pingResult!! < 150 -> "Connection fair"
-                                    else -> "Connection slow"
-                                }
-                                
-                                val statusColor = when {
-                                    isTesting -> Color.White.copy(alpha = 0.7f)
-                                    pingResult == null || speedResult == null -> Color.White.copy(alpha = 0.7f)
-                                    pingResult!! <= 0 || speedResult!! <= 0 -> Color.Red
-                                    pingResult!! < 50 && speedResult!! > 20 -> Color.Green
-                                    pingResult!! < 100 && speedResult!! > 10 -> Color.Cyan
-                                    else -> Color.Yellow
-                                }
-                                
-                                // Status row with icon
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (isTesting) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            color = Color.White,
-                                            strokeWidth = 2.dp
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    Text(
-                                        connectionStatus,
-                                        fontSize = 13.sp,
-                                        color = statusColor,
-                                        fontWeight = FontWeight.Bold
+                            Text(
+                                text = "Wi-Fi Connection",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .focusRequester(closeButtonFocusRequester)
+                                    .clip(CircleShape)
+                                    .size(36.dp)
+                                    .onFocusChanged { isCloseFocused = it.isFocused }
+                                    .background(
+                                        color = if (isCloseFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.05f),
+                                        shape = CircleShape
                                     )
-                                }
-                                
-                                // Only show results if tests have started
-                                if (pingResult != null || speedResult != null) {
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                }
-                                
-                                // Ping result
-                                if (pingResult != null) {
-                                    Row(
+                                    .clickable(
+                                        onClick = { dismissWithAnimation() },
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    )
+                                    .focusable(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "\uF057",
+                                    color = if (isCloseFocused) Color(0xFF071434) else Color.White.copy(alpha = 0.55f),
+                                    style = TextStyle(fontSize = 18.sp),
+                                    fontFamily = FontFamily(Font(R.font.icons))
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        if (loading || qrCodeBitmap == null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = Color.White)
+                            }
+                        } else {
+                            val qrCodeBitmap = qrCodeBitmap!!
+                            Row(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1.1f),
+                                    horizontalAlignment = Alignment.Start,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Column(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalArrangement = Arrangement.spacedBy(20.dp)
                                     ) {
-                                        Text(
-                                            "Ping",
-                                            fontSize = 14.sp,
-                                            color = Color.White.copy(alpha = 0.7f)
-                                        )
-                                        Text(
-                                            if (pingResult!! > 0) "${pingResult}ms" else "Failed",
-                                            fontSize = 14.sp,
-                                            color = if (pingResult!! > 0) Color.White.copy(alpha = 0.8f) else Color.Red,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(54.dp)
+                                                    .background(Color.White.copy(0.1f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_wifi_rounded),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(28.dp),
+                                                    tint = Color.White
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Column {
+                                                Text("Wifi", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
+                                                Text(ssid, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(54.dp)
+                                                    .background(Color.White.copy(0.1f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.keyboard),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(28.dp),
+                                                    tint = Color.White
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Column {
+                                                Text("Password", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
+                                                Text(password, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
                                     }
-                                }
-                                
-                                // Download result
-                                if (speedResult != null) {
-                                    if (pingResult != null) {
-                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                    Spacer(modifier = Modifier.height(24.dp))
+
+                                    var linkSpeed by remember { mutableStateOf(0) }
+                                    var speedResult by remember { mutableStateOf<Double?>(null) }
+                                    var pingResult by remember { mutableStateOf<Int?>(null) }
+                                    var isTesting by remember { mutableStateOf(true) }
+                                    var testStatus by remember { mutableStateOf("") }
+
+                                    LaunchedEffect(animateIn) {
+                                        if (animateIn) {
+                                            delay(400)
+                                            try {
+                                                val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+                                                linkSpeed = wifiManager?.connectionInfo?.linkSpeed ?: 0
+                                                testStatus = "Testing ping..."
+                                                pingResult = SpeedTestManager.runPingTest()
+                                                testStatus = "Testing download..."
+                                                speedResult = SpeedTestManager.runDownloadTest()
+                                                testStatus = ""
+                                            } catch (t: Throwable) {
+                                                t.printStackTrace()
+                                                testStatus = "Test failed"
+                                            } finally {
+                                                isTesting = false
+                                            }
+                                        }
                                     }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+                                            .padding(12.dp)
                                     ) {
-                                        Text(
-                                            "Download",
-                                            fontSize = 14.sp,
-                                            color = Color.White.copy(alpha = 0.7f)
-                                        )
-                                        if (speedResult!! > 0) {
-                                            Text(
-                                                "${String.format("%.1f", speedResult)} Mbps",
-                                                fontSize = 14.sp,
-                                                color = Color.White.copy(alpha = 0.8f),
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        } else {
-                                            Text(
-                                                "Failed",
-                                                fontSize = 14.sp,
-                                                color = Color.Red,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                        Column {
+                                            if (isTesting) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(bottom = 12.dp)
+                                                ) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(16.dp),
+                                                        color = Color.White,
+                                                        strokeWidth = 2.dp
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("loading", fontSize = 16.sp, color = Color.White.copy(alpha = 0.8f))
+                                                }
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                            } else {
+                                                val connectionStatus = when {
+                                                    pingResult == null || speedResult == null -> "Connection issues detected"
+                                                    pingResult!! <= 0 || speedResult!! <= 0 -> "Connection issues detected"
+                                                    pingResult!! < 50 && speedResult!! > 20 -> "Connection excellent"
+                                                    pingResult!! < 100 && speedResult!! > 10 -> "Connection good"
+                                                    pingResult!! < 150 -> "Connection fair"
+                                                    else -> "Connection slow"
+                                                }
+                                                val statusColor = when {
+                                                    pingResult == null || speedResult == null -> Color.Red
+                                                    pingResult!! <= 0 || speedResult!! <= 0 -> Color.Red
+                                                    pingResult!! < 50 && speedResult!! > 20 -> Color.Green
+                                                    pingResult!! < 100 && speedResult!! > 10 -> Color.Cyan
+                                                    else -> Color.Yellow
+                                                }
+                                                Text(
+                                                    text = connectionStatus,
+                                                    fontSize = 16.sp,
+                                                    color = statusColor,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(bottom = 12.dp)
+                                                )
+                                            }
+                                            
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Ping",
+                                                    fontSize = 18.sp,
+                                                    color = Color.White.copy(alpha = 0.8f),
+                                                    modifier = Modifier.width(120.dp)
+                                                )
+                                                val pingVal = pingResult ?: 0
+                                                Text("${pingVal}ms", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
+                                            
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Download",
+                                                    fontSize = 18.sp,
+                                                    color = Color.White.copy(alpha = 0.8f),
+                                                    modifier = Modifier.width(120.dp)
+                                                )
+                                                val speedVal = speedResult?.let { String.format(java.util.Locale.US, "%.1f", it).replace('.', ',') } ?: "0,0"
+                                                Text("${speedVal}Mbps", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
                                 }
+
+                                Spacer(modifier = Modifier.width(32.dp))
+
+                                Image(
+                                    bitmap = qrCodeBitmap, 
+                                    contentDescription = "Wi-Fi QR Code",
+                                    modifier = Modifier
+                                        .size(320.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                )
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.width(80.dp))
-
-                    // Right Side: QR Code
-                    Image(
-                        bitmap = qrCodeBitmap, 
-                        contentDescription = "Wi-Fi QR Code",
-                        modifier = Modifier
-                            .size(400.dp)
-                            .clip(RoundedCornerShape(32.dp))
-                    )
                 }
             }
         }
@@ -3601,179 +3880,250 @@ fun WifiQRCodeDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-fun WaQRCodeDialog(onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-    val room = sharedPreferences.getString("deviceID", null)
-    val branchId = sharedPreferences.getString("branchId", null)
-
-    var phone by remember { mutableStateOf("") }
-    var ext by remember { mutableStateOf("") }
-    var telephone by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
+fun WaQRCodeDialog(
+    phone: String,
+    ext: String,
+    telephone: String,
+    address: String,
+    loading: Boolean,
+    qrCodeBitmap: ImageBitmap?,
+    onDismiss: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var animateIn by remember { mutableStateOf(false) }
+    val cardFocusRequester = remember { FocusRequester() }
+    val closeButtonFocusRequester = remember { FocusRequester() }
+    var isCloseFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val database: DatabaseReference = Firebase.database.reference
-        database.child("BRANCHES").child(branchId ?: "").child("SETTING/CONTACT")
-            .get()
-            .addOnSuccessListener { snapshot ->
-                phone = snapshot.child("PHONE").getValue(String::class.java) ?: ""
-                val rawMessage = snapshot.child("MESSAGE").getValue(String::class.java) ?: ""
-                message = URLEncoder.encode(rawMessage, StandardCharsets.UTF_8.toString())
-                ext = snapshot.child("EXT").getValue(String::class.java) ?: ""
-                telephone = snapshot.child("TELEPHONE").getValue(String::class.java) ?: ""
-                address = snapshot.child("ADDRESS").getValue(String::class.java) ?: ""
-                loading = false
-            }
-            .addOnFailureListener {
-                loading = false
-            }
+        animateIn = true
+    }
+
+    LaunchedEffect(animateIn) {
+        if (animateIn) {
+            delay(100)
+            cardFocusRequester.requestFocus()
+        }
+    }
+
+    val animatedAlpha by animateFloatAsState(
+        targetValue = if (animateIn) 1f else 0f,
+        animationSpec = tween(durationMillis = 300)
+    )
+
+    fun dismissWithAnimation() {
+        animateIn = false
+        scope.launch {
+            delay(300)
+            onDismiss()
+        }
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { dismissWithAnimation() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnBackPress = true,
-            dismissOnClickOutside = true
+            dismissOnClickOutside = true,
+            decorFitsSystemWindows = false
         )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onDismiss() },
-            contentAlignment = Alignment.Center
+                .focusProperties { canFocus = false }
         ) {
-            if (!loading) {
-                val qrCodeBitmap = room?.let { generateWaQRCode(phone, message, it) }
-                
-                Row(
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { dismissWithAnimation() }
+            )
+
+            AnimatedVisibility(
+                visible = animateIn,
+                enter = fadeIn(animationSpec = tween(durationMillis = 300)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 300)),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Surface(
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ) {}, 
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .padding(20.dp)
+                        .graphicsLayer(clip = false)
+                        .focusRequester(cardFocusRequester)
+                        .focusable()
+                        .clickable(enabled = false) {},
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color(0xFF1E2026),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp
                 ) {
-                    // Left Side: Info
                     Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.Start,
-                        verticalArrangement = Arrangement.Center
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                            .focusGroup()
                     ) {
-                        Text(
-                            "Scan to contact\nreceptionist",
-                            fontSize = 32.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = 36.sp,
-                            fontFamily = FontFamily(Font(R.font.ionicons)) // Assuming using icon font or regular? User code used icon before.
-                        )
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "WhatsApp Receptionist",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
 
-                        // Phone Info Rows
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            // Whatsapp
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .background(Color.White.copy(0.1f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_whatsapp),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp),
-                                        tint = Color.Green
+                            Box(
+                                modifier = Modifier
+                                    .focusRequester(closeButtonFocusRequester)
+                                    .clip(CircleShape)
+                                    .size(36.dp)
+                                    .onFocusChanged { isCloseFocused = it.isFocused }
+                                    .background(
+                                        color = if (isCloseFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.05f),
+                                        shape = CircleShape
                                     )
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
-                                    Text("WhatsApp", fontSize=12.sp, color=Color.White.copy(0.6f))
-                                    Text(phone, fontSize=20.sp, color=Color.White, fontWeight=FontWeight.Bold)
-                                }
-                            }
-
-                            // Telephone
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .background(Color.White.copy(0.1f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_phone),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp),
-                                        tint = Color.White
+                                    .clickable(
+                                        onClick = { dismissWithAnimation() },
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
                                     )
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
-                                    Text("Telephone", fontSize=12.sp, color=Color.White.copy(0.6f))
-                                    Text(telephone, fontSize=20.sp, color=Color.White, fontWeight=FontWeight.Bold)
-                                }
-                            }
-                            
-                            // Ext
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .background(Color.White.copy(0.1f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        "Ext",
-                                        fontSize=12.sp,
-                                        fontWeight=FontWeight.Bold,
-                                        color=Color.White
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
-                                    Text("Extension", fontSize=12.sp, color=Color.White.copy(0.6f))
-                                    Text(ext, fontSize=20.sp, color=Color.White, fontWeight=FontWeight.Bold)
-                                }
+                                    .focusable(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "\uF057",
+                                    color = if (isCloseFocused) Color(0xFF071434) else Color.White.copy(alpha = 0.55f),
+                                    style = TextStyle(fontSize = 18.sp),
+                                    fontFamily = FontFamily(Font(R.font.icons))
+                                )
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.width(60.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Right Side: QR
-                    qrCodeBitmap?.let {
-                        Image(
-                            bitmap = it, 
-                            contentDescription = "Wa QR Code",
-                            modifier = Modifier
-                                .size(400.dp)
-                                .clip(RoundedCornerShape(32.dp))
-                        )
+                        if (loading || qrCodeBitmap == null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = Color.White)
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1.1f),
+                                    horizontalAlignment = Alignment.Start,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(54.dp)
+                                                    .background(Color.White.copy(0.1f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_whatsapp),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(28.dp),
+                                                    tint = Color.Green
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Column {
+                                                Text("WhatsApp", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
+                                                Text(phone, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(54.dp)
+                                                    .background(Color.White.copy(0.1f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_phone),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(28.dp),
+                                                    tint = Color.White
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Column {
+                                                Text("Telephone", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
+                                                Text(telephone, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(54.dp)
+                                                    .background(Color.White.copy(0.1f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    "Ext",
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Column {
+                                                Text("Extension", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
+                                                Text(ext, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(32.dp))
+
+                                qrCodeBitmap?.let {
+                                    Image(
+                                        bitmap = it, 
+                                        contentDescription = "Wa QR Code",
+                                        modifier = Modifier
+                                            .size(320.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = address,
+                                fontSize = 12.sp,
+                                color = Color.White.copy(alpha=0.6f),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
-                
-                // Footer Address
-                Text(
-                    text = address,
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha=0.6f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 8.dp)
-                        .fillMaxWidth(0.8f)
-                )
             }
         }
     }
@@ -4487,7 +4837,7 @@ fun CartDrawer(
 
                                     val minusBorderModifier = if (isMinusFocused) {
                                         Modifier.border(
-                                            width = 1.5.dp,
+                                            width = 3.5.dp,
                                             color = Color.White.copy(alpha = pulseAlpha.value * minusFocusFade),
                                             shape = CircleShape
                                         )
@@ -4497,7 +4847,7 @@ fun CartDrawer(
 
                                     val plusBorderModifier = if (isPlusFocused) {
                                         Modifier.border(
-                                            width = 1.5.dp,
+                                            width = 3.5.dp,
                                             color = Color.White.copy(alpha = pulseAlpha.value * plusFocusFade),
                                             shape = CircleShape
                                         )
@@ -4569,7 +4919,7 @@ fun CartDrawer(
                                                     modifier = Modifier
                                                         .size(34.dp)
                                                         .then(minusBorderModifier)
-                                                        .padding(3.dp)
+                                                        .padding(3.5.dp)
                                                         .clip(CircleShape)
                                                         .onFocusChanged { 
                                                             isMinusFocused = it.isFocused 
@@ -4580,8 +4930,11 @@ fun CartDrawer(
                                                         .focusRequester(minusFocusRequester)
                                                         .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
                                                         .focusable()
-                                                        .background(if (isMinusFocused) Color(0xFFE91E63) else Color.White.copy(alpha = 0.1f))
-                                                        .clickable {
+                                                        .background(if (isMinusFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.1f))
+                                                        .clickable(
+                                                            interactionSource = remember { MutableInteractionSource() },
+                                                            indication = null
+                                                        ) {
                                                             if (selectedItem.quantity > 1) {
                                                                 val idx = selectedItems.indexOf(selectedItem)
                                                                 if (idx != -1) {
@@ -4599,13 +4952,13 @@ fun CartDrawer(
                                                         Icon(
                                                             imageVector = Icons.Default.Delete,
                                                             contentDescription = "Delete",
-                                                            tint = Color.White,
+                                                            tint = if (isMinusFocused) Color(0xFF071434) else Color.White,
                                                             modifier = Modifier.size(14.dp)
                                                         )
                                                     } else {
                                                         Text(
                                                             text = "-",
-                                                            color = Color.White,
+                                                            color = if (isMinusFocused) Color(0xFF071434) else Color.White,
                                                             style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold),
                                                             modifier = Modifier.offset(y = (-1).dp)
                                                         )
@@ -4631,7 +4984,7 @@ fun CartDrawer(
                                                     modifier = Modifier
                                                         .size(34.dp)
                                                         .then(plusBorderModifier)
-                                                        .padding(3.dp)
+                                                        .padding(3.5.dp)
                                                         .clip(CircleShape)
                                                         .onFocusChanged { 
                                                             isPlusFocused = it.isFocused 
@@ -4641,8 +4994,11 @@ fun CartDrawer(
                                                         }
                                                         .focusRequester(plusFocusRequester)
                                                         .focusable()
-                                                        .background(if (isPlusFocused) Color(0xFFE91E63) else Color.White.copy(alpha = 0.1f))
-                                                        .clickable {
+                                                        .background(if (isPlusFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.1f))
+                                                        .clickable(
+                                                            interactionSource = remember { MutableInteractionSource() },
+                                                            indication = null
+                                                        ) {
                                                             val idx = selectedItems.indexOf(selectedItem)
                                                             if (idx != -1) {
                                                                     selectedItems[idx] = selectedItem.copy(quantity = selectedItem.quantity + 1)
@@ -4653,7 +5009,7 @@ fun CartDrawer(
                                                 ) {
                                                     Text(
                                                         text = "+",
-                                                        color = Color.White,
+                                                        color = if (isPlusFocused) Color(0xFF071434) else Color.White,
                                                         style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold),
                                                         modifier = Modifier.offset(y = (-1).dp)
                                                     )
@@ -4716,9 +5072,9 @@ fun CartDrawer(
 
                             val checkoutBorderModifier = if (isCheckoutFocused) {
                                 Modifier.border(
-                                    width = 2.dp,
+                                    width = 3.5.dp,
                                     color = Color.White.copy(alpha = checkoutPulseAlpha.value * checkoutFocusFade),
-                                    shape = RoundedCornerShape(25.dp)
+                                    shape = RoundedCornerShape(25.5.dp)
                                 )
                             } else {
                                 Modifier
@@ -4729,12 +5085,15 @@ fun CartDrawer(
                                     .fillMaxWidth()
                                     .height(50.dp)
                                     .then(checkoutBorderModifier)
-                                    .padding(3.dp)
+                                    .padding(3.5.dp)
                                     .clip(RoundedCornerShape(22.dp))
                                     .onFocusChanged { isCheckoutFocused = it.isFocused }
                                     .focusable()
-                                    .background(if (isCheckoutFocused) Color(0xFFE91E63) else Color(0xFF555555))
-                                    .clickable {
+                                    .background(if (isCheckoutFocused) Color(0xFFCFDFED) else Color(0xFF555555))
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
                                         dialogMessage.value = "\uF19F Please select payment method to proceed the order"
                                         showConfirmationDialog.value = true
                                     },
@@ -4742,7 +5101,7 @@ fun CartDrawer(
                             ) {
                                 Text(
                                     text = "Checkout",
-                                    color = if (isCheckoutFocused) Color.White else Color.White.copy(alpha = 0.6f),
+                                    color = if (isCheckoutFocused) Color(0xFF071434) else Color.White.copy(alpha = 0.6f),
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
@@ -4755,59 +5114,269 @@ fun CartDrawer(
     }
 
     if (showConfirmationDialog.value) {
-        AlertDialog(
-            onDismissRequest = { showConfirmationDialog.value = false },
-            title = { Text("Order Confirmation") },
-            text = {
-                Column {
-                    Text("Payment Method", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Start
+        var animateIn by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        val cashFocusRequester = remember { FocusRequester() }
+        val cardFocusRequester = remember { FocusRequester() }
+        val confirmFocusRequester = remember { FocusRequester() }
+        val cancelFocusRequester = remember { FocusRequester() }
+        
+        var isCashFocused by remember { mutableStateOf(false) }
+        var isCardFocused by remember { mutableStateOf(false) }
+        var isConfirmFocused by remember { mutableStateOf(false) }
+        var isCancelFocused by remember { mutableStateOf(false) }
+
+        LaunchedEffect(Unit) {
+            animateIn = true
+            delay(100)
+            cashFocusRequester.requestFocus()
+        }
+
+        val animatedAlpha by animateFloatAsState(
+            targetValue = if (animateIn) 1f else 0f,
+            animationSpec = tween(durationMillis = 300)
+        )
+
+        fun dismissWithAnimation() {
+            animateIn = false
+            scope.launch {
+                delay(300)
+                showConfirmationDialog.value = false
+            }
+        }
+
+        val infiniteTransition = rememberInfiniteTransition(label = "borderPulse")
+        val pulseAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseAlpha"
+        )
+
+        Dialog(
+            onDismissRequest = { dismissWithAnimation() },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusProperties { canFocus = false },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { dismissWithAnimation() }
+                )
+
+                AnimatedVisibility(
+                    visible = animateIn,
+                    enter = fadeIn(animationSpec = tween(durationMillis = 300)) + scaleIn(animationSpec = tween(durationMillis = 300)),
+                    exit = fadeOut(animationSpec = tween(durationMillis = 300)) + scaleOut(animationSpec = tween(durationMillis = 300))
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .width(500.dp)
+                            .wrapContentHeight()
+                            .padding(24.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color(0xFF1E2026),
+                        tonalElevation = 8.dp,
+                        shadowElevation = 12.dp
                     ) {
-                        RadioButton(
-                            selected = selectedPaymentMethod.value == "Cash",
-                            onClick = { selectedPaymentMethod.value = "Cash" }
-                        )
-                        Text("Cash", color = Color.Black, modifier = Modifier.clickable { selectedPaymentMethod.value = "Cash" })
+                        Column(
+                            modifier = Modifier
+                                .padding(24.dp)
+                                .focusGroup()
+                        ) {
+                            Text(
+                                text = "Order Confirmation",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
 
-                        Spacer(modifier = Modifier.width(24.dp))
+                            Spacer(modifier = Modifier.height(20.dp))
 
-                        RadioButton(
-                            selected = selectedPaymentMethod.value == "Debit/Credit Card",
-                            onClick = { selectedPaymentMethod.value = "Debit/Credit Card" }
-                        )
-                        Text("Debit/Credit Card", color = Color.Black, modifier = Modifier.clickable { selectedPaymentMethod.value = "Debit/Credit Card" })
+                            Text(
+                                text = "Payment Method",
+                                color = Color.White.copy(alpha = 0.6f),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                             Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(24.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp)
+                                        .focusRequester(cashFocusRequester)
+                                        .onFocusChanged { isCashFocused = it.isFocused }
+                                        .clickable { selectedPaymentMethod.value = "Cash" }
+                                        .focusable(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .border(
+                                                width = 2.dp,
+                                                color = if (isCashFocused) Color(0xFFCFDFED).copy(alpha = pulseAlpha) else Color.Transparent,
+                                                shape = CircleShape
+                                            )
+                                            .padding(3.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.05f))
+                                            .border(1.5.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (selectedPaymentMethod.value == "Cash") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFFCFDFED))
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Cash",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 16.sp
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp)
+                                        .focusRequester(cardFocusRequester)
+                                        .onFocusChanged { isCardFocused = it.isFocused }
+                                        .clickable { selectedPaymentMethod.value = "Debit/Credit Card" }
+                                        .focusable(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .border(
+                                                width = 2.dp,
+                                                color = if (isCardFocused) Color(0xFFCFDFED).copy(alpha = pulseAlpha) else Color.Transparent,
+                                                shape = CircleShape
+                                            )
+                                            .padding(3.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.05f))
+                                            .border(1.5.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (selectedPaymentMethod.value == "Debit/Credit Card") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFFCFDFED))
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Debit/Credit Card",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 16.sp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(28.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .focusRequester(cancelFocusRequester)
+                                        .onFocusChanged { isCancelFocused = it.isFocused }
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isCancelFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.05f)
+                                        )
+                                        .clickable {
+                                            dismissWithAnimation()
+                                        }
+                                        .focusable()
+                                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Cancel",
+                                        color = if (isCancelFocused) Color(0xFF1C1D24) else Color.White.copy(alpha = 0.7f),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Box(
+                                    modifier = Modifier
+                                        .focusRequester(confirmFocusRequester)
+                                        .onFocusChanged { isConfirmFocused = it.isFocused }
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isConfirmFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.05f)
+                                        )
+                                        .clickable {
+                                            if (folioId != null) {
+                                                val orderId = generateOrderId()
+                                                sendOrderNotification(context, folioId!!, selectedPaymentMethod.value, orderId, selectedItems)
+                                                sendOrderToDatabase(context, folioId!!, guestName ?: "", guestPhone ?: "", guestRoom ?: "", selectedPaymentMethod.value, selectedItems, "placed", orderId)
+                                            } else {
+                                                Toast.makeText(context, "Error: No folio ID found", Toast.LENGTH_SHORT).show()
+                                            }
+                                            selectedItems.clear()
+                                            cartPreferences.clearCart()
+                                            dismissWithAnimation()
+                                            closeWithAnimation()
+                                        }
+                                        .focusable()
+                                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Confirm",
+                                        color = if (isConfirmFocused) Color(0xFF1C1D24) else Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (folioId != null) {
-                            val orderId = generateOrderId()
-                            sendOrderNotification(context, folioId!!, selectedPaymentMethod.value, orderId, selectedItems)
-                            sendOrderToDatabase(context, folioId!!, guestName ?: "", guestPhone ?: "", guestRoom ?: "", selectedPaymentMethod.value, selectedItems, "placed", orderId)
-                        } else {
-                            Toast.makeText(context, "Error: No folio ID found", Toast.LENGTH_SHORT).show()
-                        }
-                        selectedItems.clear()
-                        cartPreferences.clearCart()
-                        showConfirmationDialog.value = false
-                        closeWithAnimation()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))
-                ) {
-                    Text("Confirm", color = Color.White)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmationDialog.value = false }) {
-                    Text("Cancel", color = Color.Gray)
-                }
             }
-        )
+        }
     }
 }
 
@@ -5029,7 +5598,7 @@ fun OrderDrawer(
                                         Modifier.border(
                                             width = 3.dp,
                                             color = Color.White.copy(alpha = pulseAlpha.value * focusFadeAlpha),
-                                            shape = RoundedCornerShape(24.dp)
+                                            shape = RoundedCornerShape(23.dp)
                                         )
                                     } else {
                                         Modifier
@@ -5060,7 +5629,7 @@ fun OrderDrawer(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .then(borderModifier)
-                                                .padding(6.dp) // The Floating Air Gap
+                                                .padding(3.dp) // The Floating Air Gap
                                                 .clip(RoundedCornerShape(20.dp))
                                                 .background(Color.White.copy(alpha = 0.05f))
                                                 .padding(12.dp)

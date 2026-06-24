@@ -1199,19 +1199,26 @@ fun ItemDialog(
                 .background(Color.White, RoundedCornerShape(20.dp))
                 .padding(8.dp)
         ) {
+            var isCloseFocused by remember { mutableStateOf(false) }
             Box(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .clickable(onClick = onDismiss)
-                    .align(Alignment.TopEnd)
+                    .onFocusChanged { isCloseFocused = it.isFocused }
+                    .clickable(
+                        onClick = onDismiss,
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    )
+                    .background(if (isCloseFocused) Color(0xFFCFDFED) else Color.Transparent)
+                    .align(Alignment.TopEnd),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "\uF057",
                     style = MaterialTheme.typography.titleLarge,
-                    color = Color(0xFFE91E63),
-                    fontFamily = FontFamily(Font(R.font.icons)),
-                    modifier = Modifier.align(Alignment.Center)
+                    color = if (isCloseFocused) Color(0xFF071434) else Color(0xFFCFDFED),
+                    fontFamily = FontFamily(Font(R.font.icons))
                 )
             }
             Column(
@@ -1265,22 +1272,25 @@ fun ItemDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Decrease quantity
+                            var isMinusFocused by remember { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
+                                    .onFocusChanged { isMinusFocused = it.isFocused }
+                                    .background(if (isMinusFocused) Color(0xFFCFDFED) else Color.Transparent)
                                     .clickable(
                                         onClick = { if (quantity > 1) quantity-- },
-                                        indication = ripple(color = Color.Black),
+                                        indication = null,
                                         interactionSource = remember { MutableInteractionSource() }
-                                    )
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = "\uF056", // Minus icon
                                     color = Color(0xff071434),
                                     style = MaterialTheme.typography.titleLarge,
-                                    fontFamily = FontFamily(Font(R.font.icons)),
-                                    modifier = Modifier.align(Alignment.Center)
+                                    fontFamily = FontFamily(Font(R.font.icons))
                                 )
                             }
                             Spacer(modifier = Modifier.width(6.dp))
@@ -1292,22 +1302,25 @@ fun ItemDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             // Increase quantity
+                            var isPlusFocused by remember { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
+                                    .onFocusChanged { isPlusFocused = it.isFocused }
+                                    .background(if (isPlusFocused) Color(0xFFCFDFED) else Color.Transparent)
                                     .clickable(
                                         onClick = { quantity++ },
-                                        indication = ripple(color = Color.Black),
+                                        indication = null,
                                         interactionSource = remember { MutableInteractionSource() }
-                                    )
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = "\uF055", // Plus icon
                                     color = Color(0xff071434),
                                     style = MaterialTheme.typography.titleLarge,
-                                    fontFamily = FontFamily(Font(R.font.icons)),
-                                    modifier = Modifier.align(Alignment.Center)
+                                    fontFamily = FontFamily(Font(R.font.icons))
                                 )
                             }
                         }
@@ -1335,21 +1348,25 @@ fun ItemDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(item.variant) { variant ->
+                            var isVariantFocused by remember { mutableStateOf(false) }
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(16.dp))
-                                    .clickable {
-                                        selectedVariant = variant // Update selected variant
-                                    }
+                                    .onFocusChanged { isVariantFocused = it.isFocused }
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        onClick = { selectedVariant = variant }
+                                    )
                                     .border(
-                                        width = 2.dp,
-                                        color = if (selectedVariant == variant) Color(0xFFFF2B85) else Color.LightGray.copy(alpha = 0.5f),
+                                        width = if (isVariantFocused || selectedVariant == variant) 2.dp else 1.dp,
+                                        color = if (isVariantFocused || selectedVariant == variant) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.5f),
                                         shape = RoundedCornerShape(16.dp)
                                     )
                                     .background(
-                                        if (selectedVariant == variant) Color(0xFFFFEFEF) else Color.White,
+                                        if (selectedVariant == variant) Color(0xFFCFDFED).copy(alpha = 0.15f) else if (isVariantFocused) Color.LightGray.copy(alpha = 0.2f) else Color.White,
                                         shape = RoundedCornerShape(16.dp)
-                                    ) // Rounded corners for the background
+                                    )
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -1362,7 +1379,7 @@ fun ItemDialog(
                                         selected = selectedVariant == variant,
                                         onClick = { selectedVariant = variant },
                                         colors = RadioButtonDefaults.colors(
-                                            selectedColor = Color(0xFFFF2B85),  // Color when the radio button is selected
+                                            selectedColor = Color(0xFFCFDFED),  // Color when the radio button is selected
                                             unselectedColor = Color.LightGray.copy(alpha = 0.5f) // Color when the radio button is unselected
                                         )
                                     )
@@ -1478,8 +1495,8 @@ fun ItemDialog(
 
                             // 2. UNIFIED TV MIC BUTTON (Captures hold and release events!)
                             val interactionSource = remember { MutableInteractionSource() }
-                            val micBgColor = if (isListening) Color(0xFFE91E63) else if (isMicFocused) Color.LightGray else Color.White.copy(alpha = 0.5f)
-                            val micIconTint = if (isListening) Color.White else if (isMicFocused) Color(0xFFE91E63) else Color.Gray
+                            val micBgColor = if (isListening || isMicFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.5f)
+                            val micIconTint = if (isListening || isMicFocused) Color(0xFF071434) else Color.Gray
 
                             Box(
                                 modifier = Modifier
@@ -1517,7 +1534,7 @@ fun ItemDialog(
                                     }
                                     .clickable(
                                         interactionSource = interactionSource,
-                                        indication = ripple(bounded = true),
+                                        indication = null,
                                         onClick = { /* Action handled entirely via KeyDown / KeyUp! */ }
                                     ),
                                 contentAlignment = Alignment.Center
@@ -1542,19 +1559,20 @@ fun ItemDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                var isAddCartFocused by remember { mutableStateOf(false) }
                 // Add to Cart Button
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(50))
+                        .onFocusChanged { isAddCartFocused = it.isFocused }
                         .clickable(
                             onClick = {
                                 // Pass the selected variant (can be null) to the cart handler
                                 onAddToCart(item, quantity, specialInstruction, selectedVariant)
                                 onDismiss()
                             },
-                            indication = ripple(color = Color.Black),
+                            indication = null,
                             interactionSource = remember { MutableInteractionSource() }
                         )
                 ) {
@@ -1564,7 +1582,7 @@ fun ItemDialog(
                             .height(64.dp)
                             .padding(8.dp)
                             .clip(RoundedCornerShape(50))
-                            .background(Color(0xFFE91E63))
+                            .background(if (isAddCartFocused) Color(0xFFCFDFED) else Color(0xFFCFDFED).copy(alpha = 0.5f))
                             .align(Alignment.Center)
                     ) {
                         Text(
@@ -1572,7 +1590,7 @@ fun ItemDialog(
                             style = TextStyle(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color(0xFF071434)
                             ),
                             modifier = Modifier
                                 .align(Alignment.Center)

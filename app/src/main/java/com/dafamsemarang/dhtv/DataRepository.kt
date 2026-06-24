@@ -61,6 +61,7 @@ object DataRepository {
     // Guest & DND
     val guestInfo = mutableStateOf<GuestInfo?>(null)
     val isDndActive = mutableStateOf(false)
+    private var currentDndFolioId: Int? = null  // Track which folioId the DND listener is on
     val instagramHandle = mutableStateOf<String?>(null)
     val facebookHandle = mutableStateOf<String?>(null)
     val tiktokHandle = mutableStateOf<String?>(null)
@@ -484,10 +485,19 @@ object DataRepository {
                         )
                         guestInfo.value = info
                         Log.d("DataRepository", "Guest info loaded: fname=${info.fname}, gender=${info.gender}, Folio: ${info.folio}")
-                        setupDndListener(db, branchId, info.folio)
+                        // Only re-setup DND listener if folioId actually changed,
+                        // prevents DND from resetting when other guest fields are updated
+                        val newFolio = if (info.folio != 0) info.folio else null
+                        if (newFolio != currentDndFolioId) {
+                            currentDndFolioId = newFolio
+                            setupDndListener(db, branchId, newFolio)
+                        }
                     } else {
                         guestInfo.value = null
-                        setupDndListener(db, branchId, null)
+                        if (currentDndFolioId != null) {
+                            currentDndFolioId = null
+                            setupDndListener(db, branchId, null)
+                        }
                     }
                 }
                 override fun onCancelled(error: DatabaseError) {
@@ -923,6 +933,7 @@ object DataRepository {
 
  
         activeBranchId = null
+        currentDndFolioId = null
         isMenuLoaded.value = false
         isRequestLoaded.value = false
         isHotelFacilitiesLoaded.value = false

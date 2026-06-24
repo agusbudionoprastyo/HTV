@@ -6,7 +6,9 @@ import android.widget.ImageView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,9 +29,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +50,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import coil.compose.rememberAsyncImagePainter
 import com.bumptech.glide.Glide
 import com.google.firebase.database.DataSnapshot
@@ -59,124 +81,156 @@ import java.util.Locale
 
 @Composable
 fun RequestDetailDialog(request: Request, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        var animateIn by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        LaunchedEffect(Unit) {
+            animateIn = true
+        }
+        val animatedAlpha by animateFloatAsState(
+            targetValue = if (animateIn) 1f else 0f,
+            animationSpec = tween(durationMillis = 300)
+        )
+        fun dismissWithAnimation() {
+            animateIn = false
+            scope.launch {
+                delay(300)
+                onDismiss()
+            }
+        }
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.White.copy(alpha = .9f), RoundedCornerShape(20.dp))
-                .padding(8.dp)
+                .fillMaxSize()
+                .focusProperties { canFocus = false },
+            contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onDismiss)
-                    .align(Alignment.TopEnd)
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { dismissWithAnimation() }
+            )
+
+            AnimatedVisibility(
+                visible = animateIn,
+                enter = fadeIn(animationSpec = tween(durationMillis = 300)) + scaleIn(animationSpec = tween(durationMillis = 300)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 300)) + scaleOut(animationSpec = tween(durationMillis = 300))
             ) {
-                Text(
-                    text = "\uF057",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.Black,
-                    fontFamily = FontFamily(Font(R.font.icons)),
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(0.6f),
+                    color = Color(0xFFCFDFED),
+                    contentColor = Color(0xFF071434),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                    ) {
+                        when (request.status) {
+                            "submitted" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.Start,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    DisplayGif(R.drawable.submitted)
 
-            Column (
-                modifier = Modifier
-                    .padding(8.dp)
-            ){
-                when (request.status) {
-                    "submitted" -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            DisplayGif(R.drawable.submitted)
+                                    Spacer(modifier = Modifier.width(8.dp))
 
-                            Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            "Your request has been submitted and is awaiting confirmation.",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            getTimeAgo(request.timestamp!!),
+                                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        RequestnotifDetails(request)
+                                    }
+                                }
+                            }
 
-                            Column {
-                                Text(
-                                    "Your request has been submitted and is awaiting confirmation.",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    getTimeAgo(request.timestamp!!),
-                                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 10.sp),
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                RequestnotifDetails(request)
+                            "confirm" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.Start,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    DisplayGif(R.drawable.confirm)
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Column {
+                                        Text(
+                                            "Your request is confirmed and will be processed soon.",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            getTimeAgo(request.timestamp!!),
+                                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        RequestnotifDetails(request)
+                                    }
+                                }
+                            }
+
+                            "completed" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.Start,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    DisplayGif(R.drawable.complete)
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Column {
+                                        Text(
+                                            "Your request is completed.",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            getTimeAgo(request.timestamp!!),
+                                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        RequestnotifDetails(request)
+                                    }
+                                }
                             }
                         }
-                    }
-
-                    "confirm" -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            DisplayGif(R.drawable.confirm)
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Column {
-                                Text(
-                                    "Your request has been confirmed and is being processed.",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    getTimeAgo(request.timestamp!!),
-                                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 10.sp),
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                RequestnotifDetails(request)
-                            }
-                        }
-                    }
-
-                    "completed" -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            DisplayGif(R.drawable.complete)
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Column {
-                                Text(
-                                    "Your request has been completed.",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    getTimeAgo(request.timestamp!!),
-                                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 10.sp),
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                RequestnotifDetails(request)
-                            }
-                        }
-                    }
-                    else -> {
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            "Request status: ${request.status}",
-                            style = MaterialTheme.typography.bodyMedium
+                            text = "Press Back to close",
+                            color = Color(0xFF071434).copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
                         )
                     }
                 }
@@ -321,248 +375,287 @@ fun RequestStatusRow(
 
 @Composable
 fun OrderDetailDialog(order: Order, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        var animateIn by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        LaunchedEffect(Unit) {
+            animateIn = true
+        }
+        val animatedAlpha by animateFloatAsState(
+            targetValue = if (animateIn) 1f else 0f,
+            animationSpec = tween(durationMillis = 300)
+        )
+        fun dismissWithAnimation() {
+            animateIn = false
+            scope.launch {
+                delay(300)
+                onDismiss()
+            }
+        }
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.White.copy(alpha = .9f), RoundedCornerShape(20.dp))
-                .padding(8.dp)
+                .fillMaxSize()
+                .focusProperties { canFocus = false },
+            contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onDismiss)
-                    .align(Alignment.TopEnd)
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { dismissWithAnimation() }
+            )
+
+            AnimatedVisibility(
+                visible = animateIn,
+                enter = fadeIn(animationSpec = tween(durationMillis = 300)) + scaleIn(animationSpec = tween(durationMillis = 300)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 300)) + scaleOut(animationSpec = tween(durationMillis = 300))
             ) {
-                Text(
-                    text = "\uF057",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.Black,
-                    fontFamily = FontFamily(Font(R.font.icons)),
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
-
-            Column{
-                when (order.status) {
-                    "placed" -> {
-                        Row(
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(modifier = Modifier
-                                .fillMaxWidth(.4f)
-
-                            ) {
-                                Column {
-                                    Text(
-                                        "Thank you for your purchase!",
-                                        style = TextStyle(fontSize = 16.sp),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        "Your order will be processed. We will notify you once order has been shipped",
-                                        style = TextStyle(fontSize = 8.sp, color = Color.DarkGray)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        "Guest detail",
-                                        style = TextStyle(fontSize = 10.sp),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    modifier = Modifier.fillMaxWidth(0.6f),
+                    color = Color(0xFFCFDFED),
+                    contentColor = Color(0xFF071434),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                    ) {
+                        when (order.status) {
+                            "placed" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(modifier = Modifier
+                                        .fillMaxWidth(.4f)
                                     ) {
-
                                         Column {
                                             Text(
-                                                "Name",
-                                                style = TextStyle(fontSize = 8.sp),
+                                                "Thank you for your purchase!",
+                                                style = TextStyle(fontSize = 16.sp),
                                                 fontWeight = FontWeight.Bold
                                             )
+                                            Spacer(modifier = Modifier.height(8.dp))
                                             Text(
-                                                "Room",
-                                                style = TextStyle(fontSize = 8.sp),
-                                                fontWeight = FontWeight.Bold
+                                                "Your order will be processed. We will notify you once order has been shipped",
+                                                style = TextStyle(fontSize = 8.sp, color = Color(0xFF071434).copy(alpha = 0.7f))
                                             )
+                                            Spacer(modifier = Modifier.height(16.dp))
                                             Text(
-                                                "Phone",
-                                                style = TextStyle(fontSize = 8.sp),
+                                                "Guest detail",
+                                                style = TextStyle(fontSize = 10.sp),
                                                 fontWeight = FontWeight.Bold
                                             )
-                                        }
-                                        Column(modifier = Modifier
-                                                .padding(end = 32.dp)
-                                            ){
-                                                Text(
-                                                    "${order.guestName?.let { formatName(it) }}",
-                                                    style = TextStyle(
-                                                        fontSize = 8.sp,
-                                                        color = Color.DarkGray
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column {
+                                                    Text(
+                                                        "Name",
+                                                        style = TextStyle(fontSize = 8.sp),
+                                                        fontWeight = FontWeight.Bold
                                                     )
-                                                )
-                                                Text(
-                                                    "${order.guestRoom}",
-                                                    style = TextStyle(
-                                                        fontSize = 8.sp,
-                                                        color = Color.DarkGray
+                                                    Text(
+                                                        "Room",
+                                                        style = TextStyle(fontSize = 8.sp),
+                                                        fontWeight = FontWeight.Bold
                                                     )
-                                                )
-                                                Text(
-                                                    "${order.guestPhone}",
-                                                    style = TextStyle(
-                                                        fontSize = 8.sp,
-                                                        color = Color.DarkGray
+                                                    Text(
+                                                        "Phone",
+                                                        style = TextStyle(fontSize = 8.sp),
+                                                        fontWeight = FontWeight.Bold
                                                     )
-                                                )
+                                                }
+                                                Column(modifier = Modifier
+                                                    .padding(end = 32.dp)
+                                                ) {
+                                                    Text(
+                                                        "${order.guestName?.let { formatName(it) }}",
+                                                        style = TextStyle(
+                                                            fontSize = 8.sp,
+                                                            color = Color(0xFF071434).copy(alpha = 0.7f)
+                                                        )
+                                                    )
+                                                    Text(
+                                                        "${order.guestRoom}",
+                                                        style = TextStyle(
+                                                            fontSize = 8.sp,
+                                                            color = Color(0xFF071434).copy(alpha = 0.7f)
+                                                        )
+                                                    )
+                                                    Text(
+                                                        "${order.guestPhone}",
+                                                        style = TextStyle(
+                                                            fontSize = 8.sp,
+                                                            color = Color(0xFF071434).copy(alpha = 0.7f)
+                                                        )
+                                                    )
+                                                }
                                             }
                                         }
                                     }
-                                }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(1f)
-                            ){
-                                OrdernotifDetails(order)
-                            }
-                        }
-                    }
-                    "confirm" -> {
-                        Row(
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(modifier = Modifier.fillMaxWidth(0.4f)) {
-                                Column {
-                                    Text(
-                                        "Your order has been confirmed!",
-                                        style = TextStyle(fontSize = 16.sp),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        "Your order will be processed. We will notify you once order has been shipped",
-                                        style = TextStyle(fontSize = 8.sp, color = Color.DarkGray)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    DisplayGif(R.drawable.orderconfirm)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(1f)
+                                    ) {
+                                        OrdernotifDetails(order)
+                                    }
                                 }
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(1f)
-                            ){
-                                OrdernotifDetails(order)
-                            }
-                        }
-                    }
-                    "process" -> {
-                        Row(
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(modifier = Modifier.fillMaxWidth(0.4f)) {
-                                Column {
-                                    Text(
-                                        "Your order has been processed!",
-                                        style = TextStyle(fontSize = 16.sp),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        "Your order is being prepared, we'll notify you when it's ready to ship.",
-                                        style = TextStyle(fontSize = 8.sp, color = Color.DarkGray)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    DisplayGif(R.drawable.orderprocess)
+                            "confirm" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(modifier = Modifier.fillMaxWidth(0.4f)) {
+                                        Column {
+                                            Text(
+                                                "Your order has been confirmed!",
+                                                style = TextStyle(fontSize = 16.sp),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text(
+                                                "Your order will be processed. We will notify you once order has been shipped",
+                                                style = TextStyle(fontSize = 8.sp, color = Color(0xFF071434).copy(alpha = 0.7f))
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            DisplayGif(R.drawable.orderconfirm)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(1f)
+                                    ) {
+                                        OrdernotifDetails(order)
+                                    }
                                 }
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            OrdernotifDetails(order)  // Assume you have this composable
-                        }
-                    }
-                    "deliver" -> {
-                        Row(
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(modifier = Modifier.fillMaxWidth(0.4f)) {
-                                Column {
-                                    Text(
-                                        "Your order is on its way!",
-                                        style = TextStyle(fontSize = 16.sp),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        "Hang tight! We'll notify you once your order arrives.",
-                                        style = TextStyle(fontSize = 8.sp, color = Color.DarkGray)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    DisplayGif(R.drawable.orderdeliver)
+                            "process" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(modifier = Modifier.fillMaxWidth(0.4f)) {
+                                        Column {
+                                            Text(
+                                                "Your order has been processed!",
+                                                style = TextStyle(fontSize = 16.sp),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text(
+                                                "Your order is being prepared, we'll notify you when it's ready to ship.",
+                                                style = TextStyle(fontSize = 8.sp, color = Color(0xFF071434).copy(alpha = 0.7f))
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            DisplayGif(R.drawable.orderprocess)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    OrdernotifDetails(order)
                                 }
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            OrdernotifDetails(order)  // Assume you have this composable
-                        }
-                    }
-                    "completed" -> {
-                        Row(
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(modifier = Modifier.fillMaxWidth(0.4f)) {
-                                Column {
-                                    Text(
-                                        "Your order has been successfully delivered. Enjoy your meal!",
-                                        style = TextStyle(fontSize = 16.sp),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        "Thank you for choosing us. We hope to serve you again soon!",
-                                        style = TextStyle(fontSize = 8.sp, color = Color.DarkGray)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    DisplayGif(R.drawable.ordercomplete)
+                            "deliver" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(modifier = Modifier.fillMaxWidth(0.4f)) {
+                                        Column {
+                                            Text(
+                                                "Your order is on its way!",
+                                                style = TextStyle(fontSize = 16.sp),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text(
+                                                "Hang tight! We'll notify you once your order arrives.",
+                                                style = TextStyle(fontSize = 8.sp, color = Color(0xFF071434).copy(alpha = 0.7f))
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            DisplayGif(R.drawable.orderdeliver)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    OrdernotifDetails(order)
                                 }
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            OrdernotifDetails(order)  // Assume you have this composable
+                            "completed" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(modifier = Modifier.fillMaxWidth(0.4f)) {
+                                        Column {
+                                            Text(
+                                                "Your order has been successfully delivered. Enjoy your meal!",
+                                                style = TextStyle(fontSize = 16.sp),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text(
+                                                "Thank you for choosing us. We hope to serve you again soon!",
+                                                style = TextStyle(fontSize = 8.sp, color = Color(0xFF071434).copy(alpha = 0.7f))
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            DisplayGif(R.drawable.ordercomplete)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    OrdernotifDetails(order)
+                                }
+                            }
+                            else -> {
+                                Text("Order ${order.status}", style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
-                    }
-                    else -> {
-                        Text("Order ${order.status}", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Press Back to close",
+                            color = Color(0xFF071434).copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
                     }
                 }
             }
+}
         }
     }
-}
 
 @Composable
 fun OrdernotifDetails(orderDetails: Order?) {
@@ -584,7 +677,7 @@ fun OrdernotifDetails(orderDetails: Order?) {
                     .padding(vertical = 4.dp)
                     .fillMaxWidth(),
                 thickness = .5.dp,
-                color = Color.LightGray
+                color = Color(0xFF071434).copy(alpha = 0.2f)
             )
 
             val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.getDefault())
@@ -604,7 +697,7 @@ fun OrdernotifDetails(orderDetails: Order?) {
                     Text(
                         text = "Date/Time",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
-                        color = Color.DarkGray
+                        color = Color(0xFF071434).copy(alpha = 0.6f)
                     )
                     Text(
                         text = formattedDate,
@@ -616,14 +709,14 @@ fun OrdernotifDetails(orderDetails: Order?) {
                     modifier = Modifier
                         .height(24.dp),
                     thickness = .5.dp,
-                    color = Color.LightGray
+                    color = Color(0xFF071434).copy(alpha = 0.2f)
                 )
 
                 Column {
                     Text(
                         text = "Order Id",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
-                        color = Color.DarkGray
+                        color = Color(0xFF071434).copy(alpha = 0.6f)
                     )
                     Text(
                         text = orderDetails.orderId.toString(),
@@ -635,14 +728,14 @@ fun OrdernotifDetails(orderDetails: Order?) {
                     modifier = Modifier
                         .height(24.dp),
                     thickness = .5.dp,
-                    color = Color.LightGray
+                    color = Color(0xFF071434).copy(alpha = 0.2f)
                 )
 
                 Column {
                     Text(
                         text = "Payment",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
-                        color = Color.DarkGray
+                        color = Color(0xFF071434).copy(alpha = 0.6f)
                     )
                     Text(
                         text = orderDetails.paymentMethod.toString(),

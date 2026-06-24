@@ -1311,13 +1311,26 @@ fun RequestDialog(
                 Text(text = "Request Date")
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { datePickerDialog.show() }) {
+                    var isDateFocused by remember { mutableStateOf(false) }
+                    Box(
+                        modifier = Modifier
+                            .onFocusChanged { isDateFocused = it.isFocused }
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                                onClick = { datePickerDialog.show() }
+                            )
+                            .background(
+                                color = if (isDateFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(8.dp)
+                    ) {
                         Icon(
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .size(24.dp),
+                            modifier = Modifier.size(24.dp),
                             painter = painterResource(id = R.drawable.ic_date_time),
-                            contentDescription = "Choose Date"
+                            contentDescription = "Choose Date",
+                            tint = if (isDateFocused) Color(0xFF071434) else Color.Gray
                         )
                     }
                     selectedDate?.let { Text(it, modifier = Modifier.padding(start = 8.dp)) }
@@ -1329,13 +1342,26 @@ fun RequestDialog(
                 Text(text = "Request Time")
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { timePickerDialog.show() }) {
+                    var isTimeFocused by remember { mutableStateOf(false) }
+                    Box(
+                        modifier = Modifier
+                            .onFocusChanged { isTimeFocused = it.isFocused }
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                                onClick = { timePickerDialog.show() }
+                            )
+                            .background(
+                                color = if (isTimeFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(8.dp)
+                    ) {
                         Icon(
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .size(24.dp),
+                            modifier = Modifier.size(24.dp),
                             painter = painterResource(id = R.drawable.ic_date_time),
-                            contentDescription = "Choose Time"
+                            contentDescription = "Choose Time",
+                            tint = if (isTimeFocused) Color(0xFF071434) else Color.Gray
                         )
                     }
                     selectedTime?.let { Text(it, modifier = Modifier.padding(start = 8.dp)) }
@@ -1394,17 +1420,19 @@ fun RequestDialog(
 
                         // 2. Unified Click-to-Talk Mic Button State Machine
                         val interactionSource = remember { MutableInteractionSource() }
-                        val micBgColor = if (isListening) Color(0xFFE91E63) else Color.Gray.copy(alpha = 0.2f)
-                        val micIconTint = if (isListening) Color.White else Color.Gray
+                        var isMicFocused by remember { mutableStateOf(false) }
+                        val micBgColor = if (isListening || isMicFocused) Color(0xFFCFDFED) else Color.Gray.copy(alpha = 0.2f)
+                        val micIconTint = if (isListening || isMicFocused) Color(0xFF071434) else Color.Gray
 
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(CircleShape)
                                 .background(micBgColor)
+                                .onFocusChanged { isMicFocused = it.isFocused }
                                 .clickable(
                                     interactionSource = interactionSource,
-                                    indication = ripple(bounded = true),
+                                    indication = null,
                                     onClick = { startVoiceRecognition() }
                                 ),
                             contentAlignment = Alignment.Center
@@ -1429,36 +1457,68 @@ fun RequestDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val requestId = generateRequestId()
-                    folioId?.let {
-                        sendRequestNotification(context, it, requestId, request, timeStamp)
-                        sendRequestToDatabase(
-                            context,
-                            it,
-                            guestName ?: "",
-                            guestPhone ?: "",
-                            guestRoom ?: "",
-                            request,
-                            "submitted",
-                            requestId,
-                            timeStamp,
-                            selectedDate ?: "",
-                            selectedTime ?: "",
-                            note,
-                            guestInfo?.gender
-                        )
-                    }
-                    onDismiss()
-                }
+            var isSubmitFocused by remember { mutableStateOf(false) }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .onFocusChanged { isSubmitFocused = it.isFocused }
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = {
+                            val requestId = generateRequestId()
+                            folioId?.let {
+                                sendRequestNotification(context, it, requestId, request, timeStamp)
+                                sendRequestToDatabase(
+                                    context,
+                                    it,
+                                    guestName ?: "",
+                                    guestPhone ?: "",
+                                    guestRoom ?: "",
+                                    request,
+                                    "submitted",
+                                    requestId,
+                                    timeStamp,
+                                    selectedDate ?: "",
+                                    selectedTime ?: "",
+                                    note,
+                                    guestInfo?.gender
+                                )
+                            }
+                            onDismiss()
+                        }
+                    )
+                    .background(if (isSubmitFocused) Color(0xFFCFDFED) else Color(0xFFCFDFED).copy(alpha = 0.5f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text("Submit Request")
+                Text(
+                    text = "Submit Request",
+                    color = Color(0xFF071434),
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         },
         dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Cancel")
+            var isCancelFocused by remember { mutableStateOf(false) }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .onFocusChanged { isCancelFocused = it.isFocused }
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = onDismiss
+                    )
+                    .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "Cancel",
+                    color = Color(0xFF071434),
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
     )
