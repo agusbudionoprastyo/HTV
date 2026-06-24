@@ -129,7 +129,7 @@ fun RequestDetailDialog(request: Request, onDismiss: () -> Unit) {
             ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(0.6f),
-                    color = Color(0xFFCFDFED),
+                    color = Color(0xFFF2F7FC),
                     contentColor = Color(0xFF071434),
                     shape = RoundedCornerShape(20.dp)
                 ) {
@@ -423,7 +423,7 @@ fun OrderDetailDialog(order: Order, onDismiss: () -> Unit) {
             ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(0.6f),
-                    color = Color(0xFFCFDFED),
+                    color = Color(0xFFF2F7FC),
                     contentColor = Color(0xFF071434),
                     shape = RoundedCornerShape(20.dp)
                 ) {

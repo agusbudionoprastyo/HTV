@@ -1425,7 +1425,7 @@ fun ItemDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.LightGray.copy(alpha = .2f), shape = RoundedCornerShape(16.dp))
+                        .background(Color.LightGray.copy(alpha = 0.5f), shape = RoundedCornerShape(16.dp))
                         .padding(24.dp)
                 ) {
                     Row(
@@ -1564,14 +1564,25 @@ fun ItemDialog(
                 }
 
                 var isAddCartFocused by remember { mutableStateOf(false) }
+                var buttonOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // Add to Cart Button
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(50))
                         .onFocusChanged { isAddCartFocused = it.isFocused }
+                        .onGloballyPositioned { coords ->
+                            val bounds = coords.boundsInRoot()
+                            buttonOffset = androidx.compose.ui.geometry.Offset(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+                        }
                         .clickable(
                             onClick = {
+                                GlobalCartState.animStartOffset.value = buttonOffset
+                                GlobalCartState.animateTrigger.value++
+
                                 // Pass the selected variant (can be null) to the cart handler
                                 onAddToCart(item, quantity, specialInstruction, selectedVariant)
                                 onDismiss()
@@ -1583,10 +1594,9 @@ fun ItemDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(64.dp)
-                            .padding(8.dp)
+                            .height(48.dp)
                             .clip(RoundedCornerShape(50))
-                            .background(if (isAddCartFocused) Color(0xFFCFDFED) else Color(0xFFCFDFED).copy(alpha = 0.5f))
+                            .background(if (isAddCartFocused) Color(0xFFCFDFED) else Color.Gray)
                             .align(Alignment.Center)
                     ) {
                         Text(
@@ -1594,7 +1604,7 @@ fun ItemDialog(
                             style = TextStyle(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF071434)
+                                color = if (isAddCartFocused) Color(0xFF071434) else Color.White
                             ),
                             modifier = Modifier
                                 .align(Alignment.Center)

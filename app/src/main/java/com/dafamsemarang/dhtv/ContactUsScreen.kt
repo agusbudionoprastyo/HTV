@@ -82,6 +82,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.focusable
 
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
@@ -1177,35 +1178,72 @@ fun RequestDialog(
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
     val formattedTime = remember { currentDateTime.format(timeFormatter) }
     
-    var selectedDate by remember { mutableStateOf<String?>(formattedDate) }
-    var selectedTime by remember { mutableStateOf<String?>(formattedTime) }
-    var note by remember { mutableStateOf("") }
-    
     val calendar = remember { Calendar.getInstance() }
-    val year = remember { calendar.get(Calendar.YEAR) }
-    val month = remember { calendar.get(Calendar.MONTH) }
-    val day = remember { calendar.get(Calendar.DAY_OF_MONTH) }
-    val hour = remember { calendar.get(Calendar.HOUR_OF_DAY) }
-    val minute = remember { calendar.get(Calendar.MINUTE) }
-
-    val datePickerDialog = remember {
-        DatePickerDialog(
-            context,
-            { _, selectedYear, selectedMonth, selectedDayOfMonth ->
-                selectedDate = "$selectedDayOfMonth/${selectedMonth + 1}/$selectedYear"
-            },
-            year, month, day
+    
+    // Parse initial date
+    var day by remember { 
+        mutableStateOf(
+            try { formattedDate.split("/")[0].toInt() } 
+            catch(e: Exception) { calendar.get(Calendar.DAY_OF_MONTH) }
+        )
+    }
+    var month by remember { 
+        mutableStateOf(
+            try { formattedDate.split("/")[1].toInt() } 
+            catch(e: Exception) { calendar.get(Calendar.MONTH) + 1 }
+        )
+    }
+    var year by remember { 
+        mutableStateOf(
+            try { formattedDate.split("/")[2].toInt() } 
+            catch(e: Exception) { calendar.get(Calendar.YEAR) }
+        )
+    }
+    
+    // Parse initial time
+    var hour by remember { 
+        mutableStateOf(
+            try { formattedTime.split(":")[0].toInt() } 
+            catch(e: Exception) { calendar.get(Calendar.HOUR_OF_DAY) }
+        )
+    }
+    var minute by remember { 
+        mutableStateOf(
+            try { formattedTime.split(":")[1].toInt() } 
+            catch(e: Exception) { calendar.get(Calendar.MINUTE) }
         )
     }
 
-    val timePickerDialog = remember {
-        TimePickerDialog(
-            context,
-            { _, selectedHour, selectedMinute ->
-                selectedTime = "$selectedHour:${selectedMinute.toString().padStart(2, '0')}"
-            },
-            hour, minute, true
-        )
+    // Helper to get max days in selected month/year
+    val maxDays = remember(month, year) {
+        val tempCal = Calendar.getInstance()
+        tempCal.set(Calendar.YEAR, year)
+        tempCal.set(Calendar.MONTH, month - 1)
+        tempCal.getActualMaximum(Calendar.DAY_OF_MONTH)
+    }
+    
+    // Adjust day if it exceeds maxDays
+    LaunchedEffect(maxDays) {
+        if (day > maxDays) {
+            day = maxDays
+        }
+    }
+
+    val selectedDate = "$day/$month/$year"
+    val selectedTime = "${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}"
+    var isEditingDateTime by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf("") }
+    
+    val dayFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(isEditingDateTime) {
+        if (isEditingDateTime) {
+            delay(100)
+            try {
+                dayFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
     
     // SpeechRecognizer state - only created when dialog is visible
@@ -1307,64 +1345,94 @@ fun RequestDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Date picker
-                Text(text = "Request Date")
+                // Date & Time picker (Inline)
+                Text(text = "Request Date & Time")
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    var isDateFocused by remember { mutableStateOf(false) }
-                    Box(
-                        modifier = Modifier
-                            .onFocusChanged { isDateFocused = it.isFocused }
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                                onClick = { datePickerDialog.show() }
-                            )
-                            .background(
-                                color = if (isDateFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .padding(8.dp)
-                    ) {
-                        Icon(
-                            modifier = Modifier.size(24.dp),
-                            painter = painterResource(id = R.drawable.ic_date_time),
-                            contentDescription = "Choose Date",
-                            tint = if (isDateFocused) Color(0xFF071434) else Color.Gray
-                        )
-                    }
-                    selectedDate?.let { Text(it, modifier = Modifier.padding(start = 8.dp)) }
-                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isEditingDateTime) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            // Date Pickers
+                            PickerColumn(label = "Day", value = day, range = 1..maxDays, onValueChange = { day = it }, modifier = Modifier.focusRequester(dayFocusRequester))
+                            PickerColumn(label = "Month", value = month, range = 1..12, onValueChange = { month = it })
+                            PickerColumn(label = "Year", value = year, range = 2026..2036, onValueChange = { year = it })
 
-                Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.Gray.copy(alpha = 0.3f)))
+                            Spacer(modifier = Modifier.width(4.dp))
 
-                // Time picker
-                Text(text = "Request Time")
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    var isTimeFocused by remember { mutableStateOf(false) }
-                    Box(
-                        modifier = Modifier
-                            .onFocusChanged { isTimeFocused = it.isFocused }
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                                onClick = { timePickerDialog.show() }
+                            // Time Pickers
+                            PickerColumn(label = "Hour", value = hour, range = 0..23, onValueChange = { hour = it }, zeroPad = true)
+                            PickerColumn(label = "Minute", value = minute, range = 0..59, onValueChange = { minute = it }, zeroPad = true)
+                        }
+
+                        // Check / Done Button
+                        var isCheckFocused by remember { mutableStateOf(false) }
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .onFocusChanged { isCheckFocused = it.isFocused }
+                                .background(if (isCheckFocused) Color(0xFFCFDFED) else Color.Transparent)
+                                .clickable { isEditingDateTime = false }
+                                .focusable(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_check),
+                                contentDescription = "Done",
+                                tint = if (isCheckFocused) Color(0xFF071434) else Color.Gray,
+                                modifier = Modifier.size(16.dp)
                             )
-                            .background(
-                                color = if (isTimeFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f),
-                                shape = RoundedCornerShape(8.dp)
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                modifier = Modifier.size(20.dp),
+                                painter = painterResource(id = R.drawable.ic_date_time),
+                                contentDescription = "Date & Time",
+                                tint = Color.Gray
                             )
-                            .padding(8.dp)
-                    ) {
-                        Icon(
-                            modifier = Modifier.size(24.dp),
-                            painter = painterResource(id = R.drawable.ic_date_time),
-                            contentDescription = "Choose Time",
-                            tint = if (isTimeFocused) Color(0xFF071434) else Color.Gray
-                        )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "$selectedDate $selectedTime",
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+
+                        // Edit Button
+                        var isEditFocused by remember { mutableStateOf(false) }
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .onFocusChanged { isEditFocused = it.isFocused }
+                                .background(if (isEditFocused) Color(0xFFCFDFED) else Color.Transparent)
+                                .clickable { isEditingDateTime = true }
+                                .focusable(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_edit),
+                                contentDescription = "Edit",
+                                tint = if (isEditFocused) Color(0xFF071434) else Color.Gray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
-                    selectedTime?.let { Text(it, modifier = Modifier.padding(start = 8.dp)) }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1373,11 +1441,12 @@ fun RequestDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 72.dp)
                         .background(
                             Color.LightGray.copy(alpha = 0.3f),
-                            RoundedCornerShape(8.dp)
+                            RoundedCornerShape(16.dp)
                         )
-                        .padding(8.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1457,14 +1526,37 @@ fun RequestDialog(
             }
         },
         confirmButton = {
-            Column(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                var isCancelFocused by remember { mutableStateOf(false) }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(CircleShape)
+                        .onFocusChanged { isCancelFocused = it.isFocused }
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = onDismiss
+                        )
+                        .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f))
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Cancel",
+                        color = Color(0xFF071434),
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
                 var isSubmitFocused by remember { mutableStateOf(false) }
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .weight(1f)
                         .clip(CircleShape)
                         .onFocusChanged { isSubmitFocused = it.isFocused }
                         .clickable(
@@ -1499,29 +1591,6 @@ fun RequestDialog(
                 ) {
                     Text(
                         text = "Submit Request",
-                        color = Color(0xFF071434),
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-
-                var isCancelFocused by remember { mutableStateOf(false) }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(CircleShape)
-                        .onFocusChanged { isCancelFocused = it.isFocused }
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                            onClick = onDismiss
-                        )
-                        .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f))
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Cancel",
                         color = Color(0xFF071434),
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyMedium
@@ -1728,4 +1797,64 @@ fun sendRequestToDatabase(
    }.addOnFailureListener {
        Log.e("DHTV_CONTACT", "Failed to save request to Firebase")
    }
+}
+
+
+
+@Composable
+fun PickerColumn(
+    label: String,
+    value: Int,
+    range: IntRange,
+    onValueChange: (Int) -> Unit,
+    zeroPad: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                    when (keyEvent.key) {
+                        androidx.compose.ui.input.key.Key.DirectionUp -> {
+                            val newValue = if (value + 1 > range.last) range.first else value + 1
+                            onValueChange(newValue)
+                            true
+                        }
+                        androidx.compose.ui.input.key.Key.DirectionDown -> {
+                            val newValue = if (value - 1 < range.first) range.last else value - 1
+                            onValueChange(newValue)
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            }
+            .focusable()
+            .background(
+                color = if (isFocused) Color(0xFFCFDFED) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (isFocused) Color(0xFF071434).copy(alpha = 0.7f) else Color.Gray.copy(alpha = 0.6f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        
+        Spacer(modifier = Modifier.height(2.dp))
+        
+        Text(
+            text = if (zeroPad) value.toString().padStart(2, '0') else value.toString(),
+            color = if (isFocused) Color(0xFF071434) else Color.Gray,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(vertical = 2.dp)
+        )
+    }
 }

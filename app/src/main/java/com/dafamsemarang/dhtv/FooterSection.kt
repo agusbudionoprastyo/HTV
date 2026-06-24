@@ -4835,25 +4835,8 @@ fun CartDrawer(
                                         label = "PlusFocusFade"
                                     )
 
-                                    val minusBorderModifier = if (isMinusFocused) {
-                                        Modifier.border(
-                                            width = 3.5.dp,
-                                            color = Color.White.copy(alpha = pulseAlpha.value * minusFocusFade),
-                                            shape = CircleShape
-                                        )
-                                    } else {
-                                        Modifier
-                                    }
-
-                                    val plusBorderModifier = if (isPlusFocused) {
-                                        Modifier.border(
-                                            width = 3.5.dp,
-                                            color = Color.White.copy(alpha = pulseAlpha.value * plusFocusFade),
-                                            shape = CircleShape
-                                        )
-                                    } else {
-                                        Modifier
-                                    }
+                                    val minusBorderModifier = Modifier
+                                    val plusBorderModifier = Modifier
 
                                     Surface(
                                         modifier = Modifier.fillMaxWidth(),
@@ -4942,8 +4925,24 @@ fun CartDrawer(
                                                                     cartPreferences.saveCart(selectedItems)
                                                                 }
                                                             } else {
+                                                                val deletedIdx = selectedItems.indexOf(selectedItem)
                                                                 selectedItems.remove(selectedItem)
                                                                 cartPreferences.saveCart(selectedItems)
+                                                                
+                                                                if (selectedItems.isNotEmpty()) {
+                                                                    val targetIdx = (deletedIdx - 1).coerceAtLeast(0)
+                                                                    val targetItem = selectedItems[targetIdx]
+                                                                    val targetKey = "minus_${targetItem.item.name}_${targetItem.selectedVariant?.name ?: "default"}_${targetItem.specialInstruction}"
+                                                                    lastFocusedControl = targetKey
+                                                                    scope.launch {
+                                                                        delay(100)
+                                                                        try {
+                                                                            focusRequesters[targetKey]?.requestFocus()
+                                                                        } catch(e: Exception) {
+                                                                            e.printStackTrace()
+                                                                        }
+                                                                    }
+                                                                }
                                                             }
                                                         },
                                                     contentAlignment = Alignment.Center
@@ -5070,22 +5069,12 @@ fun CartDrawer(
                                 label = "CheckoutFocusFade"
                             )
 
-                            val checkoutBorderModifier = if (isCheckoutFocused) {
-                                Modifier.border(
-                                    width = 3.5.dp,
-                                    color = Color.White.copy(alpha = checkoutPulseAlpha.value * checkoutFocusFade),
-                                    shape = RoundedCornerShape(25.5.dp)
-                                )
-                            } else {
-                                Modifier
-                            }
+                            val checkoutBorderModifier = Modifier
 
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(50.dp)
-                                    .then(checkoutBorderModifier)
-                                    .padding(3.5.dp)
+                                    .height(44.dp)
                                     .clip(RoundedCornerShape(22.dp))
                                     .onFocusChanged { isCheckoutFocused = it.isFocused }
                                     .focusable()
@@ -5232,26 +5221,29 @@ fun CartDrawer(
                                         .focusable(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val isCashSelected = selectedPaymentMethod.value == "Cash"
+                                    val cashRadioBgColor = if (isCashFocused) {
+                                        Color(0xFFCFDFED)
+                                    } else if (isCashSelected) {
+                                        Color(0xFFCFDFED).copy(alpha = 0.2f)
+                                    } else {
+                                        Color.White.copy(alpha = 0.05f)
+                                    }
+
                                     Box(
                                         modifier = Modifier
                                             .size(24.dp)
-                                            .border(
-                                                width = 2.dp,
-                                                color = if (isCashFocused) Color(0xFFCFDFED).copy(alpha = pulseAlpha) else Color.Transparent,
-                                                shape = CircleShape
-                                            )
-                                            .padding(3.dp)
                                             .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.05f))
-                                            .border(1.5.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                                            .background(cashRadioBgColor)
+                                            .padding(3.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (selectedPaymentMethod.value == "Cash") {
+                                        if (isCashSelected) {
                                             Box(
                                                 modifier = Modifier
                                                     .size(10.dp)
                                                     .clip(CircleShape)
-                                                    .background(Color(0xFFCFDFED))
+                                                    .background(if (isCashFocused) Color(0xFF071434) else Color(0xFFCFDFED))
                                             )
                                         }
                                     }
@@ -5274,26 +5266,29 @@ fun CartDrawer(
                                         .focusable(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val isCardSelected = selectedPaymentMethod.value == "Debit/Credit Card"
+                                    val cardRadioBgColor = if (isCardFocused) {
+                                        Color(0xFFCFDFED)
+                                    } else if (isCardSelected) {
+                                        Color(0xFFCFDFED).copy(alpha = 0.2f)
+                                    } else {
+                                        Color.White.copy(alpha = 0.05f)
+                                    }
+
                                     Box(
                                         modifier = Modifier
                                             .size(24.dp)
-                                            .border(
-                                                width = 2.dp,
-                                                color = if (isCardFocused) Color(0xFFCFDFED).copy(alpha = pulseAlpha) else Color.Transparent,
-                                                shape = CircleShape
-                                            )
-                                            .padding(3.dp)
                                             .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.05f))
-                                            .border(1.5.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                                            .background(cardRadioBgColor)
+                                            .padding(3.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (selectedPaymentMethod.value == "Debit/Credit Card") {
+                                        if (isCardSelected) {
                                             Box(
                                                 modifier = Modifier
                                                     .size(10.dp)
                                                     .clip(CircleShape)
-                                                    .background(Color(0xFFCFDFED))
+                                                    .background(if (isCardFocused) Color(0xFF071434) else Color(0xFFCFDFED))
                                             )
                                         }
                                     }

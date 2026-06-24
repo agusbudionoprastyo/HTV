@@ -690,15 +690,8 @@ fun CheckoutReminderDialog(
                                     text = buildAnnotatedString {
                                         withStyle(style = ParagraphStyle(textAlign = TextAlign.Start)) {
                                             withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 20.sp)) {
-                                                append("This is a reminder that your checkout time is at 12:00 PM today. Please ensure all your belongings are packed and ready for checkout.")
+                                                append("This is a reminder that your checkout time is at 12:00 PM today. Please ensure all your belongings are packed and ready for checkout.\n")
                                             }
-                                        }
-                                        withStyle(style = ParagraphStyle(textAlign = TextAlign.Start)) {
-                                            withStyle(style = SpanStyle(color = Color.White.copy(alpha = 0f), fontSize = 8.sp)) {
-                                                append("\n")
-                                            }
-                                        }
-                                        withStyle(style = ParagraphStyle(textAlign = TextAlign.Start)) {
                                             withStyle(style = SpanStyle(color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)) {
                                                 append("Ini adalah pengingat bahwa waktu checkout Anda adalah pukul 12:00 siang hari ini. Mohon pastikan semua barang Anda sudah dikemas dan siap untuk checkout.")
                                             }
