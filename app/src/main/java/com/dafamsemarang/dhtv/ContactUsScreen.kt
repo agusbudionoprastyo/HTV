@@ -1457,70 +1457,79 @@ fun RequestDialog(
             }
         },
         confirmButton = {
-            var isSubmitFocused by remember { mutableStateOf(false) }
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .onFocusChanged { isSubmitFocused = it.isFocused }
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = {
-                            val requestId = generateRequestId()
-                            folioId?.let {
-                                sendRequestNotification(context, it, requestId, request, timeStamp)
-                                sendRequestToDatabase(
-                                    context,
-                                    it,
-                                    guestName ?: "",
-                                    guestPhone ?: "",
-                                    guestRoom ?: "",
-                                    request,
-                                    "submitted",
-                                    requestId,
-                                    timeStamp,
-                                    selectedDate ?: "",
-                                    selectedTime ?: "",
-                                    note,
-                                    guestInfo?.gender
-                                )
-                            }
-                            onDismiss()
-                        }
-                    )
-                    .background(if (isSubmitFocused) Color(0xFFCFDFED) else Color(0xFFCFDFED).copy(alpha = 0.5f))
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "Submit Request",
-                    color = Color(0xFF071434),
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                var isSubmitFocused by remember { mutableStateOf(false) }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(CircleShape)
+                        .onFocusChanged { isSubmitFocused = it.isFocused }
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = {
+                                val requestId = generateRequestId()
+                                folioId?.let {
+                                    sendRequestNotification(context, it, requestId, request, timeStamp)
+                                    sendRequestToDatabase(
+                                        context,
+                                        it,
+                                        guestName ?: "",
+                                        guestPhone ?: "",
+                                        guestRoom ?: "",
+                                        request,
+                                        "submitted",
+                                        requestId,
+                                        timeStamp,
+                                        selectedDate ?: "",
+                                        selectedTime ?: "",
+                                        note,
+                                        guestInfo?.gender
+                                    )
+                                }
+                                onDismiss()
+                            }
+                        )
+                        .background(if (isSubmitFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f))
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Submit Request",
+                        color = Color(0xFF071434),
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                var isCancelFocused by remember { mutableStateOf(false) }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(CircleShape)
+                        .onFocusChanged { isCancelFocused = it.isFocused }
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = onDismiss
+                        )
+                        .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f))
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Cancel",
+                        color = Color(0xFF071434),
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         },
-        dismissButton = {
-            var isCancelFocused by remember { mutableStateOf(false) }
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .onFocusChanged { isCancelFocused = it.isFocused }
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = onDismiss
-                    )
-                    .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f))
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = "Cancel",
-                    color = Color(0xFF071434),
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
+        dismissButton = null
     )
 }
 

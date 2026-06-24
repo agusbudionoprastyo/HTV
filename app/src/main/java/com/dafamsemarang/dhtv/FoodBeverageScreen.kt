@@ -1288,7 +1288,7 @@ fun ItemDialog(
                             ) {
                                 Text(
                                     text = "\uF056", // Minus icon
-                                    color = Color(0xff071434),
+                                    color = if (isMinusFocused) Color(0xFF071434) else Color.Gray,
                                     style = MaterialTheme.typography.titleLarge,
                                     fontFamily = FontFamily(Font(R.font.icons))
                                 )
@@ -1318,7 +1318,7 @@ fun ItemDialog(
                             ) {
                                 Text(
                                     text = "\uF055", // Plus icon
-                                    color = Color(0xff071434),
+                                    color = if (isPlusFocused) Color(0xFF071434) else Color.Gray,
                                     style = MaterialTheme.typography.titleLarge,
                                     fontFamily = FontFamily(Font(R.font.icons))
                                 )
@@ -1364,7 +1364,7 @@ fun ItemDialog(
                                         shape = RoundedCornerShape(16.dp)
                                     )
                                     .background(
-                                        if (selectedVariant == variant) Color(0xFFCFDFED).copy(alpha = 0.15f) else if (isVariantFocused) Color.LightGray.copy(alpha = 0.2f) else Color.White,
+                                        if (isVariantFocused) Color(0xFFCFDFED) else if (selectedVariant == variant) Color(0xFFCFDFED).copy(alpha = 0.15f) else Color.White,
                                         shape = RoundedCornerShape(16.dp)
                                     )
                             ) {
@@ -1379,8 +1379,8 @@ fun ItemDialog(
                                         selected = selectedVariant == variant,
                                         onClick = { selectedVariant = variant },
                                         colors = RadioButtonDefaults.colors(
-                                            selectedColor = Color(0xFFCFDFED),  // Color when the radio button is selected
-                                            unselectedColor = Color.LightGray.copy(alpha = 0.5f) // Color when the radio button is unselected
+                                            selectedColor = if (isVariantFocused) Color(0xFF071434) else Color(0xFFCFDFED),  // Color when the radio button is selected
+                                            unselectedColor = if (isVariantFocused) Color(0xFF071434).copy(alpha = 0.6f) else Color.LightGray.copy(alpha = 0.5f) // Color when the radio button is unselected
                                         )
                                     )
                                     Column(
@@ -1389,7 +1389,10 @@ fun ItemDialog(
                                     ) {
                                         Text(
                                             text = variant.name,
-                                            style = TextStyle(fontSize = 12.sp),
+                                            style = TextStyle(
+                                                fontSize = 12.sp,
+                                                color = if (isVariantFocused) Color(0xFF071434) else Color.Unspecified
+                                            ),
                                             maxLines = 2, overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
@@ -1400,7 +1403,8 @@ fun ItemDialog(
                                             },
                                             style = TextStyle(
                                                 fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isVariantFocused) Color(0xFF071434) else Color.Unspecified
                                             )
                                         )
                                     }
