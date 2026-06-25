@@ -862,7 +862,7 @@ fun GlassmorphicWelcomeCard(
                 .padding(16.dp) // Applied padding internally to Column to keep text aligned safely!
         ) {
             Text(
-                text = "Welcome, $guestName",
+                text = if (guestName.isBlank()) "No Guest" else "Welcome, $guestName",
                 color = Color(0xFF292A2C),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,

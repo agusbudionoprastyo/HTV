@@ -1234,12 +1234,12 @@ fun RequestDialog(
     var isEditingDateTime by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf("") }
     
-    val dayFocusRequester = remember { FocusRequester() }
+    val hourFocusRequester = remember { FocusRequester() }
     LaunchedEffect(isEditingDateTime) {
         if (isEditingDateTime) {
             delay(100)
             try {
-                dayFocusRequester.requestFocus()
+                hourFocusRequester.requestFocus()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -1362,7 +1362,7 @@ fun RequestDialog(
                             modifier = Modifier.weight(1f)
                         ) {
                             // Date Pickers
-                            PickerColumn(label = "Day", value = day, range = 1..maxDays, onValueChange = { day = it }, modifier = Modifier.focusRequester(dayFocusRequester))
+                            PickerColumn(label = "Day", value = day, range = 1..maxDays, onValueChange = { day = it })
                             PickerColumn(label = "Month", value = month, range = 1..12, onValueChange = { month = it })
                             PickerColumn(label = "Year", value = year, range = 2026..2036, onValueChange = { year = it })
 
@@ -1371,7 +1371,7 @@ fun RequestDialog(
                             Spacer(modifier = Modifier.width(4.dp))
 
                             // Time Pickers
-                            PickerColumn(label = "Hour", value = hour, range = 0..23, onValueChange = { hour = it }, zeroPad = true)
+                            PickerColumn(label = "Hour", value = hour, range = 0..23, onValueChange = { hour = it }, zeroPad = true, modifier = Modifier.focusRequester(hourFocusRequester))
                             PickerColumn(label = "Minute", value = minute, range = 0..59, onValueChange = { minute = it }, zeroPad = true)
                         }
 
@@ -1390,7 +1390,7 @@ fun RequestDialog(
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_check),
                                 contentDescription = "Done",
-                                tint = if (isCheckFocused) Color(0xFF071434) else Color.Gray,
+                                tint = if (isCheckFocused) Color(0xFF1E2026) else Color.Gray,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -1428,7 +1428,7 @@ fun RequestDialog(
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_edit),
                                 contentDescription = "Edit",
-                                tint = if (isEditFocused) Color(0xFF071434) else Color.Gray,
+                                tint = if (isEditFocused) Color(0xFF1E2026) else Color.Gray,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -1491,7 +1491,7 @@ fun RequestDialog(
                         val interactionSource = remember { MutableInteractionSource() }
                         var isMicFocused by remember { mutableStateOf(false) }
                         val micBgColor = if (isListening || isMicFocused) Color(0xFFCFDFED) else Color.Gray.copy(alpha = 0.2f)
-                        val micIconTint = if (isListening || isMicFocused) Color(0xFF071434) else Color.Gray
+                        val micIconTint = if (isListening || isMicFocused) Color(0xFF1E2026) else Color.Gray
 
                         Box(
                             modifier = Modifier
@@ -1541,13 +1541,13 @@ fun RequestDialog(
                             interactionSource = remember { MutableInteractionSource() },
                             onClick = onDismiss
                         )
-                        .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f))
+                        .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.Gray.copy(alpha = 0.2f))
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Cancel",
-                        color = Color(0xFF071434),
+                        color = if (isCancelFocused) Color(0xFF1E2026) else Color.Gray,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -1585,13 +1585,13 @@ fun RequestDialog(
                                 onDismiss()
                             }
                         )
-                        .background(if (isSubmitFocused) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.3f))
+                        .background(if (isSubmitFocused) Color(0xFFCFDFED) else Color.Gray.copy(alpha = 0.2f))
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Submit Request",
-                        color = Color(0xFF071434),
+                        color = if (isSubmitFocused) Color(0xFF1E2026) else Color.Gray,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyMedium
                     )

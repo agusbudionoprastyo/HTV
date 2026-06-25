@@ -171,6 +171,7 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                             ScreenSaverManager.isScreenSaverActive = true
                         } else {
                             Log.d("MainActivity", "Device is not paired yet")
+                            shouldShowPairing = true
                             // Log current device information
                             val deviceInfo = tempDeviceManager.getDeviceInformation()
                             Log.d("MainActivity", "Current device information: $deviceInfo")
@@ -275,6 +276,13 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
     override fun onPairingFailed(error: String) {
         Log.e("MainActivity", "Pairing failed: $error")
         // You might want to show an error message to the user here
+    }
+
+    override fun onConfigChanged() {
+        Log.d("MainActivity", "Device configuration changed (room/branchId), restarting to apply new settings")
+        val intent = intent
+        finish()
+        startActivity(intent)
     }
 
     private fun keepScreenAwake() {

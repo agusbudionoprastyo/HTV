@@ -980,7 +980,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Dear ${formatNameEN(guestInfo?.fname ?: "Guest Name", guestInfo?.gender)}",
+                        text = if (guestInfo == null || guestInfo?.fname.isNullOrEmpty()) "No Guest" else "Dear ${formatNameEN(guestInfo?.fname ?: "", guestInfo?.gender)}",
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(0.dp),

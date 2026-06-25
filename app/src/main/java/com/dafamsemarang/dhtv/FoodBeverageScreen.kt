@@ -1217,7 +1217,7 @@ fun ItemDialog(
                 Text(
                     text = "\uF057",
                     style = MaterialTheme.typography.titleLarge,
-                    color = if (isCloseFocused) Color(0xFF071434) else Color(0xFFCFDFED),
+                    color = if (isCloseFocused) Color(0xFF1E2026) else Color(0xFFCFDFED),
                     fontFamily = FontFamily(Font(R.font.icons))
                 )
             }
@@ -1288,7 +1288,7 @@ fun ItemDialog(
                             ) {
                                 Text(
                                     text = "\uF056", // Minus icon
-                                    color = if (isMinusFocused) Color(0xFF071434) else Color.Gray,
+                                    color = if (isMinusFocused) Color(0xFF1E2026) else Color.Gray,
                                     style = MaterialTheme.typography.titleLarge,
                                     fontFamily = FontFamily(Font(R.font.icons))
                                 )
@@ -1318,7 +1318,7 @@ fun ItemDialog(
                             ) {
                                 Text(
                                     text = "\uF055", // Plus icon
-                                    color = if (isPlusFocused) Color(0xFF071434) else Color.Gray,
+                                    color = if (isPlusFocused) Color(0xFF1E2026) else Color.Gray,
                                     style = MaterialTheme.typography.titleLarge,
                                     fontFamily = FontFamily(Font(R.font.icons))
                                 )
@@ -1379,8 +1379,8 @@ fun ItemDialog(
                                         selected = selectedVariant == variant,
                                         onClick = { selectedVariant = variant },
                                         colors = RadioButtonDefaults.colors(
-                                            selectedColor = if (isVariantFocused) Color(0xFF071434) else Color(0xFFCFDFED),  // Color when the radio button is selected
-                                            unselectedColor = if (isVariantFocused) Color(0xFF071434).copy(alpha = 0.6f) else Color.LightGray.copy(alpha = 0.5f) // Color when the radio button is unselected
+                                            selectedColor = if (isVariantFocused) Color(0xFF1E2026) else Color(0xFFCFDFED),  // Color when the radio button is selected
+                                            unselectedColor = if (isVariantFocused) Color(0xFF1E2026).copy(alpha = 0.6f) else Color.LightGray.copy(alpha = 0.5f) // Color when the radio button is unselected
                                         )
                                     )
                                     Column(
@@ -1391,7 +1391,7 @@ fun ItemDialog(
                                             text = variant.name,
                                             style = TextStyle(
                                                 fontSize = 12.sp,
-                                                color = if (isVariantFocused) Color(0xFF071434) else Color.Unspecified
+                                                color = if (isVariantFocused) Color(0xFF1E2026) else Color.Unspecified
                                             ),
                                             maxLines = 2, overflow = TextOverflow.Ellipsis
                                         )
@@ -1404,7 +1404,7 @@ fun ItemDialog(
                                             style = TextStyle(
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isVariantFocused) Color(0xFF071434) else Color.Unspecified
+                                                color = if (isVariantFocused) Color(0xFF1E2026) else Color.Unspecified
                                             )
                                         )
                                     }
@@ -1500,7 +1500,7 @@ fun ItemDialog(
                             // 2. UNIFIED TV MIC BUTTON (Captures hold and release events!)
                             val interactionSource = remember { MutableInteractionSource() }
                             val micBgColor = if (isListening || isMicFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.5f)
-                            val micIconTint = if (isListening || isMicFocused) Color(0xFF071434) else Color.Gray
+                            val micIconTint = if (isListening || isMicFocused) Color(0xFF1E2026) else Color.Gray
 
                             Box(
                                 modifier = Modifier
@@ -1566,6 +1566,17 @@ fun ItemDialog(
                 var isAddCartFocused by remember { mutableStateOf(false) }
                 var buttonOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
+                val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
+                val pulseAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.4f,
+                    targetValue = 1.0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1000),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "pulseAlpha"
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Add to Cart Button
@@ -1595,8 +1606,13 @@ fun ItemDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
+                            .border(
+                                width = 2.5.dp,
+                                color = if (isAddCartFocused) Color(0xFFCFDFED).copy(alpha = pulseAlpha) else Color.Transparent,
+                                shape = RoundedCornerShape(50)
+                            )
                             .clip(RoundedCornerShape(50))
-                            .background(if (isAddCartFocused) Color(0xFFCFDFED) else Color.Gray)
+                            .background(Color(0xFFE91E63))
                             .align(Alignment.Center)
                     ) {
                         Text(
@@ -1604,7 +1620,7 @@ fun ItemDialog(
                             style = TextStyle(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isAddCartFocused) Color(0xFF071434) else Color.White
+                                color = Color.White
                             ),
                             modifier = Modifier
                                 .align(Alignment.Center)

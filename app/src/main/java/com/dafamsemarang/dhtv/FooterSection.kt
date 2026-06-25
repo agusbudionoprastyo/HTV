@@ -2490,6 +2490,7 @@ fun NotificationButtonDialog(
 ) {
     var notifications by remember { mutableStateOf<List<Notification>>(emptyList()) }
     var selectedNotification by remember { mutableStateOf<Notification?>(null) }
+    var globalDpadLeftLocked by remember { mutableStateOf(false) }
     
     // Animation control
     var isVisible by remember { mutableStateOf(false) }
@@ -2507,6 +2508,7 @@ fun NotificationButtonDialog(
     // Focus management
     val firstItemFocusRequester = remember { FocusRequester() }
     val closeButtonFocusRequester = remember { FocusRequester() }
+    val focusRequesters = remember { mutableMapOf<String, FocusRequester>() }
     var hasFocusedInitialItem by remember { mutableStateOf(false) }
 
     var currentTime by remember { mutableStateOf(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())) }
@@ -2746,16 +2748,41 @@ fun NotificationButtonDialog(
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 itemsIndexed(sortedNotifications) { index, notification ->
+                                    val itemFocusRequester = focusRequesters.getOrPut(notification.id) { FocusRequester() }
                                     NotificationItem(
                                         notification = notification,
-                                        deleteNotification = { deleteNotification(context, notification, folioId) },
+                                        deleteNotification = {
+                                            val nextFocusIndex = if (focusedIndex > 0) {
+                                                focusedIndex - 1
+                                            } else if (sortedNotifications.size > 1) {
+                                                0
+                                            } else {
+                                                -1
+                                            }
+                                            deleteNotification(context, notification, folioId)
+                                            if (nextFocusIndex >= 0) {
+                                                scope.launch {
+                                                    delay(100)
+                                                    if (nextFocusIndex == 0) {
+                                                        firstItemFocusRequester.requestFocus()
+                                                    } else {
+                                                        val nextNotif = sortedNotifications.getOrNull(nextFocusIndex)
+                                                        if (nextNotif != null) {
+                                                            focusRequesters[nextNotif.id]?.requestFocus()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
                                         onNotificationClick = {
                                             selectedNotification = notification
                                         },
                                         onFocused = {
                                             focusedIndex = index
                                         },
-                                        modifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier
+                                        globalDpadLeftLocked = globalDpadLeftLocked,
+                                        onDpadLeftLockedChange = { globalDpadLeftLocked = it },
+                                        modifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier.focusRequester(itemFocusRequester)
                                     )
                                 }
                             }
@@ -2787,25 +2814,69 @@ fun NotificationButtonDialog(
 }
 
 @Composable
-fun NotificationItem(
+ fun NotificationItem(
     notification: Notification,
     deleteNotification: (Notification) -> Unit,
     onNotificationClick: (Notification) -> Unit,
     onFocused: () -> Unit,
+    globalDpadLeftLocked: Boolean,
+    onDpadLeftLockedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var formattedTimestamp by remember { mutableStateOf(getTimeAgo(notification.timestamp)) }
     var showDeleteButton by remember { mutableStateOf(false) }
-    var hasDeletedDuringPress by remember { mutableStateOf(false) }
+
+    // Hold to delete UX states
+    var deleteProgress by remember { mutableStateOf(0f) }
+    var isHoldingDpadLeft by remember { mutableStateOf(false) }
+    var isDeleting by remember { mutableStateOf(false) }
 
     var isFocused by remember { mutableStateOf(false) }
     val focusPulseAlpha = remember { Animatable(0.0f) }
 
     // Animasi pergeseran offset card notifikasi
     val offsetX by animateDpAsState(
-        targetValue = if (showDeleteButton) (-120).dp else 0.dp,
-        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+        targetValue = when {
+            isDeleting -> (-1000).dp // Slide out to the left
+            showDeleteButton -> (-120).dp
+            else -> 0.dp
+        },
+        animationSpec = tween(
+            durationMillis = if (isDeleting) 350 else 250,
+            easing = FastOutSlowInEasing
+        )
     )
+
+    // Progress counter when holding D-pad Left
+    LaunchedEffect(isHoldingDpadLeft) {
+        if (isHoldingDpadLeft && !globalDpadLeftLocked) {
+            val duration = 1200f // 1.2 seconds hold time
+            val startTime = System.currentTimeMillis()
+            while (deleteProgress < 1f && isHoldingDpadLeft) {
+                val elapsed = System.currentTimeMillis() - startTime
+                deleteProgress = (elapsed / duration).coerceIn(0f, 1f)
+                if (deleteProgress >= 1f) {
+                    isDeleting = true
+                    onDpadLeftLockedChange(true) // Lock DPAD Left globally
+                    isHoldingDpadLeft = false
+                }
+                delay(16) // ~60fps loop
+            }
+        } else if (!isHoldingDpadLeft) {
+            deleteProgress = 0f
+        }
+    }
+
+    // Trigger delete action after sliding off-screen
+    LaunchedEffect(isDeleting) {
+        if (isDeleting) {
+            delay(350) // Wait for slide animation
+            deleteNotification(notification)
+            isDeleting = false
+            showDeleteButton = false
+            deleteProgress = 0f
+        }
+    }
 
     LaunchedEffect(notification.timestamp) {
         while (true) {
@@ -2825,6 +2896,8 @@ fun NotificationItem(
             )
         } else {
             focusPulseAlpha.snapTo(0.0f)
+            isHoldingDpadLeft = false
+            deleteProgress = 0f
         }
     }
 
@@ -2839,33 +2912,43 @@ fun NotificationItem(
                     onFocused()
                 } else {
                     showDeleteButton = false
+                    isHoldingDpadLeft = false
+                    deleteProgress = 0f
                 }
             }
             .onKeyEvent { event ->
                 if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) {
-                    if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
-                        // Mulai geser card ketika ditahan
-                        showDeleteButton = true
-                        
-                        // Hapus total jika terus ditahan (repeatCount >= 8)
-                        if (event.nativeKeyEvent.repeatCount >= 8 && !hasDeletedDuringPress) {
-                            hasDeletedDuringPress = true
-                            deleteNotification(notification)
-                            showDeleteButton = false
+                    if (globalDpadLeftLocked) {
+                        if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_UP) {
+                            onDpadLeftLockedChange(false)
                         }
                         true
-                    } else if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_UP) {
-                        if (!hasDeletedDuringPress) {
-                            showDeleteButton = false
-                        }
-                        hasDeletedDuringPress = false
-                        false
                     } else {
-                        false
+                        if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                            showDeleteButton = true
+                            
+                            // Only start holding state if this is the very first event (repeatCount == 0)
+                            // when the item is already focused. If focus shifts while holding, the new item
+                            // will receive events with repeatCount > 0, preventing accidental deletion.
+                            if (event.nativeKeyEvent.repeatCount == 0 && !isDeleting) {
+                                isHoldingDpadLeft = true
+                            }
+                            true
+                        } else if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_UP) {
+                            isHoldingDpadLeft = false
+                            if (!isDeleting) {
+                                showDeleteButton = false
+                            }
+                            true
+                        } else {
+                            false
+                        }
                     }
                 } else if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT && showDeleteButton) {
                     if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
                         showDeleteButton = false
+                        isHoldingDpadLeft = false
+                        deleteProgress = 0f
                         true
                     } else {
                         false
@@ -2877,8 +2960,11 @@ fun NotificationItem(
             .clickable(
                 onClick = {
                     if (showDeleteButton) {
-                        deleteNotification(notification)
-                        showDeleteButton = false
+                        if (!isDeleting) {
+                            isDeleting = true
+                            onDpadLeftLockedChange(true) // Lock DPAD Left globally
+                            isHoldingDpadLeft = false
+                        }
                     } else {
                         onNotificationClick(notification)
                     }
@@ -2907,17 +2993,48 @@ fun NotificationItem(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {
-                        deleteNotification(notification)
-                        showDeleteButton = false
+                        if (!isDeleting) {
+                            isDeleting = true
+                            onDpadLeftLockedChange(true) // Lock DPAD Left globally
+                            isHoldingDpadLeft = false
+                        }
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    painter = rememberAsyncImagePainter(R.drawable.ic_trash),
-                    contentDescription = "Delete Icon",
-                    modifier = Modifier.size(24.dp),
-                    tint = Color.White
-                )
+                // Circle Progress Indicator Wrapper
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .drawBehind {
+                            // Circle Background
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.1f),
+                                radius = size.minDimension / 2
+                            )
+                            // Rounded Progress Border
+                            if (deleteProgress > 0f) {
+                                val strokeWidth = 3.dp.toPx()
+                                drawArc(
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * deleteProgress,
+                                    useCenter = false,
+                                    style = Stroke(
+                                        width = strokeWidth,
+                                        cap = StrokeCap.Round
+                                    )
+                                )
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = rememberAsyncImagePainter(R.drawable.ic_trash),
+                        contentDescription = "Delete Icon",
+                        modifier = Modifier.size(24.dp),
+                        tint = Color.White
+                    )
+                }
             }
         }
 
@@ -3177,7 +3294,7 @@ fun NotificationDialog(
                     ) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(0.6f),
-                            color = Color(0xFFCFDFED),
+                            color = Color(0xFFF2F7FC),
                             contentColor = Color(0xFF071434),
                             shape = RoundedCornerShape(20.dp)
                         ) {
@@ -3701,7 +3818,7 @@ fun WifiQRCodeDialog(
                             val qrCodeBitmap = qrCodeBitmap!!
                             Row(
                                 modifier = Modifier.fillMaxWidth().weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
+                                verticalAlignment = Alignment.Bottom,
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 Column(
@@ -3786,7 +3903,7 @@ fun WifiQRCodeDialog(
 
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxWidth()
+                                            .fillMaxWidth(0.6f)
                                             .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
                                             .padding(12.dp)
                                     ) {
@@ -4455,8 +4572,15 @@ fun updateNotificationStatus(context: Context, notification: Notification, folio
     val notificationsRef = database.child("BRANCHES").child(branchId ?: "").child("NOTIFICATIONS").child(folioId.toString())
 
     notificationsRef.orderByChild("id").equalTo(notification.id).get().addOnSuccessListener { snapshot ->
+        val updates = hashMapOf<String, Any>()
         snapshot.children.forEach { snapshotChild ->
-            snapshotChild.ref.child("status").setValue(newStatus)
+            val key = snapshotChild.key
+            if (key != null) {
+                updates["$key/status"] = newStatus
+            }
+        }
+        if (updates.isNotEmpty()) {
+            notificationsRef.updateChildren(updates)
                 .addOnCompleteListener { task ->
                     if (task.isSuccessful) {
                         Log.d("Firebase", "Notification status updated to $newStatus")
@@ -4474,9 +4598,16 @@ fun deleteNotification(context: Context, notification: Notification, folioId: In
     val branchId = sharedPreferences.getString("branchId", null)
     val notificationsRef = database.child("BRANCHES").child(branchId ?: "").child("NOTIFICATIONS").child(folioId.toString())
 
-    notificationsRef.orderByChild("id").equalTo(notification.id).get().addOnSuccessListener {
-        it.children.forEach { snapshot ->
-            snapshot.ref.removeValue()
+    notificationsRef.orderByChild("id").equalTo(notification.id).get().addOnSuccessListener { snapshot ->
+        val updates = hashMapOf<String, Any?>()
+        snapshot.children.forEach { snapshotChild ->
+            val key = snapshotChild.key
+            if (key != null) {
+                updates[key] = null
+            }
+        }
+        if (updates.isNotEmpty()) {
+            notificationsRef.updateChildren(updates)
         }
     }
 }

@@ -24,6 +24,7 @@ class DeviceManager(private val context: Context) {
         fun onPairingModeRequired()
         fun onPairingSuccess()
         fun onPairingFailed(error: String)
+        fun onConfigChanged()
     }
 
     private var deviceStatusListener: DeviceStatusListener? = null
@@ -149,12 +150,30 @@ class DeviceManager(private val context: Context) {
                     // Validate device data matches with SharedPreferences
                     val typeIndicator = object : GenericTypeIndicator<Map<String, Any>>() {}
                     val deviceData = deviceSnapshot.getValue(typeIndicator)
-                    if (deviceData == null || 
-                        deviceData["branchId"] != branchId ||
-                        deviceData["room"] != room) {
-                        Log.d("DeviceManager", "Device data mismatch, unpairing...")
+                    if (deviceData == null) {
+                        Log.d("DeviceManager", "Device data is null, unpairing...")
                         returnToPairingMode()
                         deviceStatusListener?.onPairingModeRequired()
+                        return
+                    }
+
+                    val dbBranchId = deviceData["branchId"] as? String
+                    val dbRoom = deviceData["room"] as? String
+
+                    if (dbBranchId != branchId || dbRoom != room) {
+                        if (dbBranchId != null && dbRoom != null && dbBranchId.isNotEmpty() && dbRoom.isNotEmpty()) {
+                            Log.d("DeviceManager", "Device configuration changed in Firebase. Updating local branchId: $dbBranchId, room: $dbRoom")
+                            sharedPreferences.edit().run {
+                                putString("branchId", dbBranchId)
+                                putString("room", dbRoom)
+                                apply()
+                            }
+                            deviceStatusListener?.onConfigChanged()
+                        } else {
+                            Log.d("DeviceManager", "Device data mismatch or cleared, unpairing...")
+                            returnToPairingMode()
+                            deviceStatusListener?.onPairingModeRequired()
+                        }
                         return
                     }
 
@@ -305,6 +324,26 @@ class DeviceManager(private val context: Context) {
                                 Log.d("DeviceManager", "Device no longer exists in Firebase, unpairing...")
                                 returnToPairingMode()
                                 deviceStatusListener?.onPairingModeRequired()
+                                return
+                            }
+
+                            // Check for configuration changes in real time
+                            val dbBranchId = snapshot.child("branchId").getValue(String::class.java)
+                            val dbRoom = snapshot.child("room").getValue(String::class.java)
+
+                            val localBranchId = sharedPreferences.getString("branchId", null)
+                            val localRoom = sharedPreferences.getString("room", null)
+
+                            if (dbBranchId != null && dbRoom != null &&
+                                (dbBranchId != localBranchId || dbRoom != localRoom) &&
+                                dbBranchId.isNotEmpty() && dbRoom.isNotEmpty()) {
+                                Log.d("DeviceManager", "Real-time: Device configuration changed in Firebase. Updating local branchId: $dbBranchId, room: $dbRoom")
+                                sharedPreferences.edit().run {
+                                    putString("branchId", dbBranchId)
+                                    putString("room", dbRoom)
+                                    apply()
+                                }
+                                deviceStatusListener?.onConfigChanged()
                             }
                         }
 

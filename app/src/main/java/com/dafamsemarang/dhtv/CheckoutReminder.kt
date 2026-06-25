@@ -91,12 +91,6 @@ fun CheckoutReminder() {
         mutableStateOf(sharedPreferences.getLong(unlockTimeKey, 0L)) 
     }
 
-    var pendingRequestKey by remember { 
-        mutableStateOf(sharedPreferences.getString("pending_extend_request_key", "") ?: "") 
-    }
-    var extendStatus by remember { mutableStateOf<String?>(null) }
-    var showStatusDialog by remember { mutableStateOf(false) }
-    
     // Fetch guest info
     LaunchedEffect(deviceID, branchId) {
         Log.d("CheckoutReminder", "LaunchedEffect: deviceID=$deviceID, branchId=$branchId")
@@ -122,67 +116,24 @@ fun CheckoutReminder() {
                     .putInt("disabled_reminder_folio", currentFolio)
                     .putString("pending_extend_request_key", "")
                     .apply()
-                pendingRequestKey = ""
             }
-        }
-    }
-
-    // Listen to Firebase request status changes
-    DisposableEffect(pendingRequestKey, branchId) {
-        if (pendingRequestKey.isNotEmpty() && branchId != null) {
-            val ref = FirebaseDatabase.getInstance().reference
-                .child("BRANCHES").child(branchId).child("REQUEST").child(pendingRequestKey)
-            
-            val listener = object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    if (snapshot.exists()) {
-                        val status = snapshot.child("status").getValue(String::class.java) ?: "open"
-                        extendStatus = status
-                    }
-                }
-                override fun onCancelled(error: DatabaseError) {
-                    Log.e("CheckoutReminder", "Error listening to request: ${error.message}")
-                }
-            }
-            ref.addValueEventListener(listener)
-            
-            onDispose {
-                ref.removeEventListener(listener)
-            }
-        } else {
-            extendStatus = null
-            onDispose {}
-        }
-    }
-
-    // Show status dialog when a request becomes pending, confirmed, or rejected
-    LaunchedEffect(pendingRequestKey) {
-        if (pendingRequestKey.isNotEmpty()) {
-            showStatusDialog = true
-        }
-    }
-
-    LaunchedEffect(extendStatus) {
-        if (extendStatus == "confirm" || extendStatus == "confirmed" || extendStatus == "done" || 
-            extendStatus == "reject" || extendStatus == "rejected" || extendStatus == "cancel" || extendStatus == "cancelled") {
-            showStatusDialog = true
         }
     }
     
     // Check Status Loop
     LaunchedEffect(hasLoadedGuestInfo, guestInfo, lastUnlockTime) {
-        val FORCE_DEV_MODE = true // Ubah ke false jika ingin menggunakan data real-time jam 11:30
+        val FORCE_DEV_MODE = false // Ubah ke false jika ingin menggunakan data real-time jam 11:30
         Log.d("CheckoutReminder", "Check Status Loop: hasLoadedGuestInfo=$hasLoadedGuestInfo, guestInfoIsNull=${guestInfo == null}, lastUnlockTime=$lastUnlockTime")
         
         if (hasLoadedGuestInfo) {
             if (guestInfo == null) {
-                // Kamar tidak ada tamu / kosong -> Langsung Kunci
-                Log.d("CheckoutReminder", "GuestInfo is null, locking room (Expired)")
-                reminderState = ReminderState.Expired
+                // Kamar tidak ada tamu / kosong -> Tidak mengunci
+                Log.d("CheckoutReminder", "GuestInfo is null, setting reminder state to None")
+                reminderState = ReminderState.None
             } else {
                 while (true) {
                     val reminderDisabled = sharedPreferences.getBoolean("checkout_reminder_disabled", false)
-                    if (reminderDisabled) {
+                    if (reminderDisabled && !FORCE_DEV_MODE) {
                         reminderState = ReminderState.None
                         delay(5000)
                         continue
@@ -195,13 +146,13 @@ fun CheckoutReminder() {
                     Log.d("CheckoutReminder", "Loop run - Dateco: ${guestInfo!!.dateco}, isPast: $isPast, isToday: $isToday")
                     
                      if (isPast) {
-                          // Tanggal checkout sudah lewat kemarin atau sebelumnya
-                          val timeSinceUnlock = now.timeInMillis - lastUnlockTime
-                          val ONE_HOUR_MS = 3600000L // 1 Hour
-                          Log.d("CheckoutReminder", "isPast = true. timeSinceUnlock = $timeSinceUnlock ms")
+                          // Tanggal checkout sudah lewat kemarin atau sebelumnya -> Tetap munculkan warning reminder
+                          val lastDismissTime = sharedPreferences.getLong("checkout_warning_dismiss_time", 0L)
+                          val TWO_MINUTES_MS = 120000L // 2 Menit (120,000 ms)
+                          val timeSinceDismiss = System.currentTimeMillis() - lastDismissTime
                           
-                          if (timeSinceUnlock > ONE_HOUR_MS) {
-                              reminderState = ReminderState.Expired
+                          if (timeSinceDismiss > TWO_MINUTES_MS) {
+                              reminderState = ReminderState.Warning
                           } else {
                               reminderState = ReminderState.None
                           }
@@ -231,14 +182,14 @@ fun CheckoutReminder() {
                              }
                              
                              if (now.after(checkoutDeadline)) {
-                                  // Check if unlocked recently (1 Hour Logic)
-                                  val timeSinceUnlock = now.timeInMillis - lastUnlockTime
-                                  val ONE_HOUR_MS = 3600000L // 1 Hour
+                                  // Batas waktu checkout sudah lewat -> Tetap munculkan warning reminder
+                                  val lastDismissTime = sharedPreferences.getLong("checkout_warning_dismiss_time", 0L)
+                                  val TWO_MINUTES_MS = 120000L // 2 Menit
+                                  val timeSinceDismiss = System.currentTimeMillis() - lastDismissTime
                                   
-                                  if (timeSinceUnlock > ONE_HOUR_MS) {
-                                      reminderState = ReminderState.Expired
+                                  if (timeSinceDismiss > TWO_MINUTES_MS) {
+                                      reminderState = ReminderState.Warning
                                   } else {
-                                      // Within grace period
                                       reminderState = ReminderState.None
                                   }
                              } else if (now.after(warningStart)) {
@@ -257,7 +208,7 @@ fun CheckoutReminder() {
                          } else {
                              reminderState = ReminderState.None
                          }
-                     }
+                      }
                     
                     delay(5000) // Check status setiap 5 detik agar lebih responsif saat testing
                 }
@@ -272,13 +223,13 @@ fun CheckoutReminder() {
                 guestName = guestInfo?.fname ?: "Guest",
                 roomNumber = guestInfo?.room ?: "",
                 checkoutDate = guestInfo?.dateco ?: "Today",
+                folioId = guestInfo?.folio,
                 onDismiss = { 
                     // Simpan waktu dismissal ke SharedPreferences
                     sharedPreferences.edit().putLong("checkout_warning_dismiss_time", System.currentTimeMillis()).apply()
                     reminderState = ReminderState.None
                 },
                 onExtendSubmitted = { reqKey ->
-                    pendingRequestKey = reqKey
                     reminderState = ReminderState.None
                 }
             )
@@ -298,19 +249,7 @@ fun CheckoutReminder() {
         else -> {}
     }
 
-    // Render Extend Status Dialog
-    if (showStatusDialog && pendingRequestKey.isNotEmpty()) {
-        ExtendStatusDialog(
-            status = extendStatus ?: "open",
-            onDismiss = {
-                showStatusDialog = false
-                if (extendStatus != "open" && extendStatus != null) {
-                    pendingRequestKey = ""
-                    sharedPreferences.edit().putString("pending_extend_request_key", "").apply()
-                }
-            }
-        )
-    }
+    // Custom extend status dialog rendering removed. Status updates are handled globally by NotifViewModel.
 }
 
 /**
@@ -535,6 +474,7 @@ fun CheckoutReminderDialog(
     guestName: String,
     roomNumber: String,
     checkoutDate: String,
+    folioId: Int?,
     onDismiss: () -> Unit,
     onExtendSubmitted: (String) -> Unit
 ) {
@@ -547,15 +487,93 @@ fun CheckoutReminderDialog(
 
     var isCheckOutFocused by remember { mutableStateOf(false) }
     var isExtendFocused by remember { mutableStateOf(false) }
-    var extraDays by remember { mutableStateOf(1) }
-    var isMinusFocused by remember { mutableStateOf(false) }
-    var isPlusFocused by remember { mutableStateOf(false) }
+    
+    val originalCoCal = remember(checkoutDate) { parseCheckoutDate(checkoutDate) }
+    val initialSelectedCal = remember(originalCoCal) {
+        val cal = originalCoCal.clone() as java.util.Calendar
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        cal
+    }
+    
+    var selectedDay by remember { mutableStateOf(initialSelectedCal.get(java.util.Calendar.DAY_OF_MONTH)) }
+    var selectedMonth by remember { mutableStateOf(initialSelectedCal.get(java.util.Calendar.MONTH) + 1) }
+    var selectedYear by remember { mutableStateOf(initialSelectedCal.get(java.util.Calendar.YEAR)) }
+    
+    // Helper to get max days in selected month/year
+    val maxDays = remember(selectedMonth, selectedYear) {
+        val tempCal = java.util.Calendar.getInstance()
+        tempCal.set(java.util.Calendar.YEAR, selectedYear)
+        tempCal.set(java.util.Calendar.MONTH, selectedMonth - 1)
+        tempCal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    }
+
+    LaunchedEffect(maxDays) {
+        if (selectedDay > maxDays) {
+            selectedDay = maxDays
+        }
+    }
+
+    // Function to safely update values and enforce minimum check-out date (original date + 1 day)
+    fun updateSelectedDate(d: Int, m: Int, y: Int) {
+        val cal = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.YEAR, y)
+            set(java.util.Calendar.MONTH, m - 1)
+            set(java.util.Calendar.DAY_OF_MONTH, d)
+        }
+        val minCal = originalCoCal.clone() as java.util.Calendar
+        minCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        minCal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        minCal.set(java.util.Calendar.MINUTE, 0)
+        minCal.set(java.util.Calendar.SECOND, 0)
+        minCal.set(java.util.Calendar.MILLISECOND, 0)
+        
+        if (cal.before(minCal)) {
+            selectedDay = minCal.get(java.util.Calendar.DAY_OF_MONTH)
+            selectedMonth = minCal.get(java.util.Calendar.MONTH) + 1
+            selectedYear = minCal.get(java.util.Calendar.YEAR)
+        } else {
+            selectedDay = d
+            selectedMonth = m
+            selectedYear = y
+        }
+    }
+
+    // Calculate extraDays and day name dynamically
+    val selectedCal = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.YEAR, selectedYear)
+        set(java.util.Calendar.MONTH, selectedMonth - 1)
+        set(java.util.Calendar.DAY_OF_MONTH, selectedDay)
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }
+    val originalCopy = originalCoCal.clone() as java.util.Calendar
+    originalCopy.set(java.util.Calendar.HOUR_OF_DAY, 0)
+    originalCopy.set(java.util.Calendar.MINUTE, 0)
+    originalCopy.set(java.util.Calendar.SECOND, 0)
+    originalCopy.set(java.util.Calendar.MILLISECOND, 0)
+    
+    var extraDays = 1
+    if (selectedCal.after(originalCopy)) {
+        var count = 0
+        while (originalCopy.before(selectedCal)) {
+            originalCopy.add(java.util.Calendar.DAY_OF_YEAR, 1)
+            count++
+        }
+        extraDays = count
+    }
+
+    val dayFormat = remember { java.text.SimpleDateFormat("EEEE, dd MMM yyyy", java.util.Locale.US) }
+    val formattedDayName = remember(selectedCal) { dayFormat.format(selectedCal.time) }
+
     var isSending by remember { mutableStateOf(false) }
 
     val checkOutFocusRequester = remember { FocusRequester() }
     val extendFocusRequester = remember { FocusRequester() }
-    val minusFocusRequester = remember { FocusRequester() }
-    val plusFocusRequester = remember { FocusRequester() }
+    val dayFocusRequester = remember { FocusRequester() }
+    val monthFocusRequester = remember { FocusRequester() }
+    val yearFocusRequester = remember { FocusRequester() }
     val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
 
     LaunchedEffect(Unit) {
@@ -690,168 +708,16 @@ fun CheckoutReminderDialog(
                                     text = buildAnnotatedString {
                                         withStyle(style = ParagraphStyle(textAlign = TextAlign.Start)) {
                                             withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 20.sp)) {
-                                                append("This is a reminder that your checkout time is at 12:00 PM today. Please ensure all your belongings are packed and ready for checkout.\n")
+                                                append("Dear Valued Guest,\nWe kindly remind you that the check-out time is at 12:00 PM today. If you wish to prolong your stay, you may request an extension below, or proceed to check out when you are ready.\n\n")
                                             }
                                             withStyle(style = SpanStyle(color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)) {
-                                                append("Ini adalah pengingat bahwa waktu checkout Anda adalah pukul 12:00 siang hari ini. Mohon pastikan semua barang Anda sudah dikemas dan siap untuk checkout.")
+                                                append("Tamu yang Terhormat,\nKami menginformasikan bahwa waktu check-out adalah pukul 12:00 siang hari ini. Apabila Anda ingin memperpanjang masa tinggal, silakan ajukan permohonan di bawah ini, atau lakukan check-out jika sudah siap.")
                                             }
                                         }
                                     },
                                     color = Color.White,
                                     lineHeight = 28.sp
                                 )
-
-                                Spacer(modifier = Modifier.height(28.dp))
-
-                                // ── Action Row: Check-Out | − 1 + | Extend ──
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Check-Out Button
-                                    Box(
-                                        modifier = Modifier
-                                            .height(44.dp)
-                                            .clip(RoundedCornerShape(22.dp))
-                                            .background(
-                                                if (isCheckOutFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.08f)
-                                            )
-                                            .onFocusChanged { isCheckOutFocused = it.isFocused }
-                                            .focusRequester(checkOutFocusRequester)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) {
-                                                dismissWithAnimation()
-                                            }
-                                            .focusable()
-                                            .padding(horizontal = 20.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "Check-Out",
-                                            color = if (isCheckOutFocused) Color(0xFF071434) else Color.White.copy(alpha = 0.8f),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(8.dp))
-
-                                    // Minus Button
-                                    Box(
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (isMinusFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.1f)
-                                            )
-                                            .onFocusChanged { isMinusFocused = it.isFocused }
-                                            .focusRequester(minusFocusRequester)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) { if (extraDays > 1) extraDays-- }
-                                            .focusable(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "−",
-                                            color = if (isMinusFocused) Color(0xFF071434) else Color.White,
-                                            fontSize = 22.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-
-                                    // Day Count Display
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Text(
-                                            text = "$extraDays",
-                                            color = Color.White,
-                                            fontSize = 28.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "Hari",
-                                            color = Color.White.copy(alpha = 0.55f),
-                                            fontSize = 12.sp
-                                        )
-                                    }
-
-                                    // Plus Button
-                                    Box(
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (isPlusFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.1f)
-                                            )
-                                            .onFocusChanged { isPlusFocused = it.isFocused }
-                                            .focusRequester(plusFocusRequester)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) { if (extraDays < 30) extraDays++ }
-                                            .focusable(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "+",
-                                            color = if (isPlusFocused) Color(0xFF071434) else Color.White,
-                                            fontSize = 22.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(8.dp))
-
-                                    // Extend Button
-                                    Box(
-                                        modifier = Modifier
-                                            .height(44.dp)
-                                            .clip(RoundedCornerShape(22.dp))
-                                            .background(
-                                                if (isExtendFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.08f)
-                                            )
-                                            .onFocusChanged { isExtendFocused = it.isFocused }
-                                            .focusRequester(extendFocusRequester)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) {
-                                                if (!isSending) {
-                                                    isSending = true
-                                                    sendExtendRequest(
-                                                        context = context,
-                                                        guestName = guestName,
-                                                        roomNumber = roomNumber,
-                                                        extraDays = extraDays,
-                                                        checkoutDate = checkoutDate,
-                                                        onSuccess = { reqKey ->
-                                                            // Save to SharedPreferences that extend was requested and disable reminder
-                                                            sharedPreferences.edit()
-                                                                .putBoolean("checkout_reminder_disabled", true)
-                                                                .apply()
-                                                            onExtendSubmitted(reqKey)
-                                                        }
-                                                    )
-                                                    dismissWithAnimation()
-                                                }
-                                            }
-                                            .focusable()
-                                            .padding(horizontal = 20.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = if (isSending) "Sending..." else "Extend",
-                                            color = if (isExtendFocused) Color(0xFF071434) else Color.White.copy(alpha = 0.8f),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
-                                        )
-                                    }
-                                }
                             }
 
                             Spacer(modifier = Modifier.width(32.dp))
@@ -875,6 +741,141 @@ fun CheckoutReminderDialog(
                         }
 
                         Spacer(modifier = Modifier.weight(1f))
+
+                        // ── Action Row: Extend with Date Picker (Bottom Left) | Check-Out (Bottom Right) ──
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            // Bottom Left Group: Extend Stay button + Date Picker Columns + Selected Date Info
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                // Column grouping the Extend Button and the Day/Date text above it
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    // Day & Date Info displayed cleanly ABOVE the Extend pill button
+                                    Text(
+                                        text = formattedDayName,
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    // Extend Button (Pill shape with fixed width to fit longer text like "365 Days")
+                                    Box(
+                                        modifier = Modifier
+                                            .width(220.dp)
+                                            .height(44.dp)
+                                            .clip(RoundedCornerShape(22.dp))
+                                            .background(
+                                                if (isExtendFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.08f)
+                                            )
+                                            .onFocusChanged { isExtendFocused = it.isFocused }
+                                            .focusRequester(extendFocusRequester)
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null
+                                            ) {
+                                                if (!isSending) {
+                                                    isSending = true
+                                                    sendExtendRequest(
+                                                        context = context,
+                                                        guestName = guestName,
+                                                        roomNumber = roomNumber,
+                                                        extraDays = extraDays,
+                                                        checkoutDate = checkoutDate,
+                                                        folioId = folioId,
+                                                        onSuccess = { reqKey ->
+                                                            // Save to SharedPreferences that extend was requested but keep reminder enabled for development
+                                                            sharedPreferences.edit()
+                                                                .putBoolean("checkout_reminder_disabled", true)
+                                                                .putString("last_extend_req_key", reqKey)
+                                                                .apply()
+                                                            onExtendSubmitted(reqKey)
+                                                        }
+                                                    )
+                                                    dismissWithAnimation()
+                                                }
+                                            }
+                                            .focusable(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        val daySuffix = if (extraDays == 1) "Day" else "Days"
+                                        Text(
+                                            text = if (isSending) "Sending..." else "Extend Stay $extraDays $daySuffix",
+                                            color = if (isExtendFocused) Color(0xFF071434) else Color.White.copy(alpha = 0.8f),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(4.dp))
+
+                                // Date Picker Columns
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    ReminderPickerColumn(
+                                        label = "Day",
+                                        value = selectedDay,
+                                        range = 1..maxDays,
+                                        onValueChange = { updateSelectedDate(it, selectedMonth, selectedYear) },
+                                        modifier = Modifier.focusRequester(dayFocusRequester)
+                                    )
+                                    ReminderPickerColumn(
+                                        label = "Month",
+                                        value = selectedMonth,
+                                        range = 1..12,
+                                        onValueChange = { updateSelectedDate(selectedDay, it, selectedYear) },
+                                        modifier = Modifier.focusRequester(monthFocusRequester)
+                                    )
+                                    ReminderPickerColumn(
+                                        label = "Year",
+                                        value = selectedYear,
+                                        range = 2026..2036,
+                                        onValueChange = { updateSelectedDate(selectedDay, selectedMonth, it) },
+                                        modifier = Modifier.focusRequester(yearFocusRequester)
+                                    )
+                                }
+                            }
+
+                            // Bottom Right Check-Out Button
+                            Box(
+                                modifier = Modifier
+                                    .height(44.dp)
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(
+                                        if (isCheckOutFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.08f)
+                                    )
+                                    .onFocusChanged { isCheckOutFocused = it.isFocused }
+                                    .focusRequester(checkOutFocusRequester)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        dismissWithAnimation()
+                                    }
+                                    .focusable()
+                                    .padding(horizontal = 20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Check-Out",
+                                    color = if (isCheckOutFocused) Color(0xFF071434) else Color.White.copy(alpha = 0.8f),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -928,7 +929,8 @@ fun ExtendStatusDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .focusProperties { canFocus = false }
+                .focusProperties { canFocus = false },
+            contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
@@ -942,23 +944,21 @@ fun ExtendStatusDialog(
 
             AnimatedVisibility(
                 visible = animateIn,
-                enter = fadeIn(animationSpec = tween(durationMillis = 300)),
-                exit = fadeOut(animationSpec = tween(durationMillis = 300)),
-                modifier = Modifier.align(Alignment.BottomCenter)
+                enter = fadeIn(animationSpec = tween(durationMillis = 300)) + scaleIn(animationSpec = tween(durationMillis = 300)),
+                exit = fadeOut(animationSpec = tween(durationMillis = 300)) + scaleOut(animationSpec = tween(durationMillis = 300))
             ) {
                 Surface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp)
+                        .fillMaxWidth(0.6f)
                         .padding(20.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    color = Color(0xFF1E2026),
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFF2F7FC),
                     tonalElevation = 8.dp,
                     shadowElevation = 12.dp
                 ) {
                     Column(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
                             .padding(24.dp)
                             .focusGroup(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -981,14 +981,14 @@ fun ExtendStatusDialog(
 
                         Text(
                             text = title,
-                            color = Color.White,
+                            color = Color(0xFF071434),
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = message,
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = Color(0xFF071434).copy(alpha = 0.8f),
                             fontSize = 16.sp,
                             textAlign = TextAlign.Center
                         )
@@ -999,7 +999,7 @@ fun ExtendStatusDialog(
                                 .height(44.dp)
                                 .width(180.dp)
                                 .clip(RoundedCornerShape(22.dp))
-                                .background(if (isCloseFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.08f))
+                                .background(if (isCloseFocused) Color(0xFFCFDFED) else Color(0xFF071434))
                                 .onFocusChanged { isCloseFocused = it.isFocused }
                                 .focusRequester(closeFocusRequester)
                                 .clickable(
@@ -1192,6 +1192,7 @@ fun sendExtendRequest(
     roomNumber: String,
     extraDays: Int,
     checkoutDate: String,
+    folioId: Int?,
     onSuccess: (String) -> Unit
 ) {
     val database = FirebaseDatabase.getInstance().reference
@@ -1200,124 +1201,192 @@ fun sendExtendRequest(
         Log.e("CheckoutReminder", "branchId is null, cannot send extend request")
         return
     }
-    val deviceID = sharedPreferences.getString("deviceID", null) ?: run {
-        Log.e("CheckoutReminder", "deviceID is null, cannot send extend request")
-        return
+
+    val requestId = "${System.currentTimeMillis()}"
+    val timeStamp = System.currentTimeMillis()
+
+    // Date time request pakai datenow
+    val now = Date()
+    val currentDateNow = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now)
+    val currentTimeNow = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now)
+
+    // Hitung until date co (new check-out date)
+    val dateFormats = listOf(
+        "dd/MM/yyyy",
+        "yyyy-MM-dd",
+        "dd-MM-yyyy",
+        "MM/dd/yyyy",
+        "dd MMM yyyy",
+        "EEEE, dd MMMM yyyy"
+    )
+    var calendar = Calendar.getInstance()
+    var parsedFormat = "dd/MM/yyyy"
+    for (format in dateFormats) {
+        try {
+            val sdf = SimpleDateFormat(format, Locale.getDefault())
+            val parsedDate = sdf.parse(checkoutDate)
+            if (parsedDate != null) {
+                calendar.time = parsedDate
+                parsedFormat = format
+                break
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+    calendar.add(Calendar.DAY_OF_YEAR, extraDays)
+    val untilDateCo = SimpleDateFormat(parsedFormat, Locale.getDefault()).format(calendar.time)
+
+    val extendDescription = "Permintaan perpanjangan menginap $extraDays hari - Kamar $roomNumber (Folio: ${folioId ?: "-"}) s/d $untilDateCo."
+    val extendNote = "Mohon bantuan staff Front Office / Receptionist untuk memperbarui reservasi pada sistem PMS, memprogram ulang kartu akses kamar yang baru, serta mengantarkannya langsung ke kamar tamu."
+
+    // Push to REQUEST node
+    val extendRequest = Request(
+        folioId = folioId,
+        guestName = guestName,
+        guestPhone = "",
+        guestRoom = roomNumber,
+        status = "open",
+        timestamp = timeStamp,
+        requestId = requestId,
+        selectedDate = currentDateNow,
+        selectedTime = currentTimeNow,
+        date = currentDateNow,
+        time = currentTimeNow,
+        requests = listOf(
+            GuestRequest(
+                request_title = "Request Extend",
+                category = "Extend Stay $extraDays Hari",
+                description = extendDescription
+            )
+        ),
+        note = extendNote
+    )
+
+    val requestRef = database.child("BRANCHES").child(branchId).child("REQUEST").push()
+    val requestKey = requestRef.key ?: requestId
+
+    requestRef.setValue(extendRequest)
+        .addOnSuccessListener {
+            Log.d("CheckoutReminder", "Extend request saved to Firebase")
+            sharedPreferences.edit().putString("pending_extend_request_key", requestKey).apply()
+            onSuccess(requestKey)
+        }
+        .addOnFailureListener { e ->
+            Log.e("CheckoutReminder", "Failed to save extend request: ${e.message}")
+        }
+
+    // Push NOTIFICATION to guest folio
+    if (folioId != null) {
+        val notification = Notification(
+            id = requestId,
+            title = "Extend Stay",
+            message = "Your request to extend stay by $extraDays day(s) has been submitted.",
+            timestamp = timeStamp,
+            type = "GUEST_REQUEST"
+        )
+        database.child("BRANCHES").child(branchId)
+            .child("NOTIFICATIONS").child(folioId.toString())
+            .push().setValue(notification)
     }
 
-    database.child("DEVICES").child(deviceID)
-        .addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(deviceSnapshot: DataSnapshot) {
-                val folioIdRaw = deviceSnapshot.child("folio").getValue(String::class.java)
-                    ?: deviceSnapshot.child("folioId").getValue(String::class.java)
-                val folioId = folioIdRaw?.toIntOrNull()
+    // FCM push — backend handles Telegram forwarding
+    FcmHelper.sendFcmNotification(
+        context = context,
+        type = "REQUEST",
+        title = "Extend Stay Request",
+        bodyText = "Kamar $roomNumber - $guestName (Folio: ${folioId ?: "-"}) minta perpanjangan $extraDays hari s/d $untilDateCo",
+        additionalData = mapOf(
+            "requestId" to requestId,
+            "room" to roomNumber,
+            "guestName" to guestName,
+            "requestTitle" to "Request Extend",
+            "note" to extendNote,
+            "folioId" to (folioId?.toString() ?: "-"),
+            "folio" to (folioId?.toString() ?: "-")
+        )
+    )
+}
 
-                val requestId = "${System.currentTimeMillis()}"
-                val timeStamp = System.currentTimeMillis()
+private fun parseCheckoutDate(checkoutStr: String): java.util.Calendar {
+    val dateFormats = listOf(
+        "dd/MM/yyyy",
+        "yyyy-MM-dd",
+        "dd-MM-yyyy",
+        "MM/dd/yyyy",
+        "dd MMM yyyy",
+        "EEEE, dd MMMM yyyy"
+    )
+    val cal = java.util.Calendar.getInstance()
+    for (format in dateFormats) {
+        try {
+            val sdf = java.text.SimpleDateFormat(format, java.util.Locale.getDefault())
+            val parsedDate = sdf.parse(checkoutStr)
+            if (parsedDate != null) {
+                cal.time = parsedDate
+                return cal
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+    return cal
+}
 
-                // Date time request pakai datenow
-                val now = Date()
-                val currentDateNow = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now)
-                val currentTimeNow = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now)
-
-                // Hitung until date co (new check-out date)
-                val dateFormats = listOf(
-                    "dd/MM/yyyy",
-                    "yyyy-MM-dd",
-                    "dd-MM-yyyy",
-                    "MM/dd/yyyy",
-                    "dd MMM yyyy",
-                    "EEEE, dd MMMM yyyy"
-                )
-                var calendar = Calendar.getInstance()
-                var parsedFormat = "dd/MM/yyyy"
-                for (format in dateFormats) {
-                    try {
-                        val sdf = SimpleDateFormat(format, Locale.getDefault())
-                        val parsedDate = sdf.parse(checkoutDate)
-                        if (parsedDate != null) {
-                            calendar.time = parsedDate
-                            parsedFormat = format
-                            break
+@Composable
+fun ReminderPickerColumn(
+    label: String,
+    value: Int,
+    range: IntRange,
+    onValueChange: (Int) -> Unit,
+    zeroPad: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                    when (keyEvent.key) {
+                        androidx.compose.ui.input.key.Key.DirectionUp -> {
+                            val newValue = if (value + 1 > range.last) range.first else value + 1
+                            onValueChange(newValue)
+                            true
                         }
-                    } catch (e: Exception) {
-                        // ignore
+                        androidx.compose.ui.input.key.Key.DirectionDown -> {
+                            val newValue = if (value - 1 < range.first) range.last else value - 1
+                            onValueChange(newValue)
+                            true
+                        }
+                        else -> false
                     }
-                }
-                calendar.add(Calendar.DAY_OF_YEAR, extraDays)
-                val untilDateCo = SimpleDateFormat(parsedFormat, Locale.getDefault()).format(calendar.time)
-
-                // Catatan instruksi receptionist + detail deskripsi until date co
-                val extendNote = "Permintaan perpanjangan menginap $extraDays hari - Kamar $roomNumber ($guestName) s/d $untilDateCo. Catatan untuk staff receptionist: ganti kartu dan antarkan ke kamar. dan update reservasi di pms."
-
-                // Push to REQUEST node
-                val extendRequest = Request(
-                    folioId = folioId,
-                    guestName = guestName,
-                    guestPhone = "",
-                    guestRoom = roomNumber,
-                    status = "open",
-                    timestamp = timeStamp,
-                    requestId = requestId,
-                    selectedDate = currentDateNow,
-                    selectedTime = currentTimeNow,
-                    date = currentDateNow,
-                    time = currentTimeNow,
-                    requests = listOf(
-                        GuestRequest(
-                            request_title = "Extend Stay $extraDays Hari",
-                            category = "EXTEND_STAY",
-                            description = extendNote
-                        )
-                    ),
-                    note = extendNote
-                )
-
-                val requestRef = database.child("BRANCHES").child(branchId).child("REQUEST").push()
-                val requestKey = requestRef.key ?: requestId
-
-                requestRef.setValue(extendRequest)
-                    .addOnSuccessListener {
-                        Log.d("CheckoutReminder", "Extend request saved to Firebase")
-                        sharedPreferences.edit().putString("pending_extend_request_key", requestKey).apply()
-                        onSuccess(requestKey)
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e("CheckoutReminder", "Failed to save extend request: ${e.message}")
-                    }
-
-                // Push NOTIFICATION to guest folio
-                if (folioId != null) {
-                    val notification = Notification(
-                        id = requestId,
-                        title = "Extend Stay",
-                        message = "Your request to extend stay by $extraDays day(s) has been submitted.",
-                        timestamp = timeStamp,
-                        type = "GUEST_REQUEST"
-                    )
-                    database.child("BRANCHES").child(branchId)
-                        .child("NOTIFICATIONS").child(folioId.toString())
-                        .push().setValue(notification)
-                }
-
-                // FCM push — backend handles Telegram forwarding
-                FcmHelper.sendFcmNotification(
-                    context = context,
-                    type = "REQUEST",
-                    title = "Extend Stay Request",
-                    bodyText = "Kamar $roomNumber - $guestName minta perpanjangan $extraDays hari s/d $untilDateCo",
-                    additionalData = mapOf(
-                        "requestId" to requestId,
-                        "room" to roomNumber,
-                        "guestName" to guestName,
-                        "requestTitle" to "Extend Stay $extraDays Hari",
-                        "note" to extendNote
-                    )
-                )
+                } else false
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("CheckoutReminder", "Failed to read device data: ${error.message}")
-            }
-        })
+            .focusable()
+            .background(
+                color = if (isFocused) Color(0xFFCFDFED) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (isFocused) Color(0xFF071434).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.6f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        
+        Spacer(modifier = Modifier.height(2.dp))
+        
+        Text(
+            text = if (zeroPad) value.toString().padStart(2, '0') else value.toString(),
+            color = if (isFocused) Color(0xFF071434) else Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(vertical = 2.dp)
+        )
+    }
 }

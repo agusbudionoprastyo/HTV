@@ -138,7 +138,7 @@ fun RequestDetailDialog(request: Request, onDismiss: () -> Unit) {
                             .padding(16.dp)
                     ) {
                         when (request.status) {
-                            "submitted" -> {
+                            "submitted", "open" -> {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -211,6 +211,77 @@ fun RequestDetailDialog(request: Request, onDismiss: () -> Unit) {
                                     Column {
                                         Text(
                                             "Your request is completed.",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            getTimeAgo(request.timestamp!!),
+                                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        RequestnotifDetails(request)
+                                    }
+                                }
+                            }
+
+                            "canceled", "cancelled", "rejected", "cancel" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.Start,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(R.drawable.err),
+                                        contentDescription = "Canceled Icon",
+                                        modifier = Modifier
+                                            .size(150.dp)
+                                            .padding(8.dp)
+                                    )
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Column {
+                                        Text(
+                                            "Your request has been cancelled or rejected.",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFD32F2F)
+                                        )
+                                        Text(
+                                            getTimeAgo(request.timestamp!!),
+                                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        RequestnotifDetails(request)
+                                    }
+                                }
+                            }
+
+                            else -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.Start,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(R.drawable.err),
+                                        contentDescription = "Info Icon",
+                                        modifier = Modifier
+                                            .size(150.dp)
+                                            .padding(8.dp)
+                                    )
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Column {
+                                        Text(
+                                            "Request Status: ${request.status}",
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -639,8 +710,68 @@ fun OrderDetailDialog(order: Order, onDismiss: () -> Unit) {
                                     OrdernotifDetails(order)
                                 }
                             }
+                            "canceled", "cancelled", "rejected", "cancel" -> {
+                                Row(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(modifier = Modifier.fillMaxWidth(0.4f)) {
+                                        Column {
+                                            Text(
+                                                "Your order has been cancelled.",
+                                                style = TextStyle(fontSize = 16.sp, color = Color(0xFFD32F2F)),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text(
+                                                "If you have any questions, please contact our staff.",
+                                                style = TextStyle(fontSize = 8.sp, color = Color(0xFF071434).copy(alpha = 0.7f))
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            Image(
+                                                painter = rememberAsyncImagePainter(R.drawable.err),
+                                                contentDescription = "Canceled Icon",
+                                                modifier = Modifier
+                                                    .size(120.dp)
+                                                    .padding(8.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    OrdernotifDetails(order)
+                                }
+                            }
                             else -> {
-                                Text("Order ${order.status}", style = MaterialTheme.typography.bodyMedium)
+                                Row(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(modifier = Modifier.fillMaxWidth(0.4f)) {
+                                        Column {
+                                            Text(
+                                                "Order status: ${order.status}",
+                                                style = TextStyle(fontSize = 16.sp),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Image(
+                                                painter = rememberAsyncImagePainter(R.drawable.err),
+                                                contentDescription = "Info Icon",
+                                                modifier = Modifier
+                                                    .size(120.dp)
+                                                    .padding(8.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    OrdernotifDetails(order)
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
