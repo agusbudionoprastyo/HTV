@@ -3816,177 +3816,184 @@ fun WifiQRCodeDialog(
                             }
                         } else {
                             val qrCodeBitmap = qrCodeBitmap!!
-                            Row(
-                                modifier = Modifier.fillMaxWidth().weight(1f),
-                                verticalAlignment = Alignment.Bottom,
-                                horizontalArrangement = Arrangement.Center
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Column(
-                                    modifier = Modifier.weight(1.1f),
-                                    horizontalAlignment = Alignment.Start,
-                                    verticalArrangement = Arrangement.Center
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().wrapContentHeight(),
+                                    verticalAlignment = Alignment.Top,
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
                                     Column(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                                        modifier = Modifier.weight(1.1f),
+                                        horizontalAlignment = Alignment.Start,
+                                        verticalArrangement = Arrangement.Top
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(54.dp)
-                                                    .background(Color.White.copy(0.1f), CircleShape),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.ic_wifi_rounded),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(28.dp),
-                                                    tint = Color.White
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(16.dp))
-                                            Column {
-                                                Text("Wifi", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
-                                                Text(ssid, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                        
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(54.dp)
-                                                    .background(Color.White.copy(0.1f), CircleShape),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(id = R.drawable.keyboard),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(28.dp),
-                                                    tint = Color.White
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(16.dp))
-                                            Column {
-                                                Text("Password", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
-                                                Text(password, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(24.dp))
-
-                                    var linkSpeed by remember { mutableStateOf(0) }
-                                    var speedResult by remember { mutableStateOf<Double?>(null) }
-                                    var pingResult by remember { mutableStateOf<Int?>(null) }
-                                    var isTesting by remember { mutableStateOf(true) }
-                                    var testStatus by remember { mutableStateOf("") }
-
-                                    LaunchedEffect(animateIn) {
-                                        if (animateIn) {
-                                            delay(400)
-                                            try {
-                                                val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
-                                                linkSpeed = wifiManager?.connectionInfo?.linkSpeed ?: 0
-                                                testStatus = "Testing ping..."
-                                                pingResult = SpeedTestManager.runPingTest()
-                                                testStatus = "Testing download..."
-                                                speedResult = SpeedTestManager.runDownloadTest()
-                                                testStatus = ""
-                                            } catch (t: Throwable) {
-                                                t.printStackTrace()
-                                                testStatus = "Test failed"
-                                            } finally {
-                                                isTesting = false
-                                            }
-                                        }
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth(0.6f)
-                                            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
-                                            .padding(12.dp)
-                                    ) {
-                                        Column {
-                                            if (isTesting) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.padding(bottom = 12.dp)
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(20.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(54.dp)
+                                                        .background(Color.White.copy(0.1f), CircleShape),
+                                                    contentAlignment = Alignment.Center
                                                 ) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(16.dp),
-                                                        color = Color.White,
-                                                        strokeWidth = 2.dp
+                                                    Icon(
+                                                        painter = painterResource(id = R.drawable.ic_wifi_rounded),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(28.dp),
+                                                        tint = Color.White
                                                     )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("loading", fontSize = 16.sp, color = Color.White.copy(alpha = 0.8f))
                                                 }
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                            } else {
-                                                val connectionStatus = when {
-                                                    pingResult == null || speedResult == null -> "Connection issues detected"
-                                                    pingResult!! <= 0 || speedResult!! <= 0 -> "Connection issues detected"
-                                                    pingResult!! < 50 && speedResult!! > 20 -> "Connection excellent"
-                                                    pingResult!! < 100 && speedResult!! > 10 -> "Connection good"
-                                                    pingResult!! < 150 -> "Connection fair"
-                                                    else -> "Connection slow"
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                                Column {
+                                                    Text("Wifi", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
+                                                    Text(ssid, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
                                                 }
-                                                val statusColor = when {
-                                                    pingResult == null || speedResult == null -> Color.Red
-                                                    pingResult!! <= 0 || speedResult!! <= 0 -> Color.Red
-                                                    pingResult!! < 50 && speedResult!! > 20 -> Color.Green
-                                                    pingResult!! < 100 && speedResult!! > 10 -> Color.Cyan
-                                                    else -> Color.Yellow
-                                                }
-                                                Text(
-                                                    text = connectionStatus,
-                                                    fontSize = 16.sp,
-                                                    color = statusColor,
-                                                    fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.padding(bottom = 12.dp)
-                                                )
                                             }
                                             
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "Ping",
-                                                    fontSize = 18.sp,
-                                                    color = Color.White.copy(alpha = 0.8f),
-                                                    modifier = Modifier.width(120.dp)
-                                                )
-                                                val pingVal = pingResult ?: 0
-                                                Text("${pingVal}ms", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(54.dp)
+                                                        .background(Color.White.copy(0.1f), CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(id = R.drawable.keyboard),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(28.dp),
+                                                        tint = Color.White
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                                Column {
+                                                    Text("Password", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
+                                                    Text(password, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                                }
                                             }
-                                            
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "Download",
-                                                    fontSize = 18.sp,
-                                                    color = Color.White.copy(alpha = 0.8f),
-                                                    modifier = Modifier.width(120.dp)
-                                                )
-                                                val speedVal = speedResult?.let { String.format(java.util.Locale.US, "%.1f", it).replace('.', ',') } ?: "0,0"
-                                                Text("${speedVal}Mbps", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        Spacer(modifier = Modifier.height(24.dp))
+
+                                        var linkSpeed by remember { mutableStateOf(0) }
+                                        var speedResult by remember { mutableStateOf<Double?>(null) }
+                                        var pingResult by remember { mutableStateOf<Int?>(null) }
+                                        var isTesting by remember { mutableStateOf(true) }
+                                        var testStatus by remember { mutableStateOf("") }
+
+                                        LaunchedEffect(animateIn) {
+                                            if (animateIn) {
+                                                delay(400)
+                                                try {
+                                                    val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+                                                    linkSpeed = wifiManager?.connectionInfo?.linkSpeed ?: 0
+                                                    testStatus = "Testing ping..."
+                                                    pingResult = SpeedTestManager.runPingTest()
+                                                    testStatus = "Testing download..."
+                                                    speedResult = SpeedTestManager.runDownloadTest()
+                                                    testStatus = ""
+                                                } catch (t: Throwable) {
+                                                    t.printStackTrace()
+                                                    testStatus = "Test failed"
+                                                } finally {
+                                                    isTesting = false
+                                                }
+                                            }
+                                        }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(0.6f)
+                                                .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+                                                .padding(12.dp)
+                                        ) {
+                                            Column {
+                                                if (isTesting) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.padding(bottom = 12.dp)
+                                                    ) {
+                                                        CircularProgressIndicator(
+                                                            modifier = Modifier.size(16.dp),
+                                                            color = Color.White,
+                                                            strokeWidth = 2.dp
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text("loading", fontSize = 16.sp, color = Color.White.copy(alpha = 0.8f))
+                                                    }
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                } else {
+                                                    val connectionStatus = when {
+                                                        pingResult == null || speedResult == null -> "Connection issues detected"
+                                                        pingResult!! <= 0 || speedResult!! <= 0 -> "Connection issues detected"
+                                                        pingResult!! < 50 && speedResult!! > 20 -> "Connection excellent"
+                                                        pingResult!! < 100 && speedResult!! > 10 -> "Connection good"
+                                                        pingResult!! < 150 -> "Connection fair"
+                                                        else -> "Connection slow"
+                                                    }
+                                                    val statusColor = when {
+                                                        pingResult == null || speedResult == null -> Color.Red
+                                                        pingResult!! <= 0 || speedResult!! <= 0 -> Color.Red
+                                                        pingResult!! < 50 && speedResult!! > 20 -> Color.Green
+                                                        pingResult!! < 100 && speedResult!! > 10 -> Color.Cyan
+                                                        else -> Color.Yellow
+                                                    }
+                                                    Text(
+                                                        text = connectionStatus,
+                                                        fontSize = 16.sp,
+                                                        color = statusColor,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(bottom = 12.dp)
+                                                    )
+                                                }
+                                                
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "Ping",
+                                                        fontSize = 18.sp,
+                                                        color = Color.White.copy(alpha = 0.8f),
+                                                        modifier = Modifier.width(120.dp)
+                                                    )
+                                                    val pingVal = pingResult ?: 0
+                                                    Text("${pingVal}ms", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                                }
+                                                
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "Download",
+                                                        fontSize = 18.sp,
+                                                        color = Color.White.copy(alpha = 0.8f),
+                                                        modifier = Modifier.width(120.dp)
+                                                    )
+                                                    val speedVal = speedResult?.let { String.format(java.util.Locale.US, "%.1f", it).replace('.', ',') } ?: "0,0"
+                                                    Text("${speedVal}Mbps", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                                }
                                             }
                                         }
                                     }
+
+                                    Spacer(modifier = Modifier.width(32.dp))
+
+                                    Image(
+                                        bitmap = qrCodeBitmap, 
+                                        contentDescription = "Wi-Fi QR Code",
+                                        modifier = Modifier
+                                            .size(320.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                    )
                                 }
-
-                                Spacer(modifier = Modifier.width(32.dp))
-
-                                Image(
-                                    bitmap = qrCodeBitmap, 
-                                    contentDescription = "Wi-Fi QR Code",
-                                    modifier = Modifier
-                                        .size(320.dp)
-                                        .clip(RoundedCornerShape(16.dp))
-                                )
                             }
                         }
                     }

@@ -62,39 +62,36 @@ fun downloadAndCacheImage(
     
     CoroutineScope(Dispatchers.IO).launch {
         try {
-            val request = ImageRequest.Builder(context)
-                .data(sanitizedUrl)
-                .allowHardware(false) // Disable hardware bitmaps during caching download
-                .build()
+            val url = java.net.URL(sanitizedUrl)
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 10000
+            conn.readTimeout = 15000
+            conn.requestMethod = "GET"
             
-            val result = context.imageLoader.execute(request)
-            if (result is SuccessResult) {
-                val drawable = result.drawable
-                val bitmap = try {
-                    drawable.toBitmap()
-                } catch (e: Exception) {
-                    (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+            val responseCode = conn.responseCode
+            if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                conn.inputStream.use { input ->
+                    FileOutputStream(cacheFile).use { output ->
+                        input.copyTo(output)
+                    }
                 }
-                
-                if (bitmap != null) {
-                    FileOutputStream(cacheFile).use { out ->
-                        // Use PNG to preserve transparency (Alpha channel)
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
-                    }
-                    
-                    Log.d("ImageCacheHelper", "Image cached successfully: $cacheFileName")
-                    withContext(Dispatchers.Main) {
-                        onSuccess(cacheFile.absolutePath)
-                    }
-                } else {
-                    onError(Exception("Failed to get bitmap from drawable"))
+                Log.d("ImageCacheHelper", "Image cached successfully: $cacheFileName")
+                withContext(Dispatchers.Main) {
+                    onSuccess(cacheFile.absolutePath)
                 }
             } else {
-                onError(Exception("Failed to load image"))
+                throw Exception("HTTP error code: $responseCode")
             }
         } catch (e: Exception) {
             Log.e("ImageCacheHelper", "Failed to cache image: ${e.message}")
-            onError(e)
+            try {
+                if (cacheFile.exists()) {
+                    cacheFile.delete()
+                }
+            } catch (ignored: Exception) {}
+            withContext(Dispatchers.Main) {
+                onError(e)
+            }
         }
     }
 }
