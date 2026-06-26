@@ -1554,12 +1554,14 @@ fun RequestDialog(
                 }
 
                 var isSubmitFocused by remember { mutableStateOf(false) }
+                val isSubmitEnabled = folioId != null && folioId != 0
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(CircleShape)
                         .onFocusChanged { isSubmitFocused = it.isFocused }
                         .clickable(
+                            enabled = isSubmitEnabled,
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() },
                             onClick = {
@@ -1585,13 +1587,28 @@ fun RequestDialog(
                                 onDismiss()
                             }
                         )
-                        .background(if (isSubmitFocused) Color(0xFFCFDFED) else Color.Gray.copy(alpha = 0.2f))
+                        .background(
+                            if (!isSubmitEnabled) {
+                                Color.Gray.copy(alpha = 0.05f)
+                            } else if (isSubmitFocused) {
+                                Color(0xFFCFDFED)
+                            } else {
+                                Color.Gray.copy(alpha = 0.2f)
+                            }
+                        )
+                        .focusable(enabled = isSubmitEnabled)
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Submit Request",
-                        color = if (isSubmitFocused) Color(0xFF1E2026) else Color.Gray,
+                        color = if (!isSubmitEnabled) {
+                            Color.Gray.copy(alpha = 0.4f)
+                        } else if (isSubmitFocused) {
+                            Color(0xFF1E2026)
+                        } else {
+                            Color.Gray
+                        },
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyMedium
                     )

@@ -242,237 +242,206 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
     // Fetch company icon URL from Firebase and check data validity
     // Use pairingSessionKey to ensure cleanup when unpair/pair happens
     // Track if listeners are already set up to prevent duplication
-    var listenersSetup by remember(pairingSessionKey) { mutableStateOf(false) }
+    var listenersSetup by remember(roomId, branchId, pairingSessionKey) { mutableStateOf(false) }
     
-    DisposableEffect(pairingSessionKey) {
-        // If critical data is missing, unpair and clear data
+    DisposableEffect(roomId, branchId, pairingSessionKey) {
         if (roomId == null || branchId == null || deviceId == null) {
-            Log.e("WelcomeScreen", "Critical data missing - roomId: $roomId, branchId: $branchId, deviceId: $deviceId")
-            Log.d("WelcomeScreen", "Unpairing device due to missing data")
-            
-            // Use DeviceManager to properly unpair
-            val deviceManager = DeviceManager(context)
-            deviceManager.returnToPairingMode()
-            
-            // Clear SharedPreferences
-            sharedPreferences.edit().apply {
-                remove("deviceID")
-                remove("branchId")
-                remove("room")
-                apply()
-            }
-            
-            // Restart activity to go back to pairing screen
-            val intent = (context as? Activity)?.intent
-            (context as? Activity)?.finish()
-            intent?.let {
-                context.startActivity(it)
-            }
-            
-            onDispose { }
-        } else if (roomId != null && branchId != null) {
-            // Check if already set up to prevent duplication
-            if (listenersSetup) {
-                Log.d("WelcomeScreen", "Firebase listeners already set up - skipping duplicate setup")
-                onDispose { }
-            } else {
-                // Mark as set up BEFORE setting up listeners to prevent race condition
-                listenersSetup = true
-                Log.d("WelcomeScreen", "Setting up Firebase listeners - BranchId: $branchId, RoomId: $roomId")
-            
-            // Store listeners for cleanup
-            val welcomeListener = object : ValueEventListener {
-                    override fun onDataChange(dataSnapshot: DataSnapshot) {
-                        android.util.Log.d("WelcomeScreen", "WELCOME_LETTER raw snapshot: ${dataSnapshot.value}")
-                        val data = dataSnapshot.getValue(WelcomeData::class.java)
-                        welcomeData = data ?: WelcomeData() // Use default if data is null
-                        Log.d("WelcomeScreen", "Welcome data updated: ${welcomeData.welcomeMessage}")
-                    }
+            Log.e("WelcomeScreen", "Critical data missing in WelcomeScreen - roomId: $roomId, branchId: $branchId, deviceId: $deviceId. Doing nothing.")
+            return@DisposableEffect onDispose { }
+        }
 
-                    override fun onCancelled(databaseError: DatabaseError) {
-                        Log.e("WelcomeScreen", "Error fetching welcome data: ${databaseError.message}")
-                    }
+        // Check if already set up to prevent duplication
+        if (listenersSetup) {
+            Log.d("WelcomeScreen", "Firebase listeners already set up - skipping duplicate setup")
+            return@DisposableEffect onDispose { }
+        }
+
+        // Mark as set up BEFORE setting up listeners to prevent race condition
+        listenersSetup = true
+        Log.d("WelcomeScreen", "Setting up Firebase listeners - BranchId: $branchId, RoomId: $roomId")
+        
+        // Store listeners for cleanup
+        val welcomeListener = object : ValueEventListener {
+            override fun onDataChange(dataSnapshot: DataSnapshot) {
+                android.util.Log.d("WelcomeScreen", "WELCOME_LETTER raw snapshot: ${dataSnapshot.value}")
+                val data = dataSnapshot.getValue(WelcomeData::class.java)
+                welcomeData = data ?: WelcomeData() // Use default if data is null
+                Log.d("WelcomeScreen", "Welcome data updated: ${welcomeData.welcomeMessage}")
             }
 
-            var imageListener: ValueEventListener? = null
-                
-            val guestListener = object : ValueEventListener {
-                    override fun onDataChange(dataSnapshot: DataSnapshot) {
-                        if (!dataSnapshot.exists()) {
-                            guestInfo = null
-                            guestImageUrl = ""
-                            isGuestDataLoaded = true
-                            return
-                        }
+            override fun onCancelled(databaseError: DatabaseError) {
+                Log.e("WelcomeScreen", "Error fetching welcome data: ${databaseError.message}")
+            }
+        }
 
-                        // Try parsing GuestInfo automatically, fallback to robust manual parsing on error
-                        val guest = try {
-                            dataSnapshot.getValue(GuestInfo::class.java)
-                        } catch (e: Exception) {
-                            Log.e("WelcomeScreen", "Failed to deserialize GuestInfo automatically, falling back to manual parsing", e)
+        var imageListener: ValueEventListener? = null
+            
+        val guestListener = object : ValueEventListener {
+            override fun onDataChange(dataSnapshot: DataSnapshot) {
+                if (!dataSnapshot.exists()) {
+                    guestInfo = null
+                    guestImageUrl = ""
+                    isGuestDataLoaded = true
+                    return
+                }
+
+                // Try parsing GuestInfo automatically, fallback to robust manual parsing on error
+                val guest = try {
+                    dataSnapshot.getValue(GuestInfo::class.java)
+                } catch (e: Exception) {
+                    Log.e("WelcomeScreen", "Failed to deserialize GuestInfo automatically, falling back to manual parsing", e)
+                    try {
+                        val folioVal = try {
+                            dataSnapshot.child("folio").getValue(Int::class.java) ?: 0
+                        } catch (e2: Exception) {
                             try {
-                                val folioVal = try {
-                                    dataSnapshot.child("folio").getValue(Int::class.java) ?: 0
-                                } catch (e2: Exception) {
-                                    try {
-                                        dataSnapshot.child("folio").getValue(String::class.java)?.toIntOrNull() ?: 0
-                                    } catch (e3: Exception) { 0 }
-                                }
-                                val roomnightVal = try {
-                                    dataSnapshot.child("roomnight").getValue(Int::class.java) ?: 0
-                                } catch (e2: Exception) {
-                                    try {
-                                        dataSnapshot.child("roomnight").getValue(String::class.java)?.toIntOrNull() ?: 0
-                                    } catch (e3: Exception) { 0 }
-                                }
-                                GuestInfo(
-                                    folio = folioVal,
-                                    dateci = dataSnapshot.child("dateci").getValue(String::class.java) ?: "",
-                                    dateco = dataSnapshot.child("dateco").getValue(String::class.java) ?: "",
-                                    datecreate = dataSnapshot.child("datecreate").getValue(String::class.java) ?: "",
-                                    fname = dataSnapshot.child("fname").getValue(String::class.java) ?: "",
-                                    foliostatus = dataSnapshot.child("foliostatus").getValue(String::class.java) ?: "",
-                                    email = dataSnapshot.child("email").getValue(String::class.java) ?: "",
-                                    phone = dataSnapshot.child("phone").getValue(String::class.java) ?: "",
-                                    room = dataSnapshot.child("room").getValue(String::class.java) ?: "",
-                                    roomnight = roomnightVal,
-                                    roomtype = dataSnapshot.child("roomtype").getValue(String::class.java) ?: "",
-                                    guestImageUrl = dataSnapshot.child("guestImageUrl").getValue(String::class.java) ?: "",
-                                    isSmoking = dataSnapshot.child("isSmoking").getValue(Boolean::class.java) == true,
-                                    gender = dataSnapshot.child("gender").getValue(String::class.java) ?: ""
-                                )
-                            } catch (manualEx: Exception) {
-                                Log.e("WelcomeScreen", "Failed manual parse of GuestInfo", manualEx)
-                                null
-                            }
+                                dataSnapshot.child("folio").getValue(String::class.java)?.toIntOrNull() ?: 0
+                            } catch (e3: Exception) { 0 }
                         }
-
-                        guestInfo = guest
-                        // Initialize guestImageUrl with the direct guestImageUrl property from FOGUEST first
-                        val rawGuestUrl = guest?.guestImageUrl ?: ""
-                        guestImageUrl = if (isValidImageUrl(rawGuestUrl)) rawGuestUrl else ""
-                        Log.d("WelcomeScreen", "Guest data received: ${guest?.fname}, Folio: ${guest?.folio}, guestImageUrl: $guestImageUrl")
-
-                        // Setelah mendapatkan guestInfo, ambil data dari GUESTIMAGE
-                        guestInfo?.folio?.let { folio ->
-                            // Menggunakan folio untuk membangun path yang benar
-                            val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folio.toString())
-                            Log.d("WelcomeScreen", "Fetching guest image data from path: BRANCHES/$branchId/GUESTIMAGE/$folio")
-                            
-                            val imageListenerObj = object : ValueEventListener {
-                                override fun onDataChange(imageSnapshot: DataSnapshot) {
-                                    // Ambil URL gambar dari child imageUrl
-                                    val imageUrl = imageSnapshot.child("imageUrl").getValue(String::class.java)
-                                    
-                                    // Ambil zoom, offsetX, dan offsetY dari data tamu spesifik ini
-                                    val zoomVal = try {
-                                        imageSnapshot.child("zoom").getValue(Float::class.java)
-                                    } catch (e: Exception) {
-                                        try {
-                                            imageSnapshot.child("zoom").getValue(String::class.java)?.toFloatOrNull()
-                                        } catch (e2: Exception) { null }
-                                    }
-                                    val offsetXVal = try {
-                                        imageSnapshot.child("offsetX").getValue(Float::class.java)
-                                    } catch (e: Exception) {
-                                        try {
-                                            imageSnapshot.child("offsetX").getValue(String::class.java)?.toFloatOrNull()
-                                        } catch (e2: Exception) { null }
-                                    }
-                                    val offsetYVal = try {
-                                        imageSnapshot.child("offsetY").getValue(Float::class.java)
-                                    } catch (e: Exception) {
-                                        try {
-                                            imageSnapshot.child("offsetY").getValue(String::class.java)?.toFloatOrNull()
-                                        } catch (e2: Exception) { null }
-                                    }
-
-                                    guestImageZoom = zoomVal ?: 1.0f
-                                    guestImageOffsetX = offsetXVal ?: 0.0f
-                                    guestImageOffsetY = offsetYVal ?: 0.0f
-
-                                    // Simpan URL gambar ke dalam state guestImageUrl, falling back to direct guestImageUrl from FOGUEST if null/empty
-                                    val resolvedUrl = if (!imageUrl.isNullOrBlank()) imageUrl else (guest?.guestImageUrl ?: "")
-                                    guestImageUrl = if (isValidImageUrl(resolvedUrl)) resolvedUrl else ""
-                                    Log.d("WelcomeScreen", "Guest image data received: $guestImageUrl, zoom: $guestImageZoom, offsetX: $guestImageOffsetX, offsetY: $guestImageOffsetY")
-                                    isGuestDataLoaded = true
-                                }
-
-                                override fun onCancelled(imageError: DatabaseError) {
-                                    Log.e("WelcomeScreen", "Error fetching guest image: ${imageError.message}")
-                                    val rawFallback = guest?.guestImageUrl ?: ""
-                                    guestImageUrl = if (isValidImageUrl(rawFallback)) rawFallback else ""
-                                    guestImageZoom = 1.0f
-                                    guestImageOffsetX = 0.0f
-                                    guestImageOffsetY = 0.0f
-                                    isGuestDataLoaded = true
-                                }
-                            }
-                            imageListener = imageListenerObj
-                            imageRef.addValueEventListener(imageListenerObj)
-                        } ?: run {
-                            Log.w("WelcomeScreen", "No folio found for guest")
-                            isGuestDataLoaded = true
+                        val roomnightVal = try {
+                            dataSnapshot.child("roomnight").getValue(Int::class.java) ?: 0
+                        } catch (e2: Exception) {
+                            try {
+                                dataSnapshot.child("roomnight").getValue(String::class.java)?.toIntOrNull() ?: 0
+                            } catch (e3: Exception) { 0 }
                         }
-                    }
-
-                    override fun onCancelled(databaseError: DatabaseError) {
-                        Log.e("WelcomeScreen", "Error fetching guest data: ${databaseError.message}")
-                        guestInfo = null
-                        isGuestDataLoaded = true
-                    }
-            }
-
-            val iconListener = object : ValueEventListener {
-                    override fun onDataChange(snapshot: DataSnapshot) {
-                        iconUrl = snapshot.child("iconUrl").getValue(String::class.java)
-                        Log.d("DHTV_WELCOME", "Company icon URL updated: $iconUrl")
-                    }
-
-                    override fun onCancelled(error: DatabaseError) {
-                        Log.e("DHTV_WELCOME", "Error loading company icon: ${error.message}")
-                    }
-            }
-            
-            // Use branchId in the path for WELCOME_LETTER
-            val myRef = database.child("BRANCHES").child(branchId).child("WELCOME_LETTER")
-            Log.d("WelcomeScreen", "Fetching welcome data from path: BRANCHES/$branchId/WELCOME_LETTER")
-            myRef.addValueEventListener(welcomeListener)
-
-            // Use branchId in the path for FOGUEST with BRANCHES node
-            val guestRef = database.child("BRANCHES").child(branchId).child("FOGUEST").child(roomId)
-            Log.d("WelcomeScreen", "Fetching guest data from path: BRANCHES/$branchId/FOGUEST/$roomId")
-            guestRef.addValueEventListener(guestListener)
-
-            // Fetch company icon URL from Firebase
-            val iconRef = database.child("BRANCHES").child(branchId).child("SETTING").child("COMPANY_ICON")
-            iconRef.addValueEventListener(iconListener)
-            
-            // Cleanup all listeners when composable is disposed or roomId/branchId changes
-            onDispose {
-                Log.d("WelcomeScreen", "Cleaning up Firebase listeners for roomId: $roomId, branchId: $branchId")
-                listenersSetup = false
-                myRef.removeEventListener(welcomeListener)
-                guestRef.removeEventListener(guestListener)
-                iconRef.removeEventListener(iconListener)
-                // Cleanup image listener if it was created
-                imageListener?.let { listener ->
-                    guestInfo?.folio?.let { folio ->
-                        val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folio.toString())
-                        imageRef.removeEventListener(listener)
+                        GuestInfo(
+                            folio = folioVal,
+                            dateci = dataSnapshot.child("dateci").getValue(String::class.java) ?: "",
+                            dateco = dataSnapshot.child("dateco").getValue(String::class.java) ?: "",
+                            datecreate = dataSnapshot.child("datecreate").getValue(String::class.java) ?: "",
+                            fname = dataSnapshot.child("fname").getValue(String::class.java) ?: "",
+                            foliostatus = dataSnapshot.child("foliostatus").getValue(String::class.java) ?: "",
+                            email = dataSnapshot.child("email").getValue(String::class.java) ?: "",
+                            phone = dataSnapshot.child("phone").getValue(String::class.java) ?: "",
+                            room = dataSnapshot.child("room").getValue(String::class.java) ?: "",
+                            roomnight = roomnightVal,
+                            roomtype = dataSnapshot.child("roomtype").getValue(String::class.java) ?: "",
+                            guestImageUrl = dataSnapshot.child("guestImageUrl").getValue(String::class.java) ?: "",
+                            isSmoking = dataSnapshot.child("isSmoking").getValue(Boolean::class.java) == true,
+                            gender = dataSnapshot.child("gender").getValue(String::class.java) ?: ""
+                        )
+                    } catch (manualEx: Exception) {
+                        Log.e("WelcomeScreen", "Failed manual parse of GuestInfo", manualEx)
+                        null
                     }
                 }
+
+                guestInfo = guest
+                // Initialize guestImageUrl with the direct guestImageUrl property from FOGUEST first
+                val rawGuestUrl = guest?.guestImageUrl ?: ""
+                guestImageUrl = if (isValidImageUrl(rawGuestUrl)) rawGuestUrl else ""
+                Log.d("WelcomeScreen", "Guest data received: ${guest?.fname}, Folio: ${guest?.folio}, guestImageUrl: $guestImageUrl")
+
+                // Setelah mendapatkan guestInfo, ambil data dari GUESTIMAGE
+                guestInfo?.folio?.let { folio ->
+                    // Menggunakan folio untuk membangun path yang benar
+                    val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folio.toString())
+                    Log.d("WelcomeScreen", "Fetching guest image data from path: BRANCHES/$branchId/GUESTIMAGE/$folio")
+                    
+                    val imageListenerObj = object : ValueEventListener {
+                        override fun onDataChange(imageSnapshot: DataSnapshot) {
+                            // Ambil URL gambar dari child imageUrl
+                            val imageUrl = imageSnapshot.child("imageUrl").getValue(String::class.java)
+                            
+                            // Ambil zoom, offsetX, dan offsetY dari data tamu spesifik ini
+                            val zoomVal = try {
+                                imageSnapshot.child("zoom").getValue(Float::class.java)
+                            } catch (e: Exception) {
+                                try {
+                                    imageSnapshot.child("zoom").getValue(String::class.java)?.toFloatOrNull()
+                                } catch (e2: Exception) { null }
+                            }
+                            val offsetXVal = try {
+                                imageSnapshot.child("offsetX").getValue(Float::class.java)
+                            } catch (e: Exception) {
+                                try {
+                                    imageSnapshot.child("offsetX").getValue(String::class.java)?.toFloatOrNull()
+                                } catch (e2: Exception) { null }
+                            }
+                            val offsetYVal = try {
+                                imageSnapshot.child("offsetY").getValue(Float::class.java)
+                            } catch (e: Exception) {
+                                try {
+                                    imageSnapshot.child("offsetY").getValue(String::class.java)?.toFloatOrNull()
+                                } catch (e2: Exception) { null }
+                            }
+
+                            guestImageZoom = zoomVal ?: 1.0f
+                            guestImageOffsetX = offsetXVal ?: 0.0f
+                            guestImageOffsetY = offsetYVal ?: 0.0f
+
+                            // Simpan URL gambar ke dalam state guestImageUrl, falling back to direct guestImageUrl from FOGUEST if null/empty
+                            val resolvedUrl = if (!imageUrl.isNullOrBlank()) imageUrl else (guest?.guestImageUrl ?: "")
+                            guestImageUrl = if (isValidImageUrl(resolvedUrl)) resolvedUrl else ""
+                            Log.d("WelcomeScreen", "Guest image data received: $guestImageUrl, zoom: $guestImageZoom, offsetX: $guestImageOffsetX, offsetY: $guestImageOffsetY")
+                            isGuestDataLoaded = true
+                        }
+
+                        override fun onCancelled(imageError: DatabaseError) {
+                            Log.e("WelcomeScreen", "Error fetching guest image: ${imageError.message}")
+                            val rawFallback = guest?.guestImageUrl ?: ""
+                            guestImageUrl = if (isValidImageUrl(rawFallback)) rawFallback else ""
+                            guestImageZoom = 1.0f
+                            guestImageOffsetX = 0.0f
+                            guestImageOffsetY = 0.0f
+                            isGuestDataLoaded = true
+                        }
+                    }
+                    imageListener = imageListenerObj
+                    imageRef.addValueEventListener(imageListenerObj)
+                } ?: run {
+                    Log.w("WelcomeScreen", "No folio found for guest")
+                    isGuestDataLoaded = true
+                }
             }
+
+            override fun onCancelled(databaseError: DatabaseError) {
+                Log.e("WelcomeScreen", "Error fetching guest data: ${databaseError.message}")
+                guestInfo = null
+                isGuestDataLoaded = true
             }
-            } else {
-            if (branchId == null) {
-                Log.e("WelcomeScreen", "No branchId found in SharedPreferences")
+        }
+
+        val iconListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                iconUrl = snapshot.child("iconUrl").getValue(String::class.java)
+                Log.d("DHTV_WELCOME", "Company icon URL updated: $iconUrl")
             }
-            if (roomId == null) {
-            Log.e("WelcomeScreen", "No roomId found in SharedPreferences")
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DHTV_WELCOME", "Error loading company icon: ${error.message}")
             }
-            
-            onDispose { }
+        }
+        
+        // Use branchId in the path for WELCOME_LETTER
+        val myRef = database.child("BRANCHES").child(branchId).child("WELCOME_LETTER")
+        Log.d("WelcomeScreen", "Fetching welcome data from path: BRANCHES/$branchId/WELCOME_LETTER")
+        myRef.addValueEventListener(welcomeListener)
+
+        // Use branchId in the path for FOGUEST with BRANCHES node
+        val guestRef = database.child("BRANCHES").child(branchId).child("FOGUEST").child(roomId)
+        Log.d("WelcomeScreen", "Fetching guest data from path: BRANCHES/$branchId/FOGUEST/$roomId")
+        guestRef.addValueEventListener(guestListener)
+
+        // Fetch company icon URL from Firebase
+        val iconRef = database.child("BRANCHES").child(branchId).child("SETTING").child("COMPANY_ICON")
+        iconRef.addValueEventListener(iconListener)
+        
+        // Cleanup all listeners when composable is disposed or roomId/branchId changes
+        onDispose {
+            Log.d("WelcomeScreen", "Cleaning up Firebase listeners for roomId: $roomId, branchId: $branchId")
+            listenersSetup = false
+            myRef.removeEventListener(welcomeListener)
+            guestRef.removeEventListener(guestListener)
+            iconRef.removeEventListener(iconListener)
+            // Cleanup image listener if it was created
+            imageListener?.let { listener ->
+                guestInfo?.folio?.let { folio ->
+                    val imageRef = database.child("BRANCHES").child(branchId).child("GUESTIMAGE").child(folio.toString())
+                    imageRef.removeEventListener(listener)
+                }
+            }
         }
     }
 

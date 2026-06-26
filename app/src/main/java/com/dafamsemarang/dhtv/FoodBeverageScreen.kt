@@ -65,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -78,6 +79,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.dafamsemarang.dhtv.CachedAsyncImage
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.rememberLottieComposition
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
 
 import android.content.SharedPreferences
 import androidx.compose.animation.core.Animatable
@@ -1566,15 +1572,27 @@ fun ItemDialog(
                 var isAddCartFocused by remember { mutableStateOf(false) }
                 var buttonOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
-                val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
-                val pulseAlpha by infiniteTransition.animateFloat(
-                    initialValue = 0.4f,
-                    targetValue = 1.0f,
+                // Animated LED Strip Border Effect
+                val infiniteTransition = rememberInfiniteTransition(label = "ledBorder")
+                val animOffset by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1000f,
                     animationSpec = infiniteRepeatable(
-                        animation = tween(1000),
-                        repeatMode = RepeatMode.Reverse
+                        animation = tween(2000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
                     ),
-                    label = "pulseAlpha"
+                    label = "ledOffset"
+                )
+                val ledBrush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.White,
+                        Color.White.copy(alpha = 0.1f),
+                        Color.White.copy(alpha = 0.1f),
+                        Color.White
+                    ),
+                    start = Offset(animOffset, animOffset),
+                    end = Offset(animOffset + 300f, animOffset + 300f),
+                    tileMode = TileMode.Repeated
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1607,8 +1625,8 @@ fun ItemDialog(
                             .fillMaxWidth()
                             .height(48.dp)
                             .border(
-                                width = 2.5.dp,
-                                color = if (isAddCartFocused) Color(0xFFCFDFED).copy(alpha = pulseAlpha) else Color.Transparent,
+                                width = 4.dp,
+                                brush = if (isAddCartFocused) ledBrush else androidx.compose.ui.graphics.SolidColor(Color.Transparent),
                                 shape = RoundedCornerShape(50)
                             )
                             .clip(RoundedCornerShape(50))

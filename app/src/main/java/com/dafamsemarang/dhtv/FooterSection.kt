@@ -884,11 +884,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         buttonColor = FooterIcon,
                         onClick = {
                             Log.d("FooterSection", "DND button clicked. Current status: $isDndActive, folioId: $folioId")
-                            val currentFolioId = folioId
-                            if (currentFolioId == null) {
-                                Log.e("FooterSection", "Cannot toggle DND: folioId is null")
-                                return@SmallServiceButton
-                            }
                             if (isDndActive) {
                                 showReleaseConfirmDialog = true
                             } else {
@@ -1498,22 +1493,22 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             }
         }
 
-    if (showReleaseConfirmDialog && folioId != null) {
+    if (showReleaseConfirmDialog) {
         DndConfirmDrawer(
             context = context,
             isDndActive = true,
             onDismiss = { showReleaseConfirmDialog = false },
-            folioId = folioId!!,
+            folioId = folioId ?: 0,
             deviceID = deviceID
         )
     }
 
-    if (showConfirmDialog && folioId != null) {
+    if (showConfirmDialog) {
         DndConfirmDrawer(
             context = context,
             isDndActive = false,
             onDismiss = { showConfirmDialog = false },
-            folioId = folioId!!,
+            folioId = folioId ?: 0,
             deviceID = deviceID
         )
     }
@@ -2350,7 +2345,13 @@ fun DndConfirmDrawer(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = if (isDndActive) "Hold D-pad Left to release 'Do Not Disturb'" else "Hold D-pad Right to activate 'Do Not Disturb'",
+                            text = if (folioId == 0) {
+                                "Layanan tidak tersedia karena tidak ada tamu aktif."
+                            } else if (isDndActive) {
+                                "Hold D-pad Left to release 'Do Not Disturb'"
+                            } else {
+                                "Hold D-pad Right to activate 'Do Not Disturb'"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
@@ -2369,6 +2370,7 @@ fun DndConfirmDrawer(
                                 .onFocusChanged { isSliderFocused = it.isFocused }
                                 .focusRequester(sliderFocusRequester)
                                 .onKeyEvent { keyEvent ->
+                                    if (folioId == 0) return@onKeyEvent false
                                     if (isDndActive) {
                                         if (keyEvent.key == Key.DirectionLeft) {
                                             if (keyEvent.type == KeyEventType.KeyDown) {
@@ -2417,13 +2419,13 @@ fun DndConfirmDrawer(
                                         }
                                     }
                                 }
-                                .focusable(),
+                                .focusable(enabled = folioId != 0),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .width(364.dp * animatedProgress + 56.dp)
+                                    .width(if (folioId == 0) 56.dp else (364.dp * animatedProgress + 56.dp))
                                     .background(
                                         brush = Brush.horizontalGradient(
                                             colors = listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.8f))
@@ -2433,7 +2435,9 @@ fun DndConfirmDrawer(
                             )
 
                             Text(
-                                text = if (isDndActive) {
+                                text = if (folioId == 0) {
+                                    "Disabled"
+                                } else if (isDndActive) {
                                     if (targetProgress == 0f) "Releasing..." else "Hold D-pad Left"
                                 } else {
                                     if (targetProgress == 1f) "Activating..." else "Hold D-pad Right"
@@ -5472,15 +5476,22 @@ fun CartDrawer(
 
                                 Spacer(modifier = Modifier.width(16.dp))
 
+                                val isConfirmEnabled = folioId != null && folioId != 0
                                 Box(
                                     modifier = Modifier
                                         .focusRequester(confirmFocusRequester)
                                         .onFocusChanged { isConfirmFocused = it.isFocused }
                                         .clip(CircleShape)
                                         .background(
-                                            if (isConfirmFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.05f)
+                                            if (!isConfirmEnabled) {
+                                                Color.White.copy(alpha = 0.02f)
+                                            } else if (isConfirmFocused) {
+                                                Color(0xFFCFDFED)
+                                            } else {
+                                                Color.White.copy(alpha = 0.05f)
+                                            }
                                         )
-                                        .clickable {
+                                        .clickable(enabled = isConfirmEnabled) {
                                             if (folioId != null) {
                                                 val orderId = generateOrderId()
                                                 sendOrderNotification(context, folioId!!, selectedPaymentMethod.value, orderId, selectedItems)
@@ -5493,13 +5504,19 @@ fun CartDrawer(
                                             dismissWithAnimation()
                                             closeWithAnimation()
                                         }
-                                        .focusable()
+                                        .focusable(enabled = isConfirmEnabled)
                                         .padding(horizontal = 24.dp, vertical = 12.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = "Confirm",
-                                        color = if (isConfirmFocused) Color(0xFF1C1D24) else Color.White,
+                                        color = if (!isConfirmEnabled) {
+                                            Color.White.copy(alpha = 0.3f)
+                                        } else if (isConfirmFocused) {
+                                            Color(0xFF1C1D24)
+                                        } else {
+                                            Color.White
+                                        },
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp
                                     )

@@ -16,6 +16,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.cancel
 import java.net.NetworkInterface
 import com.google.firebase.database.GenericTypeIndicator
 
@@ -28,9 +30,39 @@ class DeviceManager(private val context: Context) {
     }
 
     private var deviceStatusListener: DeviceStatusListener? = null
+    private var deviceValueListener: com.google.firebase.database.ValueEventListener? = null
+    private var monitoredDeviceId: String? = null
 
     fun setDeviceStatusListener(listener: DeviceStatusListener) {
         deviceStatusListener = listener
+    }
+
+    fun cleanup() {
+        Log.d("DeviceManager", "Cleaning up DeviceManager resources")
+        try {
+            deviceValueListener?.let { listener ->
+                monitoredDeviceId?.let { id ->
+                    deviceRef.child(id).removeEventListener(listener)
+                    Log.d("DeviceManager", "Removed Firebase value event listener for device: $id")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("DeviceManager", "Error removing Firebase listener: ${e.message}")
+        }
+        
+        try {
+            stopNetworkMonitoring()
+        } catch (e: Exception) {
+            Log.e("DeviceManager", "Error stopping network monitoring: ${e.message}")
+        }
+        
+        try {
+            scope.cancel()
+            Log.d("DeviceManager", "Cancelled coroutine scope")
+        } catch (e: Exception) {
+            Log.e("DeviceManager", "Error cancelling coroutine scope: ${e.message}")
+        }
+        deviceStatusListener = null
     }
 
     fun getIpAddress(): String {
@@ -143,7 +175,9 @@ class DeviceManager(private val context: Context) {
                     if (!deviceSnapshot.exists()) {
                         Log.d("DeviceManager", "Device no longer exists in Firebase, unpairing...")
                         returnToPairingMode()
-                        deviceStatusListener?.onPairingModeRequired()
+                        withContext(Dispatchers.Main) {
+                            deviceStatusListener?.onPairingModeRequired()
+                        }
                         return
                     }
 
@@ -153,7 +187,9 @@ class DeviceManager(private val context: Context) {
                     if (deviceData == null) {
                         Log.d("DeviceManager", "Device data is null, unpairing...")
                         returnToPairingMode()
-                        deviceStatusListener?.onPairingModeRequired()
+                        withContext(Dispatchers.Main) {
+                            deviceStatusListener?.onPairingModeRequired()
+                        }
                         return
                     }
 
@@ -168,11 +204,15 @@ class DeviceManager(private val context: Context) {
                                 putString("room", dbRoom)
                                 apply()
                             }
-                            deviceStatusListener?.onConfigChanged()
+                            withContext(Dispatchers.Main) {
+                                deviceStatusListener?.onConfigChanged()
+                            }
                         } else {
                             Log.d("DeviceManager", "Device data mismatch or cleared, unpairing...")
                             returnToPairingMode()
-                            deviceStatusListener?.onPairingModeRequired()
+                            withContext(Dispatchers.Main) {
+                                deviceStatusListener?.onPairingModeRequired()
+                            }
                         }
                         return
                     }
@@ -318,12 +358,15 @@ class DeviceManager(private val context: Context) {
             try {
                 val deviceId = sharedPreferences.getString("deviceID", null)
                 if (deviceId != null) {
-                    deviceRef.child(deviceId).addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+                    monitoredDeviceId = deviceId
+                    val listener = object : com.google.firebase.database.ValueEventListener {
                         override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
                             if (!snapshot.exists()) {
                                 Log.d("DeviceManager", "Device no longer exists in Firebase, unpairing...")
                                 returnToPairingMode()
-                                deviceStatusListener?.onPairingModeRequired()
+                                scope.launch(Dispatchers.Main) {
+                                    deviceStatusListener?.onPairingModeRequired()
+                                }
                                 return
                             }
 
@@ -343,14 +386,18 @@ class DeviceManager(private val context: Context) {
                                     putString("room", dbRoom)
                                     apply()
                                 }
-                                deviceStatusListener?.onConfigChanged()
+                                scope.launch(Dispatchers.Main) {
+                                    deviceStatusListener?.onConfigChanged()
+                                }
                             }
                         }
 
                         override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
                             Log.e("DeviceManager", "Error monitoring device existence: ${error.message}")
                         }
-                    })
+                    }
+                    deviceValueListener = listener
+                    deviceRef.child(deviceId).addValueEventListener(listener)
                 }
             } catch (e: Exception) {
                 Log.e("DeviceManager", "Error setting up device existence monitoring: ${e.message}")

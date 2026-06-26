@@ -91,6 +91,47 @@ object ScreenSaverManager {
     private const val IDLE_TIMEOUT_MS = 120_000L 
     private var isListenerAttached = false
 
+    // Firebase Listener References for clean disposal
+    private var firebaseGuestRef: com.google.firebase.database.DatabaseReference? = null
+    private var firebaseGuestListener: ValueEventListener? = null
+    
+    private var firebaseWelcomeRef: com.google.firebase.database.DatabaseReference? = null
+    private var firebaseWelcomeListener: ValueEventListener? = null
+    
+    private var firebaseCompanyIconRef: com.google.firebase.database.DatabaseReference? = null
+    private var firebaseCompanyIconListener: ValueEventListener? = null
+    
+    private var firebaseScreensaverRef: com.google.firebase.database.DatabaseReference? = null
+    private var firebaseScreensaverListener: ValueEventListener? = null
+
+    fun stopListening() {
+        Log.d("ScreenSaverManager", "stopListening() invoked - removing all Firebase listeners")
+        try {
+            firebaseGuestListener?.let { firebaseGuestRef?.removeEventListener(it) }
+            firebaseWelcomeListener?.let { firebaseWelcomeRef?.removeEventListener(it) }
+            firebaseCompanyIconListener?.let { firebaseCompanyIconRef?.removeEventListener(it) }
+            firebaseScreensaverListener?.let { firebaseScreensaverRef?.removeEventListener(it) }
+        } catch (e: Exception) {
+            Log.e("ScreenSaverManager", "Error unregistering Firebase listeners: ${e.message}")
+        } finally {
+            firebaseGuestListener = null
+            firebaseGuestRef = null
+            firebaseWelcomeListener = null
+            firebaseWelcomeRef = null
+            firebaseCompanyIconListener = null
+            firebaseCompanyIconRef = null
+            firebaseScreensaverListener = null
+            firebaseScreensaverRef = null
+            
+            isListenerAttached = false
+            isScreenSaverActive = false
+            
+            idleJob?.cancel()
+            downloadJob?.cancel()
+            Log.d("ScreenSaverManager", "stopListening() completed - listeners cleared and screen saver deactivated")
+        }
+    }
+
     fun autoConfigureSystemScreensaver(context: Context) {
         try {
             val resolver = context.contentResolver
@@ -138,8 +179,9 @@ object ScreenSaverManager {
         // Listen to FOGUEST node to dynamically retrieve guest's name for glassmorphic card
         if (roomId != null) {
             val guestRef = database.child("BRANCHES").child(branchId).child("FOGUEST").child(roomId)
+            firebaseGuestRef = guestRef
             Log.d("ScreenSaverManager", "Attaching FOGUEST listener for screensaver: BRANCHES/$branchId/FOGUEST/$roomId")
-            guestRef.addValueEventListener(object : ValueEventListener {
+            val listener = object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     try {
                         if (snapshot.exists()) {
@@ -204,12 +246,15 @@ object ScreenSaverManager {
                 override fun onCancelled(error: DatabaseError) {
                     Log.e("ScreenSaverManager", "FOGUEST listener cancelled: ${error.message}")
                 }
-            })
+            }
+            firebaseGuestListener = listener
+            guestRef.addValueEventListener(listener)
         }
         
         val welcomeRef = database.child("BRANCHES").child(branchId).child("WELCOME_LETTER")
+        firebaseWelcomeRef = welcomeRef
         Log.d("ScreenSaverManager", "Attaching WELCOME_LETTER listener: BRANCHES/$branchId/WELCOME_LETTER")
-        welcomeRef.addValueEventListener(object : ValueEventListener {
+        val welcomeListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 try {
                     android.util.Log.d("ScreenSaverManager", "WELCOME_LETTER raw snapshot: ${snapshot.value}")
@@ -242,11 +287,14 @@ object ScreenSaverManager {
                 }
             }
             override fun onCancelled(error: DatabaseError) {}
-        })
+        }
+        firebaseWelcomeListener = welcomeListener
+        welcomeRef.addValueEventListener(welcomeListener)
 
         val iconRef = database.child("BRANCHES").child(branchId).child("SETTING").child("COMPANY_ICON")
+        firebaseCompanyIconRef = iconRef
         Log.d("ScreenSaverManager", "Attaching COMPANY_ICON listener: BRANCHES/$branchId/SETTING/COMPANY_ICON")
-        iconRef.addValueEventListener(object : ValueEventListener {
+        val companyIconListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 try {
                     companyIconUrl = snapshot.child("iconUrl").getValue(String::class.java)
@@ -256,12 +304,15 @@ object ScreenSaverManager {
                 }
             }
             override fun onCancelled(error: DatabaseError) {}
-        })
+        }
+        firebaseCompanyIconListener = companyIconListener
+        iconRef.addValueEventListener(companyIconListener)
 
         val screensaverRef = database.child("BRANCHES").child(branchId).child("SETTING").child("SCREEN_SAVER")
+        firebaseScreensaverRef = screensaverRef
         
         Log.d("ScreenSaverManager", "Attaching Firebase listener to path: BRANCHES/$branchId/SETTING/SCREEN_SAVER")
-        screensaverRef.addValueEventListener(object : ValueEventListener {
+        val screensaverListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 try {
                     android.util.Log.d("ScreenSaverManager", "SCREEN_SAVER raw snapshot: ${snapshot.value}")
@@ -326,7 +377,9 @@ object ScreenSaverManager {
             override fun onCancelled(error: DatabaseError) {
                 Log.e("ScreenSaverManager", "Firebase screensaver listener cancelled: ${error.message}")
             }
-        })
+        }
+        firebaseScreensaverListener = screensaverListener
+        screensaverRef.addValueEventListener(screensaverListener)
         isListenerAttached = true
     }
 
@@ -475,15 +528,19 @@ fun ScreenSaverOverlay() {
                         val greetingEn = "Hello! ${formatNameEN(name, gender)}."
                         val enFile = GoogleTtsHelper.synthesizeSpeech(context, greetingEn, languageCodeEn, voiceNameEn)
                         if (enFile != null) {
-                            val player = android.media.MediaPlayer().apply {
-                                setDataSource(enFile.absolutePath)
-                                prepare()
-                                start()
+                            val player = android.media.MediaPlayer()
+                            try {
+                                player.apply {
+                                    setDataSource(enFile.absolutePath)
+                                    prepare()
+                                    start()
+                                }
+                                // Wait for playback
+                                while (player.isPlaying) { delay(100) }
+                            } finally {
+                                player.release()
+                                try { enFile.delete() } catch (e: Exception) {}
                             }
-                            // Wait for playback
-                            while (player.isPlaying) { delay(100) }
-                            player.release()
-                            try { enFile.delete() } catch (e: Exception) {}
                         }
                     }
                     
@@ -492,13 +549,17 @@ fun ScreenSaverOverlay() {
                         val cacheFile = AudioCacheHelper.getAudioCacheFile(context, ScreenSaverManager.voEnAudioUrl)
                         val file = if (cacheFile.exists() && cacheFile.length() > 0) cacheFile else AudioCacheHelper.downloadAndCacheAudio(context, ScreenSaverManager.voEnAudioUrl)
                         if (file != null) {
-                            val player = android.media.MediaPlayer().apply {
-                                setDataSource(file.absolutePath)
-                                prepare()
-                                start()
+                            val player = android.media.MediaPlayer()
+                            try {
+                                player.apply {
+                                    setDataSource(file.absolutePath)
+                                    prepare()
+                                    start()
+                                }
+                                while (player.isPlaying) { delay(100) }
+                            } finally {
+                                player.release()
                             }
-                            while (player.isPlaying) { delay(100) }
-                            player.release()
                         }
                     }
 
@@ -513,14 +574,18 @@ fun ScreenSaverOverlay() {
                         val greetingId = "Halo! ${formatNameID(name, gender)}."
                         val idFile = GoogleTtsHelper.synthesizeSpeech(context, greetingId, languageCodeId, voiceNameId)
                         if (idFile != null) {
-                            val player = android.media.MediaPlayer().apply {
-                                setDataSource(idFile.absolutePath)
-                                prepare()
-                                start()
+                            val player = android.media.MediaPlayer()
+                            try {
+                                player.apply {
+                                    setDataSource(idFile.absolutePath)
+                                    prepare()
+                                    start()
+                                }
+                                while (player.isPlaying) { delay(100) }
+                            } finally {
+                                player.release()
+                                try { idFile.delete() } catch (e: Exception) {}
                             }
-                            while (player.isPlaying) { delay(100) }
-                            player.release()
-                            try { idFile.delete() } catch (e: Exception) {}
                         }
                     }
 
@@ -529,13 +594,17 @@ fun ScreenSaverOverlay() {
                         val cacheFile = AudioCacheHelper.getAudioCacheFile(context, ScreenSaverManager.voIdAudioUrl)
                         val file = if (cacheFile.exists() && cacheFile.length() > 0) cacheFile else AudioCacheHelper.downloadAndCacheAudio(context, ScreenSaverManager.voIdAudioUrl)
                         if (file != null) {
-                            val player = android.media.MediaPlayer().apply {
-                                setDataSource(file.absolutePath)
-                                prepare()
-                                start()
+                            val player = android.media.MediaPlayer()
+                            try {
+                                player.apply {
+                                    setDataSource(file.absolutePath)
+                                    prepare()
+                                    start()
+                                }
+                                while (player.isPlaying) { delay(100) }
+                            } finally {
+                                player.release()
                             }
-                            while (player.isPlaying) { delay(100) }
-                            player.release()
                         }
                     }
                 } catch (e: Exception) {

@@ -167,8 +167,13 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         if (isPaired) {
                             deviceManager = tempDeviceManager
                             Log.d("MainActivity", "Device is paired, DeviceManager initialized")
-                            // STB BOOT ONBOARDING: Open screensaver immediately on first boot/launch!
-                            ScreenSaverManager.isScreenSaverActive = true
+                            // STB BOOT ONBOARDING: Open screensaver immediately on first boot/launch, unless it's a config change!
+                            val fromConfigChange = intent.getBooleanExtra("from_config_change", false)
+                            if (!fromConfigChange) {
+                                ScreenSaverManager.isScreenSaverActive = true
+                            } else {
+                                Log.d("MainActivity", "Bypassing immediate screensaver on configuration change restart")
+                            }
                         } else {
                             Log.d("MainActivity", "Device is not paired yet")
                             shouldShowPairing = true
@@ -182,6 +187,9 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         if (isPaired) {
                             Log.d("MainActivity", "Device paired. Starting screensaver listener.")
                             ScreenSaverManager.startListening(this@MainActivity)
+                        } else {
+                            Log.d("MainActivity", "Device unpaired. Stopping screensaver listener.")
+                            ScreenSaverManager.stopListening()
                         }
                     }
 
@@ -239,50 +247,59 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
     }
 
     override fun onPairingModeRequired() {
-        Log.d("MainActivity", "Pairing mode required, clearing data and restarting to pairing screen")
-        
-        // Clear pairing information from SharedPreferences
-        val sharedPrefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-        sharedPrefs.edit().run {
-            remove("deviceID")
-            remove("branchId")
-            remove("room")
-            apply()
+        runOnUiThread {
+            Log.d("MainActivity", "Pairing mode required, clearing data and restarting to pairing screen")
+            
+            // Clear pairing information from SharedPreferences
+            val sharedPrefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+            sharedPrefs.edit().run {
+                remove("deviceID")
+                remove("branchId")
+                remove("room")
+                apply()
+            }
+            
+            // Clear all cached files (images, audio, videos) to completely clean up local storage
+            try {
+                cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+                Log.d("MainActivity", "Successfully cleared application cache")
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to clear cache: ${e.message}")
+            }
+            
+            // Restart the activity to completely reset navigation and clear memory references
+            val intent = intent
+            finish()
+            startActivity(intent)
         }
-        
-        // Clear all cached files (images, audio, videos) to completely clean up local storage
-        try {
-            cacheDir.listFiles()?.forEach { it.deleteRecursively() }
-            Log.d("MainActivity", "Successfully cleared application cache")
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Failed to clear cache: ${e.message}")
-        }
-        
-        // Restart the activity to completely reset navigation and clear memory references
-        val intent = intent
-        finish()
-        startActivity(intent)
     }
 
     override fun onPairingSuccess() {
-        Log.d("MainActivity", "Device paired successfully")
-        shouldShowPairing = false
-        // Initialize new DeviceManager with paired device
-        deviceManager = DeviceManager(this).apply {
-            setDeviceStatusListener(this@MainActivity)
+        runOnUiThread {
+            Log.d("MainActivity", "Device paired successfully")
+            shouldShowPairing = false
+            // Initialize new DeviceManager with paired device
+            deviceManager = DeviceManager(this).apply {
+                setDeviceStatusListener(this@MainActivity)
+            }
         }
     }
 
     override fun onPairingFailed(error: String) {
-        Log.e("MainActivity", "Pairing failed: $error")
-        // You might want to show an error message to the user here
+        runOnUiThread {
+            Log.e("MainActivity", "Pairing failed: $error")
+        }
     }
 
     override fun onConfigChanged() {
-        Log.d("MainActivity", "Device configuration changed (room/branchId), restarting to apply new settings")
-        val intent = intent
-        finish()
-        startActivity(intent)
+        runOnUiThread {
+            Log.d("MainActivity", "Device configuration changed (room/branchId), restarting to apply new settings")
+            val intent = intent.apply {
+                putExtra("from_config_change", true)
+            }
+            finish()
+            startActivity(intent)
+        }
     }
 
     private fun keepScreenAwake() {
@@ -440,8 +457,13 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Update device status to offline before destroying
-        deviceManager?.handleDeviceShutdown()
+        Log.d("MainActivity", "onDestroy called - stopping screensaver and device status monitoring")
+        ScreenSaverManager.stopListening()
+        // Update device status to offline and cleanup resources before destroying
+        deviceManager?.let {
+            it.handleDeviceShutdown()
+            it.cleanup()
+        }
         deviceManager = null
     }
 
