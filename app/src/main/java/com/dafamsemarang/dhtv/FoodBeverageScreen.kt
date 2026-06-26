@@ -1572,27 +1572,16 @@ fun ItemDialog(
                 var isAddCartFocused by remember { mutableStateOf(false) }
                 var buttonOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
-                // Animated LED Strip Border Effect
-                val infiniteTransition = rememberInfiniteTransition(label = "ledBorder")
-                val animOffset by infiniteTransition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 1000f,
+                // Animated Pulsing Border Effect when focused
+                val infiniteTransition = rememberInfiniteTransition(label = "pulseBorder")
+                val pulseAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 1.0f,
                     animationSpec = infiniteRepeatable(
-                        animation = tween(2000, easing = LinearEasing),
-                        repeatMode = RepeatMode.Restart
+                        animation = tween(1000, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
                     ),
-                    label = "ledOffset"
-                )
-                val ledBrush = Brush.linearGradient(
-                    colors = listOf(
-                        Color.White,
-                        Color.White.copy(alpha = 0.1f),
-                        Color.White.copy(alpha = 0.1f),
-                        Color.White
-                    ),
-                    start = Offset(animOffset, animOffset),
-                    end = Offset(animOffset + 300f, animOffset + 300f),
-                    tileMode = TileMode.Repeated
+                    label = "pulseAlpha"
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1601,7 +1590,6 @@ fun ItemDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(50))
                         .onFocusChanged { isAddCartFocused = it.isFocused }
                         .onGloballyPositioned { coords ->
                             val bounds = coords.boundsInRoot()
@@ -1619,16 +1607,17 @@ fun ItemDialog(
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() }
                         )
+                        .border(
+                            width = 4.dp,
+                            color = if (isAddCartFocused) Color(0xFF81D4FA).copy(alpha = pulseAlpha) else Color.Transparent,
+                            shape = RoundedCornerShape(50)
+                        )
+                        .padding(6.dp)
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
-                            .border(
-                                width = 4.dp,
-                                brush = if (isAddCartFocused) ledBrush else androidx.compose.ui.graphics.SolidColor(Color.Transparent),
-                                shape = RoundedCornerShape(50)
-                            )
                             .clip(RoundedCornerShape(50))
                             .background(Color(0xFFE91E63))
                             .align(Alignment.Center)
