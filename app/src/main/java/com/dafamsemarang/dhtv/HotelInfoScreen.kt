@@ -296,9 +296,17 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                         }
                     }
                     
+                    val categoryItems = categoriesList.getOrNull(index)?.second ?: emptyList()
                     Box(
                         modifier = Modifier
                             .focusRequester(tabRequesters[index])
+                            .then(
+                                if (categoryItems.isEmpty() && isTabSelected) {
+                                    Modifier.focusRequester(HotelInfoFocus.firstItemRequester)
+                                } else {
+                                    Modifier
+                                }
+                            )
                             .onFocusChanged {
                                 isTabFocused = it.isFocused
                                 if (it.isFocused) {

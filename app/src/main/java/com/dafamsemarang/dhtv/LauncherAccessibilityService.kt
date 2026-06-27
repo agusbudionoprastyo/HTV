@@ -27,6 +27,40 @@ class LauncherAccessibilityService : AccessibilityService() {
     // Time-lock debounce to neutralize Android OS 'ghost transitions' during key swallowing
     private var lastSwallowedHomeTime: Long = 0L
 
+    private var bypassExpirationTime: Long = 0L
+
+    private val bypassReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            if (intent?.action == "com.dafamsemarang.dhtv.ACTION_ALLOW_SETTINGS") {
+                val duration = intent.getLongExtra("duration_ms", 5 * 60 * 1000L)
+                bypassExpirationTime = System.currentTimeMillis() + duration
+                Log.d(TAG, "Temporary settings bypass granted for $duration ms (until $bypassExpirationTime)")
+            }
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        try {
+            val filter = android.content.IntentFilter("com.dafamsemarang.dhtv.ACTION_ALLOW_SETTINGS")
+            androidx.core.content.ContextCompat.registerReceiver(
+                this,
+                bypassReceiver,
+                filter,
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register settings bypass receiver", e)
+        }
+    }
+
+    override fun onDestroy() {
+        try {
+            unregisterReceiver(bypassReceiver)
+        } catch (e: Exception) {}
+        super.onDestroy()
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         // Prime the launcher cache immediately
@@ -40,7 +74,24 @@ class LauncherAccessibilityService : AccessibilityService() {
             val packageName = event.packageName?.toString() ?: return
             currentFocusedPackage = packageName
             
-            if (packageName != OWN_PACKAGE) {
+            if (packageName == OWN_PACKAGE) {
+                if (bypassExpirationTime > 0L) {
+                    bypassExpirationTime = 0L
+                    Log.d(TAG, "Returned to main app. Settings bypass reset/revoked.")
+                }
+            } else {
+                // EXPLICIT BLOCK: Settings app (Bypassed if PIN entered recently)
+                if (packageName.contains("settings", ignoreCase = true)) {
+                    val currentTime = System.currentTimeMillis()
+                    if (currentTime < bypassExpirationTime) {
+                        Log.d(TAG, "Bypass active: Settings access allowed.")
+                        return
+                    }
+                    Log.d(TAG, "Universal Block: Settings app detected ($packageName). Redirecting back...")
+                    redirectToMain()
+                    return
+                }
+                
                 val className = event.className?.toString() ?: ""
                 
                 // Check if target window is a system launcher
@@ -71,8 +122,7 @@ class LauncherAccessibilityService : AccessibilityService() {
         // 1. NEVER block anything if it is our own app
         if (pkg == OWN_PACKAGE) return false
         
-        // 2. EXPLICIT SAFETY WHITELIST: Never block settings or setup wizards
-        if (pkg.contains("settings", ignoreCase = true) || cls.contains("settings", ignoreCase = true)) return false
+        // 2. EXPLICIT SAFETY WHITELIST: Never block setup wizards
         if (pkg.contains("setup", ignoreCase = true) || cls.contains("setup", ignoreCase = true)) return false
 
         val signature = "$pkg/$cls"
@@ -114,6 +164,30 @@ class LauncherAccessibilityService : AccessibilityService() {
     override fun onKeyEvent(event: KeyEvent?): Boolean {
         val keyCode = event?.keyCode ?: return super.onKeyEvent(event)
         val action = event.action
+        
+        // BLOCK SETTINGS & MENU BUTTONS FROM REMOTE (UNLESS BYPASS IS ACTIVE)
+        if (keyCode == KeyEvent.KEYCODE_SETTINGS || keyCode == KeyEvent.KEYCODE_MENU) {
+            if (action == KeyEvent.ACTION_DOWN) {
+                val currentTime = System.currentTimeMillis()
+                if (currentTime < bypassExpirationTime) {
+                    Log.d(TAG, "Settings/Menu key pressed. Bypass active: letting it pass through.")
+                    return false
+                }
+                
+                Log.d(TAG, "Intercepted Settings/Menu key ($keyCode). Triggering PIN verification...")
+                try {
+                    val intent = Intent(this, MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        putExtra("trigger_pin", true)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to launch MainActivity for PIN", e)
+                }
+            }
+            return true // Swallows key press completely
+        }
         
         // ABSOLUTE HOME BUTTON INTERCEPT
         // Since we are in an isolated process, checking this and returning super takes <1ms.

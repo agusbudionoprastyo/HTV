@@ -618,7 +618,6 @@ fun CheckoutReminderDialog(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -935,7 +934,6 @@ fun ExtendStatusDialog(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -1049,7 +1047,6 @@ fun CheckoutBlockerDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.8f))
                 .clickable(enabled = false) { }
                 ,
             contentAlignment = Alignment.Center

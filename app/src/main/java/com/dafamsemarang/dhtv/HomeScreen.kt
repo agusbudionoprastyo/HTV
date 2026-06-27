@@ -2110,6 +2110,14 @@ fun HomeScreen(navController: NavHostController) {
         }
     }
     
+    val globalPinPrompt = MainActivity.showSettingsPinPrompt
+    LaunchedEffect(globalPinPrompt) {
+        if (globalPinPrompt) {
+            showPinDialog = true
+            MainActivity.showSettingsPinPrompt = false
+        }
+    }
+    
     // Ensure screenshot is allowed whenever HomeScreen is displayed
     val activity = context as? Activity
     

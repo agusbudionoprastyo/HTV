@@ -599,91 +599,81 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
                  ) { (_, isFilteringItems, requests) ->
                      val isShowingShimmer = (isLoadingRequests && shimmerVisible) || isFilteringItems
                      
-                     if (isShowingShimmer || requests.isNotEmpty()) {
-                         CompositionLocalProvider(LocalBringIntoViewSpec provides itemBringIntoViewSpec) {
-                             LazyRow(
-                                 state = itemListState,
-                                 flingBehavior = itemSnapBehavior,
-                                 modifier = Modifier
-                                     .fillMaxWidth()
-                                     .onPreviewKeyEvent { keyEvent ->
-                                         if (keyEvent.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
-                                             when (keyEvent.key) {
-                                                 androidx.compose.ui.input.key.Key.DirectionLeft,
-                                                 androidx.compose.ui.input.key.Key.DirectionRight -> {
-                                                     isNavigatingHorizontally = true
-                                                 }
-                                                 androidx.compose.ui.input.key.Key.DirectionUp,
-                                                 androidx.compose.ui.input.key.Key.DirectionDown -> {
-                                                     isNavigatingHorizontally = false
-                                                 }
-                                             }
-                                         }
-                                         false
-                                     }
-                                     .wrapContentHeight(Alignment.CenterVertically)
-                                     .focusProperties { 
-                                         enter = { itemRequesters.getOrNull(focusedItemIndex) ?: FocusRequester.Default }
-                                     },
-                                 horizontalArrangement = Arrangement.spacedBy(if (isShowingShimmer) 8.dp else 6.dp),
-                                 contentPadding = PaddingValues(start = 58.dp, end = 58.dp)
-                             ) {
-                                 if (isShowingShimmer) {
-                                     items(5) { // Show 5 shimmer items
-                                         RequestItemShimmer()
-                                     }
-                                 } else {
-                                     itemsIndexed(
-                                         items = requests,
-                                         key = { _, request -> 
-                                             "${request.request_title}_${request.category}_${request.imageUrl}"
-                                         }
-                                     ) { index, request: GuestRequest ->
-                                         var showDialog by remember { mutableStateOf(false) }
-                                         
-                                         RequestItem(
-                                             request = request,
-                                             guestInfo = guestInfo,
-                                             folioId = folioId,
-                                             guestRoom = guestInfo?.room,
-                                             guestName = guestInfo?.fname,
-                                             guestPhone = guestInfo?.phone,
-                                             modifier = Modifier
-                                                 .focusRequester(if (index < itemRequesters.size) itemRequesters[index] else FocusRequester.Default)
-                                                 .onFocusChanged {
-                                                 if (it.isFocused) {
-                                                     focusedItemIndex = index
-                                                     itemScrollTrigger++
-                                                 }
-                                             },
-                                             onItemClick = { showDialog = true }
-                                         )
-                                         
-                                         // Dialog moved outside RequestItem for better performance
-                                         if (showDialog) {
-                                             RequestDialog(
-                                                 request = request,
-                                                 guestInfo = guestInfo,
-                                                 folioId = folioId,
-                                                 guestRoom = guestInfo?.room,
-                                                 guestName = guestInfo?.fname,
-                                                 guestPhone = guestInfo?.phone,
-                                                 onDismiss = { showDialog = false }
-                                             )
-                                         }
-                                     }
-                                 }
-                             }
-                         }
-                     } else {
-                         // No data available
-                         Box(
-                             modifier = Modifier.fillMaxWidth(),
-                             contentAlignment = Alignment.Center
-                         ) {
-                             Text("No requests available", style = MaterialTheme.typography.bodyMedium)
-                         }
-                     }
+                      CompositionLocalProvider(LocalBringIntoViewSpec provides itemBringIntoViewSpec) {
+                          LazyRow(
+                              state = itemListState,
+                              flingBehavior = itemSnapBehavior,
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .onPreviewKeyEvent { keyEvent ->
+                                      if (keyEvent.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                          when (keyEvent.key) {
+                                              androidx.compose.ui.input.key.Key.DirectionLeft,
+                                              androidx.compose.ui.input.key.Key.DirectionRight -> {
+                                                  isNavigatingHorizontally = true
+                                              }
+                                              androidx.compose.ui.input.key.Key.DirectionUp,
+                                              androidx.compose.ui.input.key.Key.DirectionDown -> {
+                                                  isNavigatingHorizontally = false
+                                              }
+                                          }
+                                      }
+                                      false
+                                  }
+                                  .wrapContentHeight(Alignment.CenterVertically)
+                                  .focusProperties { 
+                                      enter = { itemRequesters.getOrNull(focusedItemIndex) ?: FocusRequester.Default }
+                                  },
+                              horizontalArrangement = Arrangement.spacedBy(if (isShowingShimmer) 8.dp else 6.dp),
+                              contentPadding = PaddingValues(start = 58.dp, end = 58.dp)
+                          ) {
+                              if (isShowingShimmer) {
+                                  items(5) { // Show 5 shimmer items
+                                      RequestItemShimmer()
+                                  }
+                              } else {
+                                  itemsIndexed(
+                                      items = requests,
+                                      key = { _, request -> 
+                                          "${request.request_title}_${request.category}_${request.imageUrl}"
+                                      }
+                                  ) { index, request: GuestRequest ->
+                                      var showDialog by remember { mutableStateOf(false) }
+                                      
+                                      RequestItem(
+                                          request = request,
+                                          guestInfo = guestInfo,
+                                          folioId = folioId,
+                                          guestRoom = guestInfo?.room,
+                                          guestName = guestInfo?.fname,
+                                          guestPhone = guestInfo?.phone,
+                                          modifier = Modifier
+                                              .focusRequester(if (index < itemRequesters.size) itemRequesters[index] else FocusRequester.Default)
+                                              .onFocusChanged {
+                                              if (it.isFocused) {
+                                                  focusedItemIndex = index
+                                                  itemScrollTrigger++
+                                              }
+                                          },
+                                          onItemClick = { showDialog = true }
+                                      )
+                                      
+                                      // Dialog moved outside RequestItem for better performance
+                                      if (showDialog) {
+                                          RequestDialog(
+                                              request = request,
+                                              guestInfo = guestInfo,
+                                              folioId = folioId,
+                                              guestRoom = guestInfo?.room,
+                                              guestName = guestInfo?.fname,
+                                              guestPhone = guestInfo?.phone,
+                                              onDismiss = { showDialog = false }
+                                          )
+                                      }
+                                  }
+                              }
+                          }
+                      }
                  }
 
            }

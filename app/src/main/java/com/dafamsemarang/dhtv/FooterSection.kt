@@ -258,6 +258,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     var currentNotification by remember { mutableStateOf<Notification?>(null) }
     var showPinDialog by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
+    var showSettingsMenu by remember { mutableStateOf(false) }
     var showMyRequestsDrawer by remember { mutableStateOf(false) }
     var showCartDrawer by remember { mutableStateOf(false) }
     var showOrderDrawer by remember { mutableStateOf(false) }
@@ -1555,13 +1556,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 if (storedPin != null) {
                     if (submittedPin == storedPin) {
                         showPinDialog = false
-                        try {
-                            val intent = Intent(android.provider.Settings.ACTION_SETTINGS)
-                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Gagal membuka Pengaturan", Toast.LENGTH_SHORT).show()
-                        }
+                        showSettingsMenu = true
                     } else {
                         Toast.makeText(context, "Access Denied.", Toast.LENGTH_SHORT).show()
                     }
@@ -1572,6 +1567,10 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             },
             confirmEnabled = pinInput.length == 4 && storedPin != null
         )
+    }
+
+    if (showSettingsMenu) {
+        SettingsOptionsDialog(onDismiss = { showSettingsMenu = false })
     }
 
     if (showMyRequestsDrawer) {
@@ -1807,19 +1806,25 @@ fun MyRequestsDrawer(onDismiss: () -> Unit, requests: List<Request>, onSelectReq
         },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
             decorFitsSystemWindows = false
         )
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusProperties { canFocus = false },
             contentAlignment = Alignment.CenterEnd
         ) {
             // Scrim
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
-                    .clickable { 
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { 
                         closeWithAnimation()
                     }
             )
@@ -2244,7 +2249,6 @@ fun DndConfirmDrawer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -3284,7 +3288,6 @@ fun NotificationDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -3735,7 +3738,6 @@ fun WifiQRCodeDialog(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -4064,7 +4066,6 @@ fun WaQRCodeDialog(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -4787,19 +4788,25 @@ fun CartDrawer(
         onDismissRequest = { closeWithAnimation() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
             decorFitsSystemWindows = false
         )
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusProperties { canFocus = false },
             contentAlignment = Alignment.CenterEnd
         ) {
             // Scrim
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
-                    .clickable { closeWithAnimation() }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { closeWithAnimation() }
             )
 
             AnimatedVisibility(
@@ -5305,7 +5312,6 @@ fun CartDrawer(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -5565,19 +5571,25 @@ fun OrderDrawer(
         onDismissRequest = { closeWithAnimation() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
             decorFitsSystemWindows = false
         )
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusProperties { canFocus = false },
             contentAlignment = Alignment.CenterEnd
         ) {
             // Scrim
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
-                    .clickable { closeWithAnimation() }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { closeWithAnimation() }
             )
 
             AnimatedVisibility(

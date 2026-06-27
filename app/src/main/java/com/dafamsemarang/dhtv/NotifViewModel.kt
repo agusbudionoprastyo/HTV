@@ -115,7 +115,6 @@ fun RequestDetailDialog(request: Request, onDismiss: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -480,7 +479,6 @@ fun OrderDetailDialog(order: Order, onDismiss: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f * animatedAlpha))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null

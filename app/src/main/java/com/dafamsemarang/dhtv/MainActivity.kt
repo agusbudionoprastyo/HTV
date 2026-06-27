@@ -55,6 +55,10 @@ import androidx.compose.ui.unit.sp
 
 
 class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
+    companion object {
+        var showSettingsPinPrompt by mutableStateOf(false)
+    }
+
     private var deviceManager: DeviceManager? = null
     private var shouldShowPairing by mutableStateOf(false)
     private lateinit var updateManager: UpdateManager
@@ -423,6 +427,10 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         if (navigateTo != null) {
             Log.d("MainActivity", "Handling screen saver external navigation: $navigateTo")
             NavigationTrigger.pendingRoute = navigateTo
+        }
+        if (intent?.getBooleanExtra("trigger_pin", false) == true) {
+            Log.d("MainActivity", "Triggering global Settings PIN Dialog via intent")
+            showSettingsPinPrompt = true
         }
     }
 

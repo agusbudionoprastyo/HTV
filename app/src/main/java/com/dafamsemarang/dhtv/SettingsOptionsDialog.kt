@@ -147,6 +147,11 @@ fun SettingsOptionsDialog(
                                     desc = "Mengaktifkan proteksi tombol Home secara permanen",
                                     icon = R.drawable.ic_accessibility_custom,
                                     onClick = {
+                                        val bypassIntent = Intent("com.dafamsemarang.dhtv.ACTION_ALLOW_SETTINGS").apply {
+                                            putExtra("duration_ms", 5 * 60 * 1000L) // 5 minutes
+                                            setPackage(context.packageName)
+                                        }
+                                        context.sendBroadcast(bypassIntent)
                                         openAccessibilitySettings(context)
                                         animateAndDismiss()
                                     }
@@ -156,6 +161,11 @@ fun SettingsOptionsDialog(
                                     desc = "Membuka konfigurasi Wi-Fi, Aplikasi, dan sistem OS",
                                     icon = R.drawable.ic_setting,
                                     onClick = {
+                                        val bypassIntent = Intent("com.dafamsemarang.dhtv.ACTION_ALLOW_SETTINGS").apply {
+                                            putExtra("duration_ms", 5 * 60 * 1000L) // 5 minutes
+                                            setPackage(context.packageName)
+                                        }
+                                        context.sendBroadcast(bypassIntent)
                                         openAndroidSettings(context)
                                         animateAndDismiss()
                                     }
