@@ -109,12 +109,20 @@ fun isValidImageUrl(url: String?): Boolean {
 }
 
 fun formatNameID(fname: String, gender: String? = null): String {
-    val cleanName = fname.replace("Mr. ", "", ignoreCase = true)
+    val rawClean = fname.replace("Mr. ", "", ignoreCase = true)
                          .replace("Mrs. ", "", ignoreCase = true)
                          .replace("Mr ", "", ignoreCase = true)
                          .replace("Mrs ", "", ignoreCase = true)
                          .replace("Bapak ", "", ignoreCase = true)
                          .replace("Ibu ", "", ignoreCase = true)
+    
+    // Convert to Title Case to prevent TTS engine from spelling out uppercase names
+    val cleanName = rawClean.split(" ")
+        .filter { it.isNotEmpty() }
+        .joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+        }
+
     val prefix = when (gender?.lowercase()) {
         "male" -> "Bapak "
         "female" -> "Ibu "
@@ -124,12 +132,20 @@ fun formatNameID(fname: String, gender: String? = null): String {
 }
 
 fun formatNameEN(fname: String, gender: String? = null): String {
-    val cleanName = fname.replace("Mr. ", "", ignoreCase = true)
+    val rawClean = fname.replace("Mr. ", "", ignoreCase = true)
                          .replace("Mrs. ", "", ignoreCase = true)
                          .replace("Mr ", "", ignoreCase = true)
                          .replace("Mrs ", "", ignoreCase = true)
                          .replace("Bapak ", "", ignoreCase = true)
                          .replace("Ibu ", "", ignoreCase = true)
+
+    // Convert to Title Case to prevent TTS engine from spelling out uppercase names
+    val cleanName = rawClean.split(" ")
+        .filter { it.isNotEmpty() }
+        .joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+        }
+
     val prefix = when (gender?.lowercase()) {
         "male" -> "Mr. "
         "female" -> "Mrs. "

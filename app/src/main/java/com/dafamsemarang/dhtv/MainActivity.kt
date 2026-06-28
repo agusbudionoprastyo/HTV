@@ -171,10 +171,19 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         if (isPaired) {
                             deviceManager = tempDeviceManager
                             Log.d("MainActivity", "Device is paired, DeviceManager initialized")
-                            // STB BOOT ONBOARDING: Open screensaver immediately on first boot/launch, unless it's a config change!
+                            // STB BOOT ONBOARDING: Launch system screensaver (Somnambulator) immediately on first boot/launch, unless it's a config change!
                             val fromConfigChange = intent.getBooleanExtra("from_config_change", false)
                             if (!fromConfigChange) {
-                                ScreenSaverManager.isScreenSaverActive = true
+                                try {
+                                    val screensaverIntent = Intent(Intent.ACTION_MAIN).apply {
+                                        setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    startActivity(screensaverIntent)
+                                    Log.d("MainActivity", "Successfully triggered system screensaver (Somnambulator) on boot")
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Failed to launch system screensaver on boot: ${e.message}")
+                                }
                             } else {
                                 Log.d("MainActivity", "Bypassing immediate screensaver on configuration change restart")
                             }
@@ -222,29 +231,7 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         AppNavigation()
                     }
 
-                    // Render screensaver inside the app overlay when active
-                    val isScreenSaverActive = ScreenSaverManager.isScreenSaverActive && !isAppLocked
-                    LaunchedEffect(isScreenSaverActive) {
-                        val window = this@MainActivity.window
-                        try {
-                            val decorView = window.decorView
-                            val controller = androidx.core.view.WindowCompat.getInsetsController(window, decorView)
-                            if (isScreenSaverActive) {
-                                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
-                                controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                                controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                            } else {
-                                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
-                                controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                            }
-                        } catch (e: Exception) {
-                            Log.e("MainActivity", "Error setting fullscreen flags: ${e.message}")
-                        }
-                    }
 
-                    if (isScreenSaverActive) {
-                        ScreenSaverOverlay()
-                    }
                 }
             }
         }

@@ -70,7 +70,6 @@
             </intent-filter>
         </activity>
         
-        <!-- Launcher Override Accessibility Service -->
         <service
             android:name=".LauncherAccessibilityService"
             android:process=":accessibility"

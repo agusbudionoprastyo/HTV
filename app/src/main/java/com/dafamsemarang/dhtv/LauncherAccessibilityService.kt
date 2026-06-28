@@ -2,6 +2,8 @@ package com.dafamsemarang.dhtv
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
@@ -19,6 +21,14 @@ class LauncherAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "LauncherAccessService"
         private const val OWN_PACKAGE = "com.dafamsemarang.dhtv"
+
+        // Hardcoded standard Android TV and Google TV launcher packages for instant fallback check
+        private val DEFAULT_LAUNCHERS = setOf(
+            "com.google.android.apps.tv.launcherx", // Google TV Launcher
+            "com.google.android.tvlauncher",       // Android TV Launcher
+            "com.xiaomi.mitv.tvhome",              // Xiaomi PatchWall
+            "com.amazon.tv.launcher"               // Fire TV Launcher
+        )
     }
 
     // Track focused window to prevent redundant task stack reloads when already active
@@ -63,9 +73,16 @@ class LauncherAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        // Prime the launcher cache immediately
-        updateLauncherCache()
-        Log.d(TAG, "Isolated Multi-Process Service connected. Auto-starting...")
+        Log.d(TAG, "Launcher Accessibility Service connected. Auto-starting...")
+        
+        // Delay querying PackageManager during heavy boot-up initialization and run it on a background thread
+        Handler(Looper.getMainLooper()).postDelayed({
+            Log.d(TAG, "Executing delayed launcher cache initialization in background...")
+            Thread {
+                updateLauncherCache()
+            }.start()
+        }, 15000) // 15 seconds delay
+        
         redirectToMain()
     }
 
@@ -112,29 +129,24 @@ class LauncherAccessibilityService : AccessibilityService() {
         }
     }
 
-    // Caching layer stores precise "package/class" signatures to prevent blocking settings
-    private val knownLauncherComponents = mutableSetOf<String>()
+    // Caching layer stores thread-safe concurrent set of "package/class" signatures to prevent blocking settings
+    private val knownLauncherComponents = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var lastCacheUpdate = 0L
 
     private fun isOtherLauncher(pkg: String, cls: String): Boolean {
-        val currentTime = System.currentTimeMillis()
-        
         // 1. NEVER block anything if it is our own app
         if (pkg == OWN_PACKAGE) return false
         
         // 2. EXPLICIT SAFETY WHITELIST: Never block setup wizards
         if (pkg.contains("setup", ignoreCase = true) || cls.contains("setup", ignoreCase = true)) return false
 
+        // 3. Fast Path: Check hardcoded default launchers first (near zero latency)
+        if (DEFAULT_LAUNCHERS.contains(pkg)) return true
+
         val signature = "$pkg/$cls"
 
-        // 3. Fast Path: Check cache
+        // 4. Check dynamic launcher cache
         if (knownLauncherComponents.contains(signature)) return true
-
-        // 4. Throttle re-querying
-        if (currentTime - lastCacheUpdate > 10_000) {
-            updateLauncherCache()
-            return knownLauncherComponents.contains(signature)
-        }
 
         return false
     }
@@ -162,7 +174,16 @@ class LauncherAccessibilityService : AccessibilityService() {
     }
 
     override fun onKeyEvent(event: KeyEvent?): Boolean {
-        val keyCode = event?.keyCode ?: return super.onKeyEvent(event)
+        if (event == null) return false
+        val keyCode = event.keyCode
+        
+        // EARLY EXIT: Instantly bypass and propagate non-intercepted keys (<0.1ms latency)
+        if (keyCode != KeyEvent.KEYCODE_HOME && 
+            keyCode != KeyEvent.KEYCODE_SETTINGS && 
+            keyCode != KeyEvent.KEYCODE_MENU) {
+            return false
+        }
+        
         val action = event.action
         
         // BLOCK SETTINGS & MENU BUTTONS FROM REMOTE (UNLESS BYPASS IS ACTIVE)
@@ -210,7 +231,7 @@ class LauncherAccessibilityService : AccessibilityService() {
             return true // Swallows the Home intent COMPLETELY. User never leaves our app!
         }
         
-        return super.onKeyEvent(event)
+        return false
     }
 
     override fun onInterrupt() {

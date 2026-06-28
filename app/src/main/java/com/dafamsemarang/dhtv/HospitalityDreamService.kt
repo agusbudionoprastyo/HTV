@@ -18,6 +18,11 @@ import com.dafamsemarang.dhtv.ui.theme.dhtvTheme
 
 class HospitalityDreamService : DreamService(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
     
+    companion object {
+        @JvmStatic
+        var isDreamingActive = false
+    }
+    
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val myViewModelStore = ViewModelStore()
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
@@ -34,6 +39,7 @@ class HospitalityDreamService : DreamService(), LifecycleOwner, ViewModelStoreOw
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        isDreamingActive = true
         
         isInteractive = true // Cover touch / keyboard events for buttons
         isFullscreen = true   // Cover status bar and navigation bar
@@ -73,6 +79,7 @@ class HospitalityDreamService : DreamService(), LifecycleOwner, ViewModelStoreOw
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        isDreamingActive = false
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
     }

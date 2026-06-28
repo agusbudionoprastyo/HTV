@@ -184,34 +184,6 @@ fun AppNavigation() {
                 )
             }
 
-            composable(
-                "welcome",
-                enterTransition = {
-                    fadeIn(animationSpec = tween(500, easing = FastOutSlowInEasing))
-                },
-                exitTransition = {
-                    fadeOut(animationSpec = tween(500, easing = FastOutSlowInEasing))
-                },
-                popEnterTransition = {
-                    fadeIn(animationSpec = tween(500, easing = FastOutSlowInEasing))
-                },
-                popExitTransition = {
-                    fadeOut(animationSpec = tween(500, easing = FastOutSlowInEasing))
-                }
-            ) {
-                WelcomeScreen(
-                    onNavigateToHome = {
-                        // Transition smoothly from welcome to home screen
-                        navController.navigate("home") {
-                            // Ensure we cannot go back into loading/welcome states directly
-                            popUpTo("welcome") { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    }
-                )
-                // Checkout reminder - muncul di semua screen
-                CheckoutReminder()
-            }
 
             // ── HOME ────────────────────────────────────────────────────────
             composable(
@@ -272,16 +244,14 @@ fun AppNavigation() {
 
         // Hoisted Persistent Header and Footer - Immediately ready when entering from Welcome Screen.
         // Retains full persistence and buttery-smooth rendering without Haze GPU shader overhead.
-        val showHeaderFooter = currentRoute in listOf("welcome", "home", "hotel_guide", "contact", "cantingfood")
+        val showHeaderFooter = currentRoute in listOf("home", "hotel_guide", "contact", "cantingfood")
         AnimatedVisibility(
             visible = showHeaderFooter,
             enter = fadeIn(animationSpec = tween(durationMillis = 500)),
             exit = fadeOut(animationSpec = tween(durationMillis = 500))
         ) {
-             val isWelcome = currentRoute == "welcome"
-             val targetAlpha = if (isWelcome) 0f else 1f
              val animatedAlpha by animateFloatAsState(
-                 targetValue = targetAlpha,
+                 targetValue = 1f,
                  animationSpec = tween(durationMillis = 500),
                  label = "HeaderFooterAlpha"
              )
