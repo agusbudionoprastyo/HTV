@@ -901,7 +901,7 @@ fun GlassmorphicWelcomeCard(
             .width(480.dp)
             .wrapContentHeight()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(207, 223, 237).copy(alpha = 0.30f))
+            .background(Color(207, 223, 237).copy(alpha = 0.80f))
             .drawBehind {
                 // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
                 drawRoundRect(
