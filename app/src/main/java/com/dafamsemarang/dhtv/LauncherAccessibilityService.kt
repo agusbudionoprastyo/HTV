@@ -97,19 +97,30 @@ class LauncherAccessibilityService : AccessibilityService() {
                     Log.d(TAG, "Returned to main app. Settings bypass reset/revoked.")
                 }
             } else {
-                // EXPLICIT BLOCK: Settings app (Bypassed if PIN entered recently)
+                val className = event.className?.toString() ?: ""
+                
+                // EXPLICIT BLOCK: Settings app (Bypassed if PIN entered recently OR if it is the 'Install unknown apps' permission screen)
                 if (packageName.contains("settings", ignoreCase = true)) {
+                    val isUnknownSourcesScreen = className.contains("UnknownSources", ignoreCase = true) ||
+                            className.contains("UnknownAppSources", ignoreCase = true) ||
+                            className.contains("ManageAppSources", ignoreCase = true) ||
+                            className.contains("InstallUnknown", ignoreCase = true) ||
+                            className.contains("ManageDomainUrls", ignoreCase = true)
+                    
+                    if (isUnknownSourcesScreen) {
+                        Log.d(TAG, "Bypass active: Allow 'Install unknown apps' screen ($className)")
+                        return
+                    }
+
                     val currentTime = System.currentTimeMillis()
                     if (currentTime < bypassExpirationTime) {
                         Log.d(TAG, "Bypass active: Settings access allowed.")
                         return
                     }
-                    Log.d(TAG, "Universal Block: Settings app detected ($packageName). Redirecting back...")
+                    Log.d(TAG, "Universal Block: Settings app detected ($packageName, class: $className). Redirecting back...")
                     redirectToMain()
                     return
                 }
-                
-                val className = event.className?.toString() ?: ""
                 
                 // Check if target window is a system launcher
                 if (isOtherLauncher(packageName, className)) {
