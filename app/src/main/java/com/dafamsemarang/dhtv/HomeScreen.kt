@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import android.view.TextureView
+import android.view.SurfaceView
 import android.view.WindowManager
 import android.widget.Toast
 import android.media.MediaPlayer
@@ -239,10 +239,10 @@ fun playNextVideo(
     context: Context,
     videoUrls: List<String>,
     mediaPlayer: MediaPlayer,
-    textureView: TextureView,
+    surfaceView: android.view.SurfaceView,
     forceNext: Boolean = false
 ) {
-    if (videoUrls.isEmpty() || textureView.surfaceTexture == null) return
+    if (videoUrls.isEmpty() || surfaceView.holder.surface == null || !surfaceView.holder.surface.isValid) return
 
     // HARDWARE PERSISTENCE DECODER: Check if we returned from process cold-boot!
     val prefs = context.getSharedPreferences("video_prefs", Context.MODE_PRIVATE)
@@ -266,7 +266,7 @@ fun playNextVideo(
 
     if (!isVideoUrlValid(videoUrl, videoUrls)) {
         deleteInvalidCachedVideo(context, videoUrl)
-        playNextVideo(context, videoUrls, mediaPlayer, textureView, forceNext = true)
+        playNextVideo(context, videoUrls, mediaPlayer, surfaceView, forceNext = true)
         return
     }
 
@@ -274,7 +274,7 @@ fun playNextVideo(
         try {
             mediaPlayer.reset()
             mediaPlayer.setDataSource(context, Uri.fromFile(file))
-            val surface = android.view.Surface(textureView.surfaceTexture)
+            val surface = surfaceView.holder.surface
             mediaPlayer.setSurface(surface)
             mediaPlayer.prepareAsync()
             mediaPlayer.setOnPreparedListener {
@@ -287,7 +287,7 @@ fun playNextVideo(
             }
             mediaPlayer.setOnCompletionListener {
                 // Completion always forces rotation to Next!
-                playNextVideo(context, videoUrls, mediaPlayer, textureView, forceNext = true)
+                playNextVideo(context, videoUrls, mediaPlayer, surfaceView, forceNext = true)
             }
             mediaPlayer.setOnErrorListener { _, what, extra ->
                 Log.e("MediaPlayer", "Playback error: what=$what, extra=$extra")
@@ -727,14 +727,14 @@ fun BannerVideoPlayer(
     var isVideoReady by remember(videoUrl) { mutableStateOf(false) }
     var hasCompleted by remember(videoUrl) { mutableStateOf(false) }
     
-    var activeSurfaceTexture by remember { mutableStateOf<android.graphics.SurfaceTexture?>(null) }
-    var textureViewInstance by remember { mutableStateOf<TextureView?>(null) }
+    var activeSurface by remember { mutableStateOf<android.view.Surface?>(null) }
+    var surfaceViewInstance by remember { mutableStateOf<android.view.SurfaceView?>(null) }
 
     var isDisposed by remember { mutableStateOf(false) }
 
-    LaunchedEffect(videoUrl, activeSurfaceTexture, isActive) {
-        val surfaceTex = activeSurfaceTexture
-        if (surfaceTex == null) {
+    LaunchedEffect(videoUrl, activeSurface, isActive) {
+        val surface = activeSurface
+        if (surface == null) {
             isVideoReady = false
             onVideoReady(false)
             return@LaunchedEffect
@@ -770,7 +770,7 @@ fun BannerVideoPlayer(
                 
                 mediaPlayer.reset()
                 mediaPlayer.setDataSource(context, Uri.fromFile(file))
-                mediaPlayer.setSurface(android.view.Surface(surfaceTex))
+                mediaPlayer.setSurface(surface)
                 mediaPlayer.isLooping = false
                 mediaPlayer.setVolume(0f, 0f)
                 mediaPlayer.prepareAsync()
@@ -799,16 +799,23 @@ fun BannerVideoPlayer(
                     true
                 }
                 mediaPlayer.setOnVideoSizeChangedListener { _, videoWidth, videoHeight ->
-                    val view = textureViewInstance
+                    val view = surfaceViewInstance
                     if (view != null && videoWidth > 0 && videoHeight > 0) {
-                        val viewWidth = view.width
-                        val viewHeight = view.height
-                        val sx = viewWidth.toFloat() / videoWidth
-                        val sy = viewHeight.toFloat() / videoHeight
-                        val maxScale = maxOf(sx, sy)
-                        val matrix = android.graphics.Matrix()
-                        matrix.setScale(maxScale / sx, maxScale / sy, viewWidth / 2f, viewHeight / 2f)
-                        view.setTransform(matrix)
+                        val parentView = view.parent as? android.view.View
+                        val viewWidth = parentView?.width ?: view.width
+                        val viewHeight = parentView?.height ?: view.height
+                        if (viewWidth > 0 && viewHeight > 0) {
+                            val sx = viewWidth.toFloat() / videoWidth
+                            val sy = viewHeight.toFloat() / videoHeight
+                            val scale = maxOf(sx, sy)
+                            val targetWidth = (videoWidth * scale).toInt()
+                            val targetHeight = (videoHeight * scale).toInt()
+                            view.layoutParams = android.widget.FrameLayout.LayoutParams(
+                                targetWidth,
+                                targetHeight,
+                                android.view.Gravity.CENTER
+                            )
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -864,40 +871,43 @@ fun BannerVideoPlayer(
     Box(modifier = modifier) {
         AndroidView(
             factory = { ctx ->
-                TextureView(ctx).apply {
-                    textureViewInstance = this
-                    surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                        override fun onSurfaceTextureAvailable(surfaceTexture: android.graphics.SurfaceTexture, width: Int, height: Int) {
-                            activeSurfaceTexture = surfaceTexture
-                        }
-                        override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {}
-                        override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture): Boolean {
-                            activeSurfaceTexture = null
-                            if (GlobalMediaPlayerHolder.activeSessionToken == sessionToken) {
-                                try {
-                                    try {
-                                        val pos = mediaPlayer.currentPosition
-                                        val duration = mediaPlayer.duration
-                                        if (pos > 0 && pos < duration - 500) {
-                                            GlobalMediaPlayerHolder.lastPlaybackPosition = pos
-                                            GlobalMediaPlayerHolder.lastPlaybackUrl = videoUrl
-                                            Log.d("VideoPlayer", "onSurfaceTextureDestroyed: Saved video position: ${pos}ms")
-                                        }
-                                    } catch (ex: Exception) {
-                                        Log.e("VideoPlayer", "Could not save position on surface destroyed: ${ex.message}")
-                                    }
-                                    mediaPlayer.stop()
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            } else {
-                                Log.d("VideoPlayer", "Ignoring surface destruction for inactive session: $sessionToken")
-                            }
-                            return true
-                        }
-                        override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) {}
+                val container = android.widget.FrameLayout(ctx)
+                val surfaceView = android.view.SurfaceView(ctx)
+                surfaceViewInstance = surfaceView
+                container.addView(surfaceView, android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.Gravity.CENTER
+                ))
+                
+                surfaceView.holder.addCallback(object : android.view.SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+                        activeSurface = holder.surface
                     }
-                }
+                    override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {}
+                    override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
+                        activeSurface = null
+                        if (GlobalMediaPlayerHolder.activeSessionToken == sessionToken) {
+                            try {
+                                try {
+                                    val pos = mediaPlayer.currentPosition
+                                    val duration = mediaPlayer.duration
+                                    if (pos > 0 && pos < duration - 500) {
+                                        GlobalMediaPlayerHolder.lastPlaybackPosition = pos
+                                        GlobalMediaPlayerHolder.lastPlaybackUrl = videoUrl
+                                        Log.d("VideoPlayer", "surfaceDestroyed: Saved video position: ${pos}ms")
+                                    }
+                                } catch (ex: Exception) {
+                                    Log.e("VideoPlayer", "Could not save position on surface destroyed: ${ex.message}")
+                                }
+                                mediaPlayer.stop()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                })
+                container
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -940,7 +950,7 @@ fun VideoAndSlideshowSection(
         }
     }
     
-    var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
+    var surfaceViewRef by remember { mutableStateOf<android.view.SurfaceView?>(null) }
     var isVideoReadyGlobal by remember { mutableStateOf(false) }
     var isTransitionFinished by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -977,7 +987,7 @@ fun VideoAndSlideshowSection(
     
     // Use rememberUpdatedState to always get the latest mediaPlayer reference
     val currentMediaPlayer by rememberUpdatedState(mediaPlayer)
-    val currentTextureViewRef by rememberUpdatedState(textureViewRef)
+    val currentSurfaceViewRef by rememberUpdatedState(surfaceViewRef)
 
     // Helper function to stop video
     val stopVideo: () -> Unit = remember {
@@ -1019,7 +1029,7 @@ fun VideoAndSlideshowSection(
             currentMediaPlayer?.let { player ->
                 try {
                     // Check if player is paused (not stopped) and can be resumed
-                    if (!player.isPlaying && currentTextureViewRef != null && currentTextureViewRef?.surfaceTexture != null) {
+                    if (!player.isPlaying && currentSurfaceViewRef != null && currentSurfaceViewRef?.holder?.surface?.isValid == true) {
                         // Try to get current position to check if player is paused or stopped
                         val currentPosition = try {
                             player.currentPosition
@@ -1044,7 +1054,7 @@ fun VideoAndSlideshowSection(
                             setWasPaused(false)
                         }
                     } else {
-                        Log.d("VideoPlayer", "Cannot resume - isPlaying: ${player.isPlaying}, texture: ${currentTextureViewRef != null}, surface: ${currentTextureViewRef?.surfaceTexture != null}")
+                        Log.d("VideoPlayer", "Cannot resume - isPlaying: ${player.isPlaying}, surfaceView: ${currentSurfaceViewRef != null}, surface: ${currentSurfaceViewRef?.holder?.surface?.isValid == true}")
                     }
                 } catch (e: Exception) {
                     Log.e("VideoPlayer", "Error resuming video: ${e.message}", e)
@@ -1110,9 +1120,9 @@ fun VideoAndSlideshowSection(
                         Handler(Looper.getMainLooper()).postDelayed({
                             try {
                                 val player = currentMediaPlayer
-                                val textureView = currentTextureViewRef
+                                val surfaceView = currentSurfaceViewRef
                                 
-                                if (player != null && textureView != null && textureView.isAvailable && textureView.surfaceTexture != null) {
+                                if (player != null && surfaceView != null && surfaceView.holder.surface?.isValid == true) {
                                     if (wasPaused) {
                                         // Video was only paused, just resume it smoothly
                                         Log.d("VideoPlayer", "ON_RESUME: Resuming video smoothly")
@@ -1126,7 +1136,7 @@ fun VideoAndSlideshowSection(
                                         setWasPaused(false)
                                         setVideoStarted(false)
                                         Log.d("VideoPlayer", "ON_RESUME: Restarting video from beginning")
-                                        playNextVideo(context, videoUrls, player, textureView)
+                                        playNextVideo(context, videoUrls, player, surfaceView)
                                     }
                                 } else {
                                     Log.d("VideoPlayer", "ON_RESUME: Texture not ready yet")
@@ -1166,9 +1176,9 @@ fun VideoAndSlideshowSection(
                         Handler(Looper.getMainLooper()).postDelayed({
                             try {
                                 val player = currentMediaPlayer
-                                val textureView = currentTextureViewRef
+                                val surfaceView = currentSurfaceViewRef
                                 
-                                if (player != null && textureView != null && textureView.isAvailable && textureView.surfaceTexture != null) {
+                                if (player != null && surfaceView != null && surfaceView.holder.surface?.isValid == true) {
                                     if (wasPaused) {
                                         // Video was paused transiently (e.g. Home button click), resume instantly!
                                         Log.d("VideoPlayer", "Window focus: Resuming video smoothly")
@@ -1182,7 +1192,7 @@ fun VideoAndSlideshowSection(
                                         setWasPaused(false)
                                         setVideoStarted(false)
                                         Log.d("VideoPlayer", "Window focus: Restarting video from beginning")
-                                        playNextVideo(context, videoUrls, player, textureView)
+                                        playNextVideo(context, videoUrls, player, surfaceView)
                                     }
                                 } else {
                                     // Texture not ready block - check if we can still attempt safe resume
@@ -1193,14 +1203,14 @@ fun VideoAndSlideshowSection(
                                         // Fresh retry loop
                                         Log.d("VideoPlayer", "Window focus: Texture not ready for fresh play, retrying...")
                                         Handler(Looper.getMainLooper()).postDelayed({
-                                            if (textureView != null && textureView.isAvailable && textureView.surfaceTexture != null) {
+                                            if (surfaceView != null && surfaceView.holder.surface?.isValid == true) {
                                                 val p2 = currentMediaPlayer
                                                 if (p2 != null) {
                                                     if (p2.isPlaying) p2.stop()
                                                     p2.reset()
                                                     setWasPaused(false)
                                                     setVideoStarted(false)
-                                                    playNextVideo(context, videoUrls, p2, textureView)
+                                                    playNextVideo(context, videoUrls, p2, surfaceView)
                                                 }
                                             }
                                         }, 300)
@@ -1239,10 +1249,10 @@ fun VideoAndSlideshowSection(
     }
     
     // LaunchedEffect to handle video playback/resume when videoUrls change or when returning to this composable
-    LaunchedEffect(videoUrls, textureViewRef?.isAvailable, lifecycleState) {
+    LaunchedEffect(videoUrls, surfaceViewRef?.holder?.surface?.isValid, lifecycleState) {
         // Always use currentMediaPlayer to get the latest reference (shared or local)
         val player = currentMediaPlayer
-        val textureView = textureViewRef
+        val surfaceView = surfaceViewRef
         
         // Stop video if videoUrls is empty
         if (videoUrls.isEmpty()) {
@@ -1252,9 +1262,9 @@ fun VideoAndSlideshowSection(
             return@LaunchedEffect
         }
         
-        // Wait for texture view to be available
-        if (textureView == null || !textureView.isAvailable) {
-            Log.d("VideoPlayer", "Texture view not available yet, waiting...")
+        // Wait for surface view to be available
+        if (surfaceView == null || surfaceView.holder.surface?.isValid != true) {
+            Log.d("VideoPlayer", "Surface view not available yet, waiting...")
             return@LaunchedEffect
         }
         
@@ -1295,7 +1305,7 @@ fun VideoAndSlideshowSection(
                 wasPausedState?.value = false
                 videoStartedState?.value = true
                 Log.d("VideoPlayer", "Video started - parent state updated (wasPaused: false, videoStarted: true)")
-                playNextVideo(context, videoUrls, player, textureView)
+                playNextVideo(context, videoUrls, player, surfaceView)
             } catch (e: Exception) {
                 Log.e("VideoPlayer", "Error playing video", e)
                 setWasPaused(false)
@@ -4256,11 +4266,24 @@ fun getCurrentTime(): String {
 }
 
 fun formatName(fname: String, gender: String? = null): String {
+    val rawClean = fname.replace("Mr. ", "", ignoreCase = true)
+                         .replace("Mrs. ", "", ignoreCase = true)
+                         .replace("Mr ", "", ignoreCase = true)
+                         .replace("Mrs ", "", ignoreCase = true)
+                         .replace("Bapak ", "", ignoreCase = true)
+                         .replace("Ibu ", "", ignoreCase = true)
+
+    val cleanName = rawClean.split(" ")
+        .filter { it.isNotEmpty() }
+        .joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+        }
+
     val prefix = when (gender?.lowercase()) {
         "male" -> "Mr. "
         "female" -> "Mrs. "
         else -> ""
     }
-    return prefix + fname
+    return prefix + cleanName
 }
 

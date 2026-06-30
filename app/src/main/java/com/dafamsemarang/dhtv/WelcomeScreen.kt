@@ -518,7 +518,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
 
         // English sequence
         if (welcomeData.voEn.isNotEmpty()) {
-            val greetingEn = "Hello! ${formatNameEN(name, guestInfo?.gender)}."
+            val greetingEn = "Welcome! ${formatNameEN(name, guestInfo?.gender)}."
             val voiceNameEn = if (welcomeData.voEnVoiceName.isNotEmpty()) welcomeData.voEnVoiceName else "en-US-Neural2-F"
             val languageCodeEn = if (voiceNameEn.contains("-")) {
                 voiceNameEn.split("-").take(2).joinToString("-")
@@ -545,7 +545,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
 
         // Indonesian sequence
         if (welcomeData.voId.isNotEmpty()) {
-            val greetingId = "Halo! ${formatNameID(name, guestInfo?.gender)}."
+            val greetingId = "Selamat Datang! ${formatNameID(name, guestInfo?.gender)}."
             val voiceNameId = if (welcomeData.voIdVoiceName.isNotEmpty()) welcomeData.voIdVoiceName else "id-ID-Wavenet-B"
             val languageCodeId = if (voiceNameId.contains("-")) {
                 voiceNameId.split("-").take(2).joinToString("-")

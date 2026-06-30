@@ -525,7 +525,7 @@ fun ScreenSaverOverlay() {
                         } else {
                             "en-US"
                         }
-                        val greetingEn = "Hello! ${formatNameEN(name, gender)}."
+                        val greetingEn = "Welcome! ${formatNameEN(name, gender)}."
                         val enFile = GoogleTtsHelper.synthesizeSpeech(context, greetingEn, languageCodeEn, voiceNameEn)
                         if (enFile != null) {
                             val player = android.media.MediaPlayer()
@@ -571,7 +571,7 @@ fun ScreenSaverOverlay() {
                         } else {
                             "id-ID"
                         }
-                        val greetingId = "Halo! ${formatNameID(name, gender)}."
+                        val greetingId = "Selamat Datang! ${formatNameID(name, gender)}."
                         val idFile = GoogleTtsHelper.synthesizeSpeech(context, greetingId, languageCodeId, voiceNameId)
                         if (idFile != null) {
                             val player = android.media.MediaPlayer()
@@ -773,10 +773,10 @@ fun VideoScreenSaver(url: String, isPlayingAudio: Boolean) {
 
     AndroidView(
         factory = { ctx ->
-            android.view.TextureView(ctx).apply {
-                surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
-                    override fun onSurfaceTextureAvailable(surfaceTexture: android.graphics.SurfaceTexture, width: Int, height: Int) {
-                        val surface = android.view.Surface(surfaceTexture)
+            android.view.SurfaceView(ctx).apply {
+                holder.addCallback(object : android.view.SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+                        val surface = holder.surface
                         currentSurface = surface
                         
                         try {
@@ -812,9 +812,9 @@ fun VideoScreenSaver(url: String, isPlayingAudio: Boolean) {
                         }
                     }
 
-                    override fun onSurfaceTextureSizeChanged(surfaceTexture: android.graphics.SurfaceTexture, width: Int, height: Int) {}
+                    override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {}
 
-                    override fun onSurfaceTextureDestroyed(surfaceTexture: android.graphics.SurfaceTexture): Boolean {
+                    override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
                         try {
                             mediaPlayerInstance?.stop()
                             mediaPlayerInstance?.release()
@@ -822,14 +822,11 @@ fun VideoScreenSaver(url: String, isPlayingAudio: Boolean) {
                         mediaPlayerInstance = null
                         currentSurface?.release()
                         currentSurface = null
-                        return true
                     }
-
-                    override fun onSurfaceTextureUpdated(surfaceTexture: android.graphics.SurfaceTexture) {}
-                }
+                })
             }
         },
-        update = { textureView ->
+        update = { surfaceView ->
             // If the local cache becomes ready while the screensaver is active, seamlessly reload video source
             val cachedPath = ScreenSaverManager.cachedVideoPath
             val targetPath = if (cachedPath != null && java.io.File(cachedPath).exists()) cachedPath else url
