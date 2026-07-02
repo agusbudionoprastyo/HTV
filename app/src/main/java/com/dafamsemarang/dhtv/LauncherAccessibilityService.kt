@@ -105,7 +105,12 @@ class LauncherAccessibilityService : AccessibilityService() {
                             className.contains("UnknownAppSources", ignoreCase = true) ||
                             className.contains("ManageAppSources", ignoreCase = true) ||
                             className.contains("InstallUnknown", ignoreCase = true) ||
-                            className.contains("ManageDomainUrls", ignoreCase = true)
+                            className.contains("ManageDomainUrls", ignoreCase = true) ||
+                            className.contains("SpecialAppAccess", ignoreCase = true) ||
+                            className.contains("SpecialAccess", ignoreCase = true) ||
+                            className.contains("Sources", ignoreCase = true) ||
+                            className.contains("Install", ignoreCase = true) ||
+                            className.contains("AppInfo", ignoreCase = true)
                     
                     if (isUnknownSourcesScreen) {
                         Log.d(TAG, "Bypass active: Allow 'Install unknown apps' screen ($className)")
