@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -130,7 +131,7 @@ fun AppNavigation() {
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
     val slideDistance = (screenWidthPx * SLIDE_OFFSET_PCT).toInt()
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().clearAndSetSemantics { }) {
         // ── Persistent wallpaper — sits behind everything, never animates ──
         WallpaperSection()
 

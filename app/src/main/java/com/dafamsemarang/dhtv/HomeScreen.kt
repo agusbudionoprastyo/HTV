@@ -1938,9 +1938,9 @@ fun HomeScreen(navController: NavHostController) {
     var installedApps by remember { mutableStateOf<List<SupportedApp>>(ShortcutIconCache.getInstalledAppsList()) }
     
     var allowedPackagesFromFirebase by remember { mutableStateOf<Set<String>>(emptySet()) }
-    LaunchedEffect(Unit) {
+    DisposableEffect(Unit) {
         val dbRef = FirebaseDatabase.getInstance().reference.child("allowedApps")
-        dbRef.addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+        val listener = object : com.google.firebase.database.ValueEventListener {
             override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
                 val packages = mutableSetOf<String>()
                 for (child in snapshot.children) {
@@ -1955,7 +1955,12 @@ fun HomeScreen(navController: NavHostController) {
             override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
                 // Ignore or log error
             }
-        })
+        }
+        dbRef.addValueEventListener(listener)
+        
+        onDispose {
+            dbRef.removeEventListener(listener)
+        }
     }
     
     val filteredInstalledApps = remember(installedApps, allowedPackagesFromFirebase) {
