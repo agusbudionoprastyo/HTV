@@ -64,9 +64,14 @@ fun PairingScreen(
             deviceId = existingDeviceId
             Log.d("PairingScreen", "Using existing deviceId: $existingDeviceId")
         } else {
-            // Generate new deviceId using Android ID
-            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-            val newDeviceId = "device_${androidId.take(8)}"
+            // Generate new deviceId using MAC address or Android ID as fallback
+            val macAddress = deviceManager.getMacAddress()
+            val newDeviceId = if (!macAddress.isNullOrEmpty()) {
+                "mac_$macAddress"
+            } else {
+                val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+                "device_${androidId.take(8)}"
+            }
             deviceId = newDeviceId
             Log.d("PairingScreen", "Generated new deviceId: $newDeviceId")
         }
@@ -161,9 +166,12 @@ private fun sendDeviceInfoToFirebase(
     // Get app version
     val (versionName, versionCode) = deviceManager.getAppVersion()
     
+    val macAddress = deviceManager.getMacAddress()
+    
     // Use updateChildren to preserve existing data like branchId and room
     val deviceInfo = mapOf(
         "deviceId" to deviceId,
+        "macAddress" to (macAddress ?: "Unknown"),
         "lastSeen" to System.currentTimeMillis(),
         "name" to (Build.MANUFACTURER + " " + Build.MODEL),
         "deviceModel" to Build.MODEL,

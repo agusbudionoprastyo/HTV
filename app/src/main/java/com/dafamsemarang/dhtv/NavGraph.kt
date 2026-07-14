@@ -16,6 +16,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -135,6 +136,52 @@ fun AppNavigation() {
         // ── Persistent wallpaper — sits behind everything, never animates ──
         WallpaperSection()
 
+        // ── Hotel Info Dynamic Background — Decoupled from NavHost slide transitions ──
+        val hotelImageUrl by com.dafamsemarang.dhtv.DataRepository.globalHotelImageUrl
+        
+        androidx.compose.animation.AnimatedVisibility(
+            visible = currentRoute == "hotel_guide",
+            enter = androidx.compose.animation.fadeIn(animationSpec = tween(700)),
+            exit = androidx.compose.animation.fadeOut(animationSpec = tween(700))
+        ) {
+            // 1. Black Blocker: Prevents the wallpaper from showing through during image crossfades.
+            androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+
+            // 2. Dynamic Image Crossfade (Overlapping Dissolve to prevent dip-to-black)
+            androidx.compose.animation.AnimatedContent(
+                targetState = hotelImageUrl,
+                transitionSpec = {
+                    // Changing items: Fade in the new image over 700ms.
+                    // Keep the old image fully opaque for exactly 700ms so they overlap perfectly.
+                    // No extra holding time.
+                    androidx.compose.animation.fadeIn(animationSpec = tween(700)) togetherWith
+                    androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.snap(delayMillis = 700))
+                },
+                label = "GlobalHeroImage"
+            ) { url ->
+                if (url != null) {
+                    coil.compose.AsyncImage(
+                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                            .data(url)
+                            .crossfade(false) // AnimatedContent handles the fade
+                            .build(),
+                        contentDescription = "Global Hero Background",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize())
+                }
+            }
+
+            // 3. Single Overlay: Placed OUTSIDE AnimatedContent so it never double-stacks during transitions!
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f))
+            )
+        }
+
         // Navigasi berdasarkan status savedDeviceId
         NavHost(
             navController = navController,
@@ -225,18 +272,10 @@ fun AppNavigation() {
             // ── HOTEL INFO ───────────────────────────────────────────────────
             composable(
                 "hotel_guide",
-                enterTransition = {
-                    fadeIn(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
-                },
-                exitTransition = {
-                    fadeOut(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
-                },
-                popEnterTransition = {
-                    fadeIn(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
-                },
-                popExitTransition = {
-                    fadeOut(animationSpec = tween(SLIDE_DURATION, easing = GoogleTvEasing))
-                }
+                enterTransition = { mainEnterTransition(slideDistance) },
+                exitTransition = { mainExitTransition(slideDistance) },
+                popEnterTransition = { mainEnterTransition(slideDistance) },
+                popExitTransition = { mainExitTransition(slideDistance) }
             ) {
                 HotelInfoScreen()
                 CheckoutReminder()

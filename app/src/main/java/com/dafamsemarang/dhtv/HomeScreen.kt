@@ -407,7 +407,6 @@ fun FlightInfoSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White.copy(alpha = 0.12f))
                     .padding(horizontal = 10.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1542,7 +1541,6 @@ fun VideoAndSlideshowSection(
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .background(Color.White.copy(alpha = 0.12f))
                                                 .padding(horizontal = 10.dp, vertical = 3.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
@@ -1712,7 +1710,6 @@ fun VideoAndSlideshowSection(
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .background(Color.White.copy(alpha = 0.12f))
                                                 .padding(horizontal = 10.dp, vertical = 3.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
@@ -1818,20 +1815,19 @@ fun VideoAndSlideshowSection(
                         )
                     }
 
-                    // 2. Separator Label "FLIGHT INFO" between slideshow and flights (simplified, smaller, tighter bottom margin)
+                    // 2. Separator Icon between slideshow and flights
                     if (fidsActive && imageList.isNotEmpty() && fidsSlidesCount > 0) {
-                        Spacer(modifier = Modifier.width(1.dp))
-                        Text(
-                            text = "FLIGHT INFO",
-                            color = Color.White.copy(alpha = 0.5f),
-                            fontSize = 6.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp,
-                            style = TextStyle(
-                                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                        val isFlightScheduleOpen = currentImageIndex >= imageList.size
+                        if (!isFlightScheduleOpen) {
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_flight),
+                                contentDescription = "Flight Info",
+                                tint = Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier.size(8.dp)
                             )
-                        )
-                        Spacer(modifier = Modifier.width(1.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                        }
                     }
 
                     // 3. Flight/FIDS Dash/Icon Indicators
@@ -3665,17 +3661,9 @@ fun ServiceButtonWithPackageBanner(
                             shape = RoundedCornerShape(12.dp)
                         )
                     } else {
-                        Modifier.liquidGlass(
-                            cornerRadius = 12.dp,
-                            glassColor = if (isEmptySlot) Color.Black else Color.White,
-                            alphaInitial = if (isEmptySlot) 0.1f else if (isFocused) 1f else 0.22f,
-                            alphaFinal = if (isFocused) (if (isEmptySlot) 0.15f else 0.5f) else 0.05f,
-                            hasTopRimLight = !isEmptySlot, 
-                            isLedStrip = false, // No LED strip inside normal card
-                            isHorizontalRim = false,
-                            isFullBorder = false,
-                            borderAlpha = 1f,
-                            borderWidth = 1.dp
+                        Modifier.background(
+                            color = Color(207, 223, 237).copy(alpha = if (isEmptySlot) 0.1f else if (isFocused) 0.3f else 0.15f),
+                            shape = RoundedCornerShape(12.dp)
                         )
                     }
                 ),

@@ -597,6 +597,29 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         isFirstDndLoad = false
     }
 
+    // ── Smart Debounce for Footer Navigation ──
+    var pendingNavigationRoute by remember { mutableStateOf<String?>(null) }
+    var lastNavigationTime by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(pendingNavigationRoute) {
+        val route = pendingNavigationRoute ?: return@LaunchedEffect
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastChange = currentTime - lastNavigationTime
+        lastNavigationTime = currentTime
+
+        if (timeSinceLastChange < 300) {
+            // Speed scrolling detected! Apply debounce delay so we don't crash/lag loading 5 screens.
+            kotlinx.coroutines.delay(250)
+        }
+        
+        if (currentRoute != route) {
+            navController?.navigate(route) {
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
+
     DisposableEffect(folioId) {
         var nRef: com.google.firebase.database.DatabaseReference? = null
         var nListener: com.google.firebase.database.ValueEventListener? = null
@@ -693,22 +716,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             color = Color(207, 223, 237).copy(alpha = baseAlpha),
                             shape = RoundedCornerShape(50.dp)
                         )
-                        .drawBehind {
-                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
-                            drawRoundRect(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.35f),
-                                        Color.White.copy(alpha = 0.03f),
-                                        Color.White.copy(alpha = 0.20f)
-                                    ),
-                                    start = Offset(0f, 0f),
-                                    end = Offset(this.size.width, this.size.height)
-                                ),
-                                cornerRadius = CornerRadius(this.size.height / 2),
-                                style = Stroke(width = 1.2.dp.toPx())
-                            )
-                        }
                 )
 
                 Row(
@@ -743,22 +750,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             color = Color(207, 223, 237).copy(alpha = baseAlpha),
                             shape = RoundedCornerShape(50.dp)
                         )
-                        .drawBehind {
-                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
-                            drawRoundRect(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.35f),
-                                        Color.White.copy(alpha = 0.03f),
-                                        Color.White.copy(alpha = 0.20f)
-                                    ),
-                                    start = Offset(0f, 0f),
-                                    end = Offset(this.size.width, this.size.height)
-                                ),
-                                cornerRadius = CornerRadius(this.size.height / 2),
-                                style = Stroke(width = 1.2.dp.toPx())
-                            )
-                        }
                 )
 
                 Row(
@@ -792,22 +783,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             color = Color(207, 223, 237).copy(alpha = baseAlpha),
                             shape = RoundedCornerShape(50.dp)
                         )
-                        .drawBehind {
-                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
-                            drawRoundRect(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.35f),
-                                        Color.White.copy(alpha = 0.03f),
-                                        Color.White.copy(alpha = 0.20f)
-                                    ),
-                                    start = Offset(0f, 0f),
-                                    end = Offset(this.size.width, this.size.height)
-                                ),
-                                cornerRadius = CornerRadius(this.size.height / 2),
-                                style = Stroke(width = 1.2.dp.toPx())
-                            )
-                        }
                 )
 
                 Row(
@@ -857,22 +832,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             color = Color(207, 223, 237).copy(alpha = baseAlpha),
                             shape = RoundedCornerShape(50.dp)
                         )
-                        .drawBehind {
-                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
-                            drawRoundRect(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.35f),
-                                        Color.White.copy(alpha = 0.03f),
-                                        Color.White.copy(alpha = 0.20f)
-                                    ),
-                                    start = Offset(0f, 0f),
-                                    end = Offset(this.size.width, this.size.height)
-                                ),
-                                cornerRadius = CornerRadius(this.size.height / 2),
-                                style = Stroke(width = 1.2.dp.toPx())
-                            )
-                        }
                 )
 
                 Row(
@@ -947,22 +906,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             shape = CircleShape
                         )
                         .animateContentSize(animationSpec = tween(durationMillis = 500))
-                        .drawBehind {
-                            // Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
-                            drawRoundRect(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.35f),
-                                        Color.White.copy(alpha = 0.03f),
-                                        Color.White.copy(alpha = 0.20f)
-                                    ),
-                                    start = Offset(0f, 0f),
-                                    end = Offset(this.size.width, this.size.height)
-                                ),
-                                cornerRadius = CornerRadius(this.size.height / 2),
-                                style = Stroke(width = 1.2.dp.toPx())
-                            )
-                        }
                 )
 
                 Row(
@@ -984,9 +927,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         },
                         title = null,
                         onFocusAction = {
-                            if (currentRoute != "home") navController?.navigate("home") {
-                                launchSingleTop = true
-                            }
+                            pendingNavigationRoute = "home"
                         },
                         isActive = currentRoute == "home",
                         showBackgroundWhenActive = true,
@@ -1022,9 +963,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             },
                             title = null,
                             onFocusAction = {
-                                if (currentRoute != "cantingfood") navController?.navigate("cantingfood") {
-                                    launchSingleTop = true
-                                }
+                                pendingNavigationRoute = "cantingfood"
                             },
                             isActive = currentRoute == "cantingfood",
                             focusRequester = foodFocusRequester,
@@ -1057,9 +996,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             },
                             title = null,
                             onFocusAction = {
-                                if (currentRoute != "contact") navController?.navigate("contact") {
-                                    launchSingleTop = true
-                                }
+                                pendingNavigationRoute = "contact"
                             },
                             isActive = currentRoute == "contact",
                             focusRequester = requestFocusRequester,
@@ -1085,9 +1022,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         },
                         title = null,
                         onFocusAction = {
-                            if (currentRoute != "hotel_guide") navController?.navigate("hotel_guide") {
-                                launchSingleTop = true
-                            }
+                            pendingNavigationRoute = "hotel_guide"
                         },
                         isActive = currentRoute == "hotel_guide",
                         focusRequester = hotelFocusRequester,

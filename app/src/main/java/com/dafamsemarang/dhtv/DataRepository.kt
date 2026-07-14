@@ -50,6 +50,7 @@ object DataRepository {
     val liveWeather = mutableStateOf<LiveWeather?>(null)
     val forecastData = mutableStateOf<ForecastData?>(null)
     val companyIconUrl = mutableStateOf<String?>(null)
+    val globalHotelImageUrl = mutableStateOf<String?>(null)
 
     // Flight / FIDS
     val fidsActive = mutableStateOf(true)

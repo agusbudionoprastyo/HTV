@@ -138,6 +138,14 @@ fun CachedAsyncImage(
     showShimmer: Boolean = true
 ) {
     val context = LocalContext.current
+    val svgAwareImageLoader = remember(context) {
+        coil.ImageLoader.Builder(context)
+            .components {
+                add(coil.decode.SvgDecoder.Factory())
+            }
+            .build()
+    }
+    
     val sanitizedUrl = remember(imageUrl) { imageUrl.replace(" ", "%20") }
     val cacheFileName = remember(sanitizedUrl) {
         getImageCacheFileName(sanitizedUrl, cachePrefix)
@@ -189,11 +197,12 @@ fun CachedAsyncImage(
             
             Image(
                 painter = rememberAsyncImagePainter(
-                    model = ImageRequest.Builder(LocalContext.current)
+                    model = ImageRequest.Builder(context)
                         .data(imgFile)
                         .crossfade(false)
                         .allowHardware(true) // Speed up rendering via direct GPU hooks
                         .build(),
+                    imageLoader = svgAwareImageLoader,
                     onSuccess = { onImageLoaded?.invoke() },
                     onError = { Log.e("CachedAsyncImage", "Coil failed file: $cachedImagePath") }
                 ),

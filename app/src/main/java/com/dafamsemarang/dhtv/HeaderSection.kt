@@ -216,7 +216,7 @@ fun HeaderSection(currentRoute: String? = "home") {
                         )
                     }
 
-                    val baseAlpha = 0.40f
+                    val baseAlpha = 0.15f
 
                     // Card Body (Always exactly 448.dp x 80.dp, no border)
                     Box(
@@ -227,23 +227,7 @@ fun HeaderSection(currentRoute: String? = "home") {
                             .background(
                                 color = Color(207, 223, 237).copy(alpha = baseAlpha),
                                 shape = RoundedCornerShape(16.dp)
-                            )
-                            .drawBehind {
-                                // 2. Shiny Bevel & Highlights (Kaca 3D Bevel Edge)
-                                drawRoundRect(
-                                    brush = Brush.linearGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = 0.35f),
-                                            Color.White.copy(alpha = 0.03f),
-                                            Color.White.copy(alpha = 0.20f)
-                                        ),
-                                        start = Offset(0f, 0f),
-                                        end = Offset(size.width, size.height)
-                                     ),
-                                    cornerRadius = CornerRadius(16.dp.toPx()),
-                                    style = Stroke(width = 1.2.dp.toPx())
-                                )
-                            },
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         AnimatedContent(

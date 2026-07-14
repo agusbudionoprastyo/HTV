@@ -1647,9 +1647,9 @@ fun MyRequestItem(request: Request) {
                Box(
                    modifier = Modifier
                        .padding(4.dp)
-                       .background(color = Color(0xFF1A1919), shape = RoundedCornerShape(8.dp))
-                       .clip(RoundedCornerShape(8.dp))
-                       .size(48.dp),
+                        .background(color = Color(0xFF1A1919), shape = RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .size(48.dp),
                    contentAlignment = Alignment.Center
                ) {
                    val guestRequest = request.requests?.firstOrNull()

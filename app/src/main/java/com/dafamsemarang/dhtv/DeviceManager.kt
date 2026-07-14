@@ -84,6 +84,28 @@ class DeviceManager(private val context: Context) {
         return "Unknown"
     }
 
+    fun getMacAddress(): String? {
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            for (intf in java.util.Collections.list(interfaces)) {
+                if (!intf.name.equals("eth0", ignoreCase = true) && !intf.name.equals("wlan0", ignoreCase = true)) continue
+                val mac = intf.hardwareAddress ?: continue
+                val buf = StringBuilder()
+                for (idx in mac.indices) {
+                    buf.append(String.format("%02X:", mac[idx]))
+                }
+                if (buf.isNotEmpty()) {
+                    buf.deleteCharAt(buf.length - 1)
+                }
+                // Return clean string without colons, e.g., 001A2B3C4D5E
+                return buf.toString().replace(":", "").uppercase()
+            }
+        } catch (e: Exception) {
+            Log.e("DeviceManager", "Error getting MAC address: ${e.message}")
+        }
+        return null
+    }
+
     private val database: FirebaseDatabase = Firebase.database
     private val deviceRef = database.getReference("DEVICES")
     private val sharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)

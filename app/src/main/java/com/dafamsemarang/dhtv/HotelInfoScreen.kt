@@ -120,141 +120,47 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     val currentFocusedItem = categoriesList.getOrNull(selectedButton)?.second?.getOrNull(focusedItemIndex)
     var debouncedFocusedItem by remember { mutableStateOf<Item?>(null) }
 
-    // Efficient TV scroll debouncer: Renders the first item instantly on load, then applies 250ms delay for active navigation.
-    // Also prevents background image loading and text re-rendering during active horizontal scroll to ensure absolute 60fps smoothness!
-    LaunchedEffect(currentFocusedItem, rowState.isScrollInProgress) {
-        val isScrolling = rowState.isScrollInProgress
-        if (!isScrolling) {
-            if (debouncedFocusedItem == null && currentFocusedItem != null) {
-                debouncedFocusedItem = currentFocusedItem
-            } else {
-                delay(250)
-                debouncedFocusedItem = currentFocusedItem
-            }
+    var lastFocusChangeTime by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(currentFocusedItem) {
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastChange = currentTime - lastFocusChangeTime
+        lastFocusChangeTime = currentTime
+        
+        if (debouncedFocusedItem == null || timeSinceLastChange < 300) {
+            // Speed scrolling detected! Apply debounce delay so we don't spam background changes.
+            // Also applies to the very first load (if debouncedFocusedItem == null but time is short) wait, no. 
+            // If debouncedFocusedItem == null, we should load instantly! 
+        }
+        
+        if (debouncedFocusedItem == null || timeSinceLastChange > 300) {
+            debouncedFocusedItem = currentFocusedItem
+        } else {
+            kotlinx.coroutines.delay(250)
+            debouncedFocusedItem = currentFocusedItem
         }
     }
 
-    var currentBgUrl by remember { mutableStateOf("") }
-
-    LaunchedEffect(debouncedFocusedItem?.imageUrl) {
-        val newUrl = debouncedFocusedItem?.imageUrl ?: ""
-        if (newUrl != currentBgUrl) {
-            currentBgUrl = newUrl
-        }
-    }
-
-    val contentSlideOffset = remember { Animatable(100f) } // starts 100.dp to the right
-    val GoogleTvEasing = CubicBezierEasing(0.18f, 0.85f, 0.18f, 1.00f)
-    LaunchedEffect(Unit) {
-        contentSlideOffset.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(durationMillis = 800, easing = GoogleTvEasing)
-        )
+    LaunchedEffect(debouncedFocusedItem) {
+        com.dafamsemarang.dhtv.DataRepository.globalHotelImageUrl.value = debouncedFocusedItem?.imageUrl
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0C0C0C)) // Deep cinematic black root background
+            .background(Color.Transparent) // Transparent so the global decoupled background shows through
     ) {
-        // Immersive Hero Background with premium Crossfade
-        Crossfade(
-            targetState = currentBgUrl,
-            animationSpec = tween(400),
-            label = "BackgroundCrossfade",
-            modifier = Modifier.fillMaxSize()
-        ) { url ->
-            if (url.isNotEmpty()) {
-                CachedAsyncImage(
-                    imageUrl = url,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    cachePrefix = "img"
-                )
-            }
-        }
 
-            // Double Overlay vignette to guarantee absolute text readability while remaining beautifully bright!
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFF0C0C0C).copy(alpha = 0.90f),
-                                Color(0xFF0C0C0C).copy(alpha = 0.75f),
-                                Color(0xFF0C0C0C).copy(alpha = 0.55f),
-                                Color(0xFF0C0C0C).copy(alpha = 0.25f),
-                                Color.Transparent
-                            ),
-                            startX = 0f,
-                            endX = Float.POSITIVE_INFINITY
-                        )
-                    )
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color(0xFF0C0C0C).copy(alpha = 0.35f),
-                                Color(0xFF0C0C0C).copy(alpha = 0.70f)
-                            )
-                        )
-                    )
-            )
-
-        // Layout Column (Edge-to-Edge with 58.dp safety zone)
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val startPaddingPx = with(density) { 58.dp.toPx() }
-        val defaultSpec = LocalBringIntoViewSpec.current
-
-        val categoryBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
-            object : BringIntoViewSpec {
-                override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
-                    get() {
-                        return androidx.compose.animation.core.tween(
-                            durationMillis = 300,
-                            easing = androidx.compose.animation.core.CubicBezierEasing(0.18f, 0.85f, 0.18f, 1.00f)
-                        )
-                    }
-
-                override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-                    return offset - startPaddingPx
-                }
-            }
-        }
-
-        val itemBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
-            object : BringIntoViewSpec {
-                override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
-                    get() {
-                        return androidx.compose.animation.core.tween(
-                            durationMillis = 300,
-                            easing = androidx.compose.animation.core.CubicBezierEasing(0.18f, 0.85f, 0.18f, 1.00f)
-                        )
-                    }
-
-                override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-                    return offset - startPaddingPx
-                }
-            }
-        }
 
         val tabRequesters = remember { List(buttonLabels.size) { FocusRequester() } }
-        // Incremented whenever any tab gains focus — signals the carousel to scroll back to item 0.
-        var tabFocusTrigger by remember { mutableIntStateOf(0) }
+
 
 
         
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .offset(x = contentSlideOffset.value.dp)
                 .padding(top = 95.dp, bottom = 55.dp), // Restrict layout area balanced below the header (95.dp) and snug above the footer (55.dp)
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -268,6 +174,43 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
             // while the carousel is scrolling horizontally — preventing GPU contention.
             var isNavigatingHorizontally by remember { mutableStateOf(false) }
 
+            val startPaddingPx = with(density) { 58.dp.toPx() }
+            val defaultSpec = LocalBringIntoViewSpec.current
+
+            val categoryBringIntoViewSpec = remember(defaultSpec, startPaddingPx) {
+                object : BringIntoViewSpec {
+                    override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
+                        get() {
+                            val duration = if (android.os.Build.VERSION.SDK_INT < 31) 60 else 100
+                            return androidx.compose.animation.core.tween(
+                                durationMillis = duration,
+                                easing = androidx.compose.animation.core.FastOutSlowInEasing
+                            )
+                        }
+
+                    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+                        return offset - startPaddingPx
+                    }
+                }
+            }
+            
+            val itemBringIntoViewSpec = remember(defaultSpec, startPaddingPx, isNavigatingHorizontally) {
+                object : BringIntoViewSpec {
+                    override val scrollAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float>
+                        get() {
+                            val duration = if (android.os.Build.VERSION.SDK_INT < 31) 90 else 150
+                            return androidx.compose.animation.core.tween(
+                                durationMillis = duration,
+                                easing = androidx.compose.animation.core.FastOutSlowInEasing
+                            )
+                        }
+
+                    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+                        return offset - startPaddingPx
+                    }
+                }
+            }
+
             // 1. TOP AREA: Category Tabs (LazyRow right at the top)
             CompositionLocalProvider(LocalBringIntoViewSpec provides categoryBringIntoViewSpec) {
             LazyRow(
@@ -280,21 +223,6 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                 itemsIndexed(buttonLabels) { index, label ->
                     var isTabFocused by remember { mutableStateOf(false) }
                     val isTabSelected = selectedButton == index
-                    
-                    val borderAlpha = remember { Animatable(0.5f) }
-                    LaunchedEffect(isTabFocused) {
-                        if (isTabFocused) {
-                            borderAlpha.animateTo(
-                                targetValue = 1.0f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(1000, easing = LinearEasing),
-                                    repeatMode = RepeatMode.Reverse
-                                )
-                            )
-                        } else {
-                            borderAlpha.snapTo(0.5f)
-                        }
-                    }
                     
                     val categoryItems = categoriesList.getOrNull(index)?.second ?: emptyList()
                     Box(
@@ -310,9 +238,10 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                             .onFocusChanged {
                                 isTabFocused = it.isFocused
                                 if (it.isFocused) {
-                                    selectedButton = index
-                                    focusedItemIndex = 0
-                                    tabFocusTrigger++ // trigger carousel scroll to item 0
+                                    if (selectedButton != index) {
+                                        selectedButton = index
+                                        focusedItemIndex = 0
+                                    }
                                 }
                             }
                             .focusable()
@@ -322,7 +251,7 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                                 if (isTabFocused) {
                                     Modifier.border(
                                         width = 2.dp,
-                                        color = Color.White.copy(alpha = borderAlpha.value),
+                                        color = Color.White,
                                         shape = RoundedCornerShape(8.dp)
                                     )
                                 } else {
@@ -330,8 +259,10 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                                 }
                             )
                             .clickable {
-                                selectedButton = index
-                                focusedItemIndex = 0
+                                if (selectedButton != index) {
+                                    selectedButton = index
+                                    focusedItemIndex = 0
+                                }
                             }
                     ) {
                         Text(
@@ -347,7 +278,7 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                     }
                 }
             }
-            } // end CompositionLocalProvider (categoryBringIntoViewSpec)
+            } // end categoryBringIntoViewSpec
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -768,12 +699,6 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                     LaunchedEffect(targetIndex) {
                         rowState.scrollToItem(0)
                     }
-                    // When any tab gains focus (user pressed UP from items), scroll back to item 0
-                    // so that itemRequesters[0] is attached before focusProperties.enter fires.
-                    LaunchedEffect(tabFocusTrigger) {
-                        if (tabFocusTrigger > 0) rowState.scrollToItem(0)
-                    }
-
                     CompositionLocalProvider(LocalBringIntoViewSpec provides itemBringIntoViewSpec) {
                         LazyRow(
                             state = rowState,
@@ -796,8 +721,9 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                                     false
                                 }
                                 .focusProperties {
-                                    // Always enter the LazyRow at item 0 (first item) when coming from tab above.
-                                    enter = { itemRequesters.getOrElse(0) { FocusRequester.Default } }
+                                    // Restore focus to the last selected item (e.g., when coming back up from the footer)
+                                    // When coming down from a tab, focusedItemIndex is already explicitly set to 0.
+                                    enter = { itemRequesters.getOrElse(focusedItemIndex) { FocusRequester.Default } }
                                 },
                             contentPadding = PaddingValues(horizontal = 58.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -826,7 +752,7 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
                                         modifier = Modifier
                                             .focusRequester(if (index < itemRequesters.size) itemRequesters[index] else FocusRequester.Default)
                                             .then(
-                                                if (index == 0) Modifier.focusRequester(HotelInfoFocus.firstItemRequester)
+                                                if (index == focusedItemIndex && targetIndex == selectedButton) Modifier.focusRequester(HotelInfoFocus.firstItemRequester)
                                                 else Modifier
                                             )
                                             .focusProperties {
@@ -846,6 +772,7 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
             }
         }
     }
+
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -861,21 +788,6 @@ fun ItemCard(item: Item, onClick: () -> Unit, modifier: Modifier = Modifier) {
         animationSpec = tween(durationMillis = 300),
         label = "FocusFadeAlpha"
     )
-    val pulseAlpha = remember { Animatable(0.0f) }
-    LaunchedEffect(isFocused) {
-        if (isFocused) {
-            pulseAlpha.animateTo(
-                targetValue = 1.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                )
-            )
-        } else {
-            pulseAlpha.snapTo(0.0f)
-        }
-    }
-
     // Google TV zoom scale on focus
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.06f else 1.0f,
@@ -902,7 +814,7 @@ fun ItemCard(item: Item, onClick: () -> Unit, modifier: Modifier = Modifier) {
                     if (isFocused) {
                         Modifier.border(
                             width = 2.5.dp,
-                            color = Color.White.copy(alpha = pulseAlpha.value * focusFadeAlpha),
+                            color = Color.White.copy(alpha = focusFadeAlpha),
                             shape = RoundedCornerShape(24.dp)
                         )
                     } else {
