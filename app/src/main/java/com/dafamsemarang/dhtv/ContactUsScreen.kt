@@ -4,8 +4,6 @@
 package com.dafamsemarang.dhtv
 
 import android.annotation.SuppressLint
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.content.Context
 import android.util.Log
 import androidx.compose.animation.core.LinearEasing
@@ -31,18 +29,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
@@ -50,7 +43,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
-import com.dafamsemarang.dhtv.DataRepository
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +54,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -71,10 +62,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -83,36 +72,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.focusable
-
 import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
-
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import kotlinx.coroutines.delay
-import io.ktor.client.*
-import io.ktor.client.engine.android.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.*
-import kotlinx.serialization.json.Json
-//import kotlinx.serialization.Serializable
 import android.speech.RecognizerIntent
 import android.content.Intent
 import android.speech.SpeechRecognizer
 import android.speech.RecognitionListener
 import android.os.Bundle
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
@@ -238,9 +214,21 @@ fun ContactUsScreen(navController: androidx.navigation.NavHostController? = null
        focusedItemIndex = 0
    }
    
+    var lastCategoryChangeTime by remember { mutableLongStateOf(0L) }
+
     LaunchedEffect(focusedCategoryForSelection) {
-        delay(200)
-        selectedCategory = focusedCategoryForSelection
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastChange = currentTime - lastCategoryChangeTime
+        lastCategoryChangeTime = currentTime
+
+        if (selectedCategory == null || timeSinceLastChange > 300) {
+            // Pindah instan kalau ini adalah tap pertama / tidak sedang speed scroll
+            selectedCategory = focusedCategoryForSelection
+        } else {
+            // Aktifkan smart debounce (tunda sedikit) jika mendeteksi spam tombol/speed scroll
+            delay(250)
+            selectedCategory = focusedCategoryForSelection
+        }
     }
    
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -863,21 +851,7 @@ fun RequestItem(
     // Track TV focus state
     var isFocused by remember { mutableStateOf(false) }
 
-    val borderAlpha = remember { androidx.compose.animation.core.Animatable(0.5f) }
-    LaunchedEffect(isFocused) {
-        if (isFocused) {
-            borderAlpha.animateTo(
-                targetValue = 1.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(1000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                )
-            )
-        } else {
-            borderAlpha.snapTo(0.5f)
-        }
-    }
-    
+
     // Elegant scale transition (1.05f expansion on focus for smooth Google TV feel)
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.05f else 1.0f,
@@ -895,7 +869,7 @@ fun RequestItem(
     // Pure pulse border animation
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_anim")
     val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
+        initialValue = 0.4f,
         targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(1000, easing = FastOutSlowInEasing),
@@ -926,21 +900,11 @@ fun RequestItem(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             )
+            .then(borderModifier)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(
-                    if (isFocused) {
-                        Modifier.border(
-                            width = 3.dp,
-                            color = Color.White.copy(alpha = borderAlpha.value),
-                            shape = RoundedCornerShape(38.dp)
-                        )
-                    } else {
-                        Modifier
-                    }
-                )
                 .padding(6.dp)
                 .clip(RoundedCornerShape(32.dp))
                 .background(Color(207, 223, 237).copy(alpha = 0.25f)) // Footer background color!
@@ -1324,11 +1288,16 @@ fun RequestDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1E2026),
+        titleContentColor = Color.White,
+        textContentColor = Color.White,
         title = { Text(request.request_title) },
         text = {
             Column {
                 Text(
                     text = request.description,
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 12.sp,
                     maxLines = 5,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1336,7 +1305,7 @@ fun RequestDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Date & Time picker (Inline)
-                Text(text = "Request Date & Time")
+                Text(text = "Request Date & Time", color = Color.White)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier
@@ -1357,7 +1326,7 @@ fun RequestDialog(
                             PickerColumn(label = "Year", value = year, range = 2026..2036, onValueChange = { year = it })
 
                             Spacer(modifier = Modifier.width(4.dp))
-                            Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.Gray.copy(alpha = 0.3f)))
+                            Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color.White.copy(alpha = 0.2f)))
                             Spacer(modifier = Modifier.width(4.dp))
 
                             // Time Pickers
@@ -1393,12 +1362,12 @@ fun RequestDialog(
                                 modifier = Modifier.size(20.dp),
                                 painter = painterResource(id = R.drawable.ic_date_time),
                                 contentDescription = "Date & Time",
-                                tint = Color.Gray
+                                tint = Color.LightGray
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "$selectedDate $selectedTime",
-                                color = Color.Gray,
+                                color = Color.White.copy(alpha = 0.9f),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -1427,13 +1396,13 @@ fun RequestDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text(text = "Note")
+                Text(text = "Note", color = Color.White)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 72.dp)
                         .background(
-                            Color.LightGray.copy(alpha = 0.3f),
+                            Color.White.copy(alpha = 0.1f),
                             RoundedCornerShape(16.dp)
                         )
                         .padding(horizontal = 16.dp, vertical = 12.dp)
@@ -1446,7 +1415,7 @@ fun RequestDialog(
                         // 1. Main clean text display
                         Text(
                             text = if (isListening) "Silakan berbicara..." else note,
-                            color = if (isListening) Color(0xFFE91E63) else Color.Black,
+                            color = if (isListening) Color(0xFFE91E63) else Color.White,
                             fontWeight = if (isListening) FontWeight.Bold else FontWeight.Normal,
                             modifier = Modifier.weight(1f)
                         )
@@ -1480,8 +1449,8 @@ fun RequestDialog(
                         // 2. Unified Click-to-Talk Mic Button State Machine
                         val interactionSource = remember { MutableInteractionSource() }
                         var isMicFocused by remember { mutableStateOf(false) }
-                        val micBgColor = if (isListening || isMicFocused) Color(0xFFCFDFED) else Color.Gray.copy(alpha = 0.2f)
-                        val micIconTint = if (isListening || isMicFocused) Color(0xFF1E2026) else Color.Gray
+                        val micBgColor = if (isListening || isMicFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.1f)
+                        val micIconTint = if (isListening || isMicFocused) Color(0xFF1E2026) else Color.White
 
                         Box(
                             modifier = Modifier
@@ -1531,13 +1500,13 @@ fun RequestDialog(
                             interactionSource = remember { MutableInteractionSource() },
                             onClick = onDismiss
                         )
-                        .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.Gray.copy(alpha = 0.2f))
+                        .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.1f))
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Cancel",
-                        color = if (isCancelFocused) Color(0xFF1E2026) else Color.Gray,
+                        color = if (isCancelFocused) Color(0xFF1E2026) else Color.White,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -1579,11 +1548,11 @@ fun RequestDialog(
                         )
                         .background(
                             if (!isSubmitEnabled) {
-                                Color.Gray.copy(alpha = 0.05f)
+                                Color.White.copy(alpha = 0.05f)
                             } else if (isSubmitFocused) {
                                 Color(0xFFCFDFED)
                             } else {
-                                Color.Gray.copy(alpha = 0.2f)
+                                Color.White.copy(alpha = 0.1f)
                             }
                         )
                         .focusable(enabled = isSubmitEnabled)
@@ -1593,11 +1562,11 @@ fun RequestDialog(
                     Text(
                         text = "Submit Request",
                         color = if (!isSubmitEnabled) {
-                            Color.Gray.copy(alpha = 0.4f)
+                            Color.White.copy(alpha = 0.4f)
                         } else if (isSubmitFocused) {
                             Color(0xFF1E2026)
                         } else {
-                            Color.Gray
+                            Color.White
                         },
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyMedium
@@ -1849,7 +1818,7 @@ fun PickerColumn(
     ) {
         Text(
             text = label,
-            color = if (isFocused) Color(0xFF071434).copy(alpha = 0.7f) else Color.Gray.copy(alpha = 0.6f),
+            color = if (isFocused) Color(0xFF071434).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.6f),
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -1858,7 +1827,7 @@ fun PickerColumn(
         
         Text(
             text = if (zeroPad) value.toString().padStart(2, '0') else value.toString(),
-            color = if (isFocused) Color(0xFF071434) else Color.Gray,
+            color = if (isFocused) Color(0xFF071434) else Color.White,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(vertical = 2.dp)

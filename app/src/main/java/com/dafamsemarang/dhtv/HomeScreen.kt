@@ -771,7 +771,7 @@ fun BannerVideoPlayer(
                 mediaPlayer.setDataSource(context, Uri.fromFile(file))
                 mediaPlayer.setSurface(surface)
                 mediaPlayer.isLooping = false
-                mediaPlayer.setVolume(0f, 0f)
+                mediaPlayer.setVolume(1f, 1f)
                 mediaPlayer.prepareAsync()
                 mediaPlayer.setOnPreparedListener {
                     if (videoUrl == GlobalMediaPlayerHolder.lastPlaybackUrl && GlobalMediaPlayerHolder.lastPlaybackPosition > 0) {
@@ -1388,9 +1388,9 @@ fun VideoAndSlideshowSection(
 
         Box(
             modifier = Modifier
-                .requiredWidth(456.dp)
-                .requiredHeight(168.dp)
-                .offset(x = (-4).dp, y = 0.dp)
+                .requiredWidth(460.dp)
+                .requiredHeight(172.dp)
+                .offset(x = (-6).dp, y = 0.dp)
                 .onFocusChanged { 
                     isBannerFocusedInternal = it.isFocused 
                     onBannerFocusChanged(it.isFocused)
@@ -1434,9 +1434,9 @@ fun VideoAndSlideshowSection(
                     modifier = Modifier
                         .fillMaxSize()
                         .border(
-                            width = 2.dp,
+                            width = 3.dp,
                             color = Color.White.copy(alpha = bannerFocusPulseAlpha.value),
-                            shape = RoundedCornerShape(24.dp) // Concentric shape: 20.dp (card corner) + 4.dp (gap) = 24.dp
+                            shape = RoundedCornerShape(26.dp) // Concentric shape: 20.dp (card corner) + 6.dp (gap) = 26.dp
                         )
                 )
             }
@@ -1815,19 +1815,9 @@ fun VideoAndSlideshowSection(
                         )
                     }
 
-                    // 2. Separator Icon between slideshow and flights
+                    // 2. Separator between slideshow and flights
                     if (fidsActive && imageList.isNotEmpty() && fidsSlidesCount > 0) {
-                        val isFlightScheduleOpen = currentImageIndex >= imageList.size
-                        if (!isFlightScheduleOpen) {
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_flight),
-                                contentDescription = "Flight Info",
-                                tint = Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier.size(8.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
 
                     // 3. Flight/FIDS Dash/Icon Indicators
@@ -1836,16 +1826,18 @@ fun VideoAndSlideshowSection(
                             repeat(fidsSlidesCount) { fidsIdx ->
                                 val actualIdx = imageList.size + fidsIdx
                                 val isActive = actualIdx == currentImageIndex
+                                val isFidsSectionActive = currentImageIndex >= imageList.size
+                                val showAirplane = if (!isFidsSectionActive && fidsIdx == 0) true else isActive
                                 
-                                if (isActive) {
-                                    // Active Flight Page: Show flight icon, flip horizontally when navigating left
+                                if (showAirplane) {
+                                    // Active Flight Page (or parked at start): Show flight icon
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_flight),
                                         contentDescription = null,
-                                        tint = Color.White,
+                                        tint = if (isActive) Color.White else Color.White.copy(alpha = 0.5f),
                                         modifier = Modifier
                                             .size(8.dp)
-                                            .graphicsLayer { scaleX = if (isNavigatingLeft) -1f else 1f }
+                                            .graphicsLayer { scaleX = if (isNavigatingLeft && isFidsSectionActive) -1f else 1f }
                                     )
                                 } else {
                                     // Inactive Flight Page: Show dash (-)
@@ -3216,9 +3208,9 @@ fun AppDrawer(
                                                         modifier = Modifier
                                                             .fillMaxSize()
                                                             .border(
-                                                                width = 2.dp,
+                                                                width = 3.dp,
                                                                 color = Color.White.copy(alpha = focusPulseAlpha.value),
-                                                                shape = RoundedCornerShape(20.dp) // Concentric shape: 16.dp inner + 4.dp gap = 20.dp
+                                                                shape = RoundedCornerShape(22.dp) // Concentric shape: 16.dp inner + 6.dp gap = 22.dp
                                                             )
                                                     )
                                                 }
@@ -3227,7 +3219,7 @@ fun AppDrawer(
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxSize()
-                                                        .padding(4.dp)
+                                                        .padding(6.dp)
                                                         .clip(RoundedCornerShape(16.dp))
                                                         .background(
                                                             if (isFocused) Color.White.copy(alpha = 0.2f) 
@@ -3632,7 +3624,7 @@ fun ServiceButtonWithPackageBanner(
                             alphaFinal = 0f,
                             isLedStrip = true,
                             borderAlpha = 1f,
-                            borderWidth = 2.dp
+                            borderWidth = 3.dp
                         )
                 )
             } else {
@@ -3640,9 +3632,9 @@ fun ServiceButtonWithPackageBanner(
                     modifier = Modifier
                         .fillMaxSize()
                         .border(
-                            width = 2.dp,
+                            width = 3.dp,
                             color = Color.White.copy(alpha = focusPulseAlpha.value),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(18.dp) // Concentric shape: 12.dp (card corner) + 6.dp (gap) = 18.dp
                         )
                 )
             }
@@ -3653,16 +3645,16 @@ fun ServiceButtonWithPackageBanner(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp) // Gap exactly as thick as the 2.dp border (giving a 2.dp transparent space)
+                .padding(6.dp) // Gap exactly as thick as the 3.dp border (giving a 3.dp transparent space)
                 .then(
                     if (isPressedAndHeld) {
                         Modifier.background(
-                            color = Color(207, 223, 237).copy(alpha = 0.25f),
+                            color = Color(207, 223, 237).copy(alpha = 0.15f),
                             shape = RoundedCornerShape(12.dp)
                         )
                     } else {
                         Modifier.background(
-                            color = Color(207, 223, 237).copy(alpha = if (isEmptySlot) 0.1f else if (isFocused) 0.3f else 0.15f),
+                            color = Color(207, 223, 237).copy(alpha = if (isFocused) 0.2f else 0.1f),
                             shape = RoundedCornerShape(12.dp)
                         )
                     }

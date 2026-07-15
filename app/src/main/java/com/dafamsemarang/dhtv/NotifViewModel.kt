@@ -34,11 +34,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -232,9 +239,14 @@ fun RequestDetailDialog(request: Request, onDismiss: () -> Unit) {
                                     horizontalArrangement = Arrangement.Start,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Image(
-                                        painter = rememberAsyncImagePainter(R.drawable.err),
-                                        contentDescription = "Canceled Icon",
+                                    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.error))
+                                    val progress by animateLottieCompositionAsState(
+                                        composition = composition,
+                                        iterations = LottieConstants.IterateForever
+                                    )
+                                    LottieAnimation(
+                                        composition = composition,
+                                        progress = { progress },
                                         modifier = Modifier
                                             .size(150.dp)
                                             .padding(8.dp)
@@ -729,9 +741,14 @@ fun OrderDetailDialog(order: Order, onDismiss: () -> Unit) {
                                                 style = TextStyle(fontSize = 8.sp, color = Color(0xFF071434).copy(alpha = 0.7f))
                                             )
                                             Spacer(modifier = Modifier.height(16.dp))
-                                            Image(
-                                                painter = rememberAsyncImagePainter(R.drawable.err),
-                                                contentDescription = "Canceled Icon",
+                                            val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.error))
+                                            val progress by animateLottieCompositionAsState(
+                                                composition = composition,
+                                                iterations = LottieConstants.IterateForever
+                                            )
+                                            LottieAnimation(
+                                                composition = composition,
+                                                progress = { progress },
                                                 modifier = Modifier
                                                     .size(120.dp)
                                                     .padding(8.dp)
@@ -801,12 +818,13 @@ fun OrdernotifDetails(orderDetails: Order?) {
                 fontWeight = FontWeight.Bold
             )
 
-            HorizontalDivider(
+            Box(
                 modifier = Modifier
                     .padding(vertical = 4.dp)
-                    .fillMaxWidth(),
-                thickness = .5.dp,
-                color = Color(0xFF071434).copy(alpha = 0.2f)
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF071434).copy(alpha = 0.2f))
             )
 
             val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.getDefault())
@@ -834,11 +852,12 @@ fun OrdernotifDetails(orderDetails: Order?) {
                     )
                 }
 
-                VerticalDivider(
+                Box(
                     modifier = Modifier
-                        .height(24.dp),
-                    thickness = .5.dp,
-                    color = Color(0xFF071434).copy(alpha = 0.2f)
+                        .height(24.dp)
+                        .width(2.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF071434).copy(alpha = 0.2f))
                 )
 
                 Column {
@@ -853,11 +872,12 @@ fun OrdernotifDetails(orderDetails: Order?) {
                     )
                 }
 
-                VerticalDivider(
+                Box(
                     modifier = Modifier
-                        .height(24.dp),
-                    thickness = .5.dp,
-                    color = Color(0xFF071434).copy(alpha = 0.2f)
+                        .height(24.dp)
+                        .width(2.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF071434).copy(alpha = 0.2f))
                 )
 
                 Column {
@@ -877,7 +897,8 @@ fun OrdernotifDetails(orderDetails: Order?) {
                 modifier = Modifier
                     .padding(vertical = 4.dp)
                     .fillMaxWidth()
-                    .height(.5.dp)
+                    .height(2.dp),
+                thickness = 2.dp
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1232,10 +1253,7 @@ fun DisplayGif(gifResId: Int) {
 }
 
 @Composable
-fun DashedDivider(modifier: Modifier = Modifier) {
-    // Get the density of the screen (density = dp to pixels conversion factor)
-    val density = LocalDensity.current.density
-
+fun DashedDivider(modifier: Modifier = Modifier, thickness: androidx.compose.ui.unit.Dp = 1.5.dp, color: Color = Color.Gray) {
     Canvas(modifier = modifier) {
         val dashWidth = 10f
         val dashGap = 5f
@@ -1243,15 +1261,15 @@ fun DashedDivider(modifier: Modifier = Modifier) {
         val endX = size.width
         var currentX = startX
 
-        // Convert 0.5 dp to pixels
-        val strokeWidth = 0.5f * density
+        val strokeWidth = thickness.toPx()
 
         while (currentX < endX) {
             drawLine(
-                color = Color.Gray,
+                color = color,
                 start = Offset(currentX, size.height / 2),
                 end = Offset(currentX + dashWidth, size.height / 2),
-                strokeWidth = strokeWidth // Use the stroke width in pixels
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
             )
             currentX += dashWidth + dashGap
         }

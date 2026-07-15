@@ -143,8 +143,8 @@ fun SettingsOptionsDialog(
                         ) {
                             val options = listOf(
                                 SettingsOptionItem(
-                                    title = "Aksesibilitas (Auto Tombol Home)",
-                                    desc = "Mengaktifkan proteksi tombol Home secara permanen",
+                                    title = "Accessibility",
+                                    desc = "Override default launcher",
                                     icon = R.drawable.ic_accessibility_custom,
                                     onClick = {
                                         val bypassIntent = Intent("com.dafamsemarang.dhtv.ACTION_ALLOW_SETTINGS").apply {
@@ -157,8 +157,8 @@ fun SettingsOptionsDialog(
                                     }
                                 ),
                                 SettingsOptionItem(
-                                    title = "Pengaturan Android (Sistem)",
-                                    desc = "Membuka konfigurasi Wi-Fi, Aplikasi, dan sistem OS",
+                                    title = "System Setting",
+                                    desc = "Open setting android",
                                     icon = R.drawable.ic_setting,
                                     onClick = {
                                         val bypassIntent = Intent("com.dafamsemarang.dhtv.ACTION_ALLOW_SETTINGS").apply {

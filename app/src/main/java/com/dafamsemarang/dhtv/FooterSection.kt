@@ -914,7 +914,8 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     modifier = Modifier.padding(4.dp)
                 ) {
                     SmallServiceButton(
-                        iconRes = R.drawable.ic_home,
+                        iconRes = null,
+                        buttonText = "Home",
                         modifier = Modifier.onGloballyPositioned { coords ->
                             homeButtonBoundsInRoot = coords.boundsInRoot()
                         },
@@ -925,7 +926,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                 restoreState = true
                             }
                         },
-                        title = null,
+                        title = null, // Tooltip is no longer needed since button has text
                         onFocusAction = {
                             pendingNavigationRoute = "home"
                         },
@@ -941,8 +942,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         useOriginalTint = true,
                         isHome3D = false
                     )
-
-                    Spacer(modifier = Modifier.width(4.dp))
 
                     // F&B button – NOT wrapped, track its position via onGloballyPositioned
                     Box(
@@ -976,8 +975,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(4.dp))
-
                     Box(
                         modifier = Modifier
                             .onGloballyPositioned { coords ->
@@ -1008,8 +1005,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             }
                         )
                     }
-
-                    Spacer(modifier = Modifier.width(4.dp))
 
                     SmallServiceButton(
                         iconRes = R.drawable.ic_info_circle,
@@ -1902,7 +1897,7 @@ fun MyRequestsDrawer(onDismiss: () -> Unit, requests: List<Request>, onSelectReq
                                         label = "RequestFocusFadeAlpha"
                                     )
 
-                                    val pulseAlpha = remember { androidx.compose.animation.core.Animatable(0.0f) }
+                                    val pulseAlpha = remember { androidx.compose.animation.core.Animatable(0.4f) }
 
                                     LaunchedEffect(isItemFocused) {
                                         if (isItemFocused) {
@@ -1914,7 +1909,7 @@ fun MyRequestsDrawer(onDismiss: () -> Unit, requests: List<Request>, onSelectReq
                                                 )
                                             )
                                         } else {
-                                            pulseAlpha.snapTo(0.0f)
+                                            pulseAlpha.snapTo(0.4f)
                                         }
                                     }
 
@@ -1923,7 +1918,7 @@ fun MyRequestsDrawer(onDismiss: () -> Unit, requests: List<Request>, onSelectReq
                                         Modifier.border(
                                             width = 3.dp,
                                             color = Color.White.copy(alpha = pulseAlpha.value * focusFadeAlpha),
-                                            shape = RoundedCornerShape(19.dp)
+                                            shape = RoundedCornerShape(22.dp)
                                         )
                                     } else {
                                         Modifier
@@ -1941,7 +1936,7 @@ fun MyRequestsDrawer(onDismiss: () -> Unit, requests: List<Request>, onSelectReq
                                             .then(if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
                                             .clickable { onSelectRequest(request) }
                                             .then(borderModifier)
-                                            .padding(3.dp)
+                                            .padding(6.dp)
                                     ) {
                                         Surface(
                                             modifier = Modifier.fillMaxWidth(),
@@ -3343,7 +3338,7 @@ fun ReleasedDndInformation( notification: Notification ) {
 
 @Composable
 fun SmallServiceButton(
-    iconRes: Int,
+    iconRes: Int? = null,
     onClick: () -> Unit,
     buttonColor: Color = Color.White, // Force solid white default
     title: String? = null,
@@ -3354,7 +3349,8 @@ fun SmallServiceButton(
     modifier: Modifier = Modifier,
     useOriginalTint: Boolean = false,
     isHome3D: Boolean = false,
-    showBackgroundWhenActive: Boolean = true
+    showBackgroundWhenActive: Boolean = true,
+    buttonText: String? = null
 ) {
     var isClicked by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
@@ -3365,13 +3361,26 @@ fun SmallServiceButton(
         label = "titleAlpha"
     )
 
+    val widthModifier = if (buttonText != null) {
+        Modifier.widthIn(min = 36.dp)
+    } else {
+        Modifier.width(36.dp)
+    }
+
     Box(
-        modifier = modifier.size(36.dp),
+        modifier = modifier.height(36.dp).then(widthModifier),
         contentAlignment = Alignment.Center
     ) {
-        var boxModifier = Modifier
-            .fillMaxSize()
-            .clip(CircleShape)
+        var boxModifier = if (buttonText != null) {
+            Modifier
+                .fillMaxHeight()
+                .wrapContentWidth()
+                .clip(RoundedCornerShape(18.dp))
+        } else {
+            Modifier
+                .matchParentSize()
+                .clip(CircleShape)
+        }
 
         if (focusRequester != null) {
             boxModifier = boxModifier.focusRequester(focusRequester)
@@ -3383,13 +3392,13 @@ fun SmallServiceButton(
                     // Outer Soft Dark Shadow (Bottom-Right)
                     drawCircle(
                         color = Color.Black.copy(alpha = 0.18f),
-                        radius = (this.size.width / 2) - 1.dp.toPx(),
+                        radius = (this.size.height / 2) - 1.dp.toPx(),
                         center = Offset(this.size.width / 2 + 2.dp.toPx(), this.size.height / 2 + 2.dp.toPx())
                     )
                     // Outer Soft Light Highlight Shadow (Top-Left)
                     drawCircle(
                         color = Color.White.copy(alpha = 0.5f),
-                        radius = (this.size.width / 2) - 1.dp.toPx(),
+                        radius = (this.size.height / 2) - 1.dp.toPx(),
                         center = Offset(this.size.width / 2 - 2.dp.toPx(), this.size.height / 2 - 2.dp.toPx())
                     )
                 }
@@ -3401,15 +3410,15 @@ fun SmallServiceButton(
                             listOf(Color(0xFFE2E8F0), Color(0xFFCBD5E1))
                         }
                     ),
-                    shape = CircleShape
+                    shape = RoundedCornerShape(18.dp)
                 )
                 .drawBehind {
                     // Inner Embossed Soft Bubble Highlight (Top-Left gloss)
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(Color.White.copy(alpha = 0.85f), Color.Transparent),
-                            center = Offset(this.size.width * 0.28f, this.size.height * 0.28f),
-                            radius = this.size.width * 0.35f
+                            center = Offset(this.size.height * 0.28f, this.size.height * 0.28f),
+                            radius = this.size.height * 0.35f
                         )
                     )
                     // Bottom-Right Inner Shadow Edge
@@ -3438,7 +3447,7 @@ fun SmallServiceButton(
                 } else {
                     Color.Transparent
                 },
-                shape = CircleShape
+                shape = RoundedCornerShape(18.dp)
             )
         }
 
@@ -3459,15 +3468,25 @@ fun SmallServiceButton(
                     },
                     indication = ripple(color = FooterRipple),
                     interactionSource = remember { MutableInteractionSource() }
-                ),
+                )
+                .padding(horizontal = if (buttonText != null) 8.dp else 0.dp), // Add padding for text
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                painter = painterResource(id = iconRes),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp), // Balanced icon size
-                tint = if (useOriginalTint) Color.Unspecified else (if (isFocused) Color(0xFF1C1D24) else buttonColor) // Google TV High-Contrast Dynamic Switch
-            )
+            if (iconRes != null) {
+                Icon(
+                    painter = painterResource(id = iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp), // Balanced icon size
+                    tint = if (useOriginalTint) Color.Unspecified else (if (isFocused) Color(0xFF1C1D24) else buttonColor) // Google TV High-Contrast Dynamic Switch
+                )
+            } else if (buttonText != null) {
+                Text(
+                    text = buttonText,
+                    color = if (isFocused) Color(0xFF1C1D24) else buttonColor,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         if (title != null) {
@@ -5674,7 +5693,7 @@ fun OrderDrawer(
                                         label = "OrderFocusFadeAlpha"
                                     )
 
-                                    val pulseAlpha = remember { androidx.compose.animation.core.Animatable(0.0f) }
+                                    val pulseAlpha = remember { androidx.compose.animation.core.Animatable(0.4f) }
 
                                     LaunchedEffect(isItemFocused) {
                                         if (isItemFocused) {
@@ -5686,7 +5705,7 @@ fun OrderDrawer(
                                                 )
                                             )
                                         } else {
-                                            pulseAlpha.snapTo(0.0f)
+                                            pulseAlpha.snapTo(0.4f)
                                         }
                                     }
 
@@ -5695,7 +5714,7 @@ fun OrderDrawer(
                                         Modifier.border(
                                             width = 3.dp,
                                             color = Color.White.copy(alpha = pulseAlpha.value * focusFadeAlpha),
-                                            shape = RoundedCornerShape(23.dp)
+                                            shape = RoundedCornerShape(26.dp)
                                         )
                                     } else {
                                         Modifier
@@ -5726,7 +5745,7 @@ fun OrderDrawer(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .then(borderModifier)
-                                                .padding(3.dp) // The Floating Air Gap
+                                                .padding(6.dp) // The Floating Air Gap
                                                 .clip(RoundedCornerShape(20.dp))
                                                 .background(Color.White.copy(alpha = 0.05f))
                                                 .padding(12.dp)

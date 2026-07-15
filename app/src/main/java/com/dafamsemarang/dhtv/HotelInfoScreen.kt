@@ -90,11 +90,23 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     val isLoadingHealthWellness = !DataRepository.isHealthWellnessLoaded.value
     val isLoadingDiscoverDestination = !DataRepository.isDiscoverDestinationLoaded.value
     
-    // Delay shimmer visibility until after screen transition completes (500ms)
+    val currentIsLoading = when(selectedButton) {
+        0 -> isLoadingHotelFacilities
+        1 -> isLoadingRoomFacilities
+        2 -> isLoadingEmergencyProcedure
+        3 -> isLoadingHealthWellness
+        4 -> isLoadingDiscoverDestination
+        else -> false
+    }
+
     var shimmerVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(550)
-        shimmerVisible = true
+    LaunchedEffect(currentIsLoading) {
+        if (currentIsLoading) {
+            delay(550)
+            if (currentIsLoading) shimmerVisible = true
+        } else {
+            shimmerVisible = false
+        }
     }
     val buttonLabels = listOf(
         "HOTEL FACILITY",
@@ -107,7 +119,7 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     val scope = rememberCoroutineScope()
     
     var focusedItemIndex by remember { mutableIntStateOf(0) }
-    val rowState = rememberLazyListState()
+    val rowState = remember(selectedButton) { androidx.compose.foundation.lazy.LazyListState() }
 
     val categoriesList = listOf(
         Pair("HOTEL FACILITY", hotelFacilities),
@@ -118,7 +130,7 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     )
 
     val currentFocusedItem = categoriesList.getOrNull(selectedButton)?.second?.getOrNull(focusedItemIndex)
-    var debouncedFocusedItem by remember { mutableStateOf<Item?>(null) }
+    var debouncedFocusedItem by remember { mutableStateOf<Item?>(currentFocusedItem) }
 
     var lastFocusChangeTime by remember { mutableLongStateOf(0L) }
 
@@ -126,12 +138,6 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
         val currentTime = System.currentTimeMillis()
         val timeSinceLastChange = currentTime - lastFocusChangeTime
         lastFocusChangeTime = currentTime
-        
-        if (debouncedFocusedItem == null || timeSinceLastChange < 300) {
-            // Speed scrolling detected! Apply debounce delay so we don't spam background changes.
-            // Also applies to the very first load (if debouncedFocusedItem == null but time is short) wait, no. 
-            // If debouncedFocusedItem == null, we should load instantly! 
-        }
         
         if (debouncedFocusedItem == null || timeSinceLastChange > 300) {
             debouncedFocusedItem = currentFocusedItem
@@ -142,7 +148,9 @@ fun HotelInfoScreen(navController: androidx.navigation.NavHostController? = null
     }
 
     LaunchedEffect(debouncedFocusedItem) {
-        com.dafamsemarang.dhtv.DataRepository.globalHotelImageUrl.value = debouncedFocusedItem?.imageUrl
+        if (debouncedFocusedItem != null) {
+            com.dafamsemarang.dhtv.DataRepository.globalHotelImageUrl.value = debouncedFocusedItem?.imageUrl
+        }
     }
 
     Box(
@@ -795,6 +803,22 @@ fun ItemCard(item: Item, onClick: () -> Unit, modifier: Modifier = Modifier) {
         label = "ItemCardScale"
     )
 
+    val pulseAlpha = remember { Animatable(0.4f) }
+
+    LaunchedEffect(isFocused) {
+        if (isFocused) {
+            pulseAlpha.animateTo(
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 800, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                )
+            )
+        } else {
+            pulseAlpha.snapTo(0.4f)
+        }
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -813,16 +837,16 @@ fun ItemCard(item: Item, onClick: () -> Unit, modifier: Modifier = Modifier) {
                 .then(
                     if (isFocused) {
                         Modifier.border(
-                            width = 2.5.dp,
-                            color = Color.White.copy(alpha = focusFadeAlpha),
+                            width = 3.dp,
+                            color = Color.White.copy(alpha = pulseAlpha.value * focusFadeAlpha),
                             shape = RoundedCornerShape(24.dp)
                         )
                     } else {
                         Modifier // Completely borderless when not focused!
                     }
                 )
-                .padding(5.dp) // Gap space between border and image is exactly 2.5.dp (as thick as the border itself!)
-                .clip(RoundedCornerShape(19.dp)) // Concentric balanced inner radius: 24.dp outer - 5.dp padding = 19.dp!
+                .padding(6.dp) // Gap space between border and image is exactly 6.dp (2x thick as the border!)
+                .clip(RoundedCornerShape(18.dp)) // Concentric balanced inner radius: 24.dp outer - 6.dp padding = 18.dp!
                 .clickable(
                     onClick = {
                         onClick()
@@ -832,29 +856,15 @@ fun ItemCard(item: Item, onClick: () -> Unit, modifier: Modifier = Modifier) {
                     interactionSource = interactionSource
                 )
         ) {
-            if (item.imageUrl.isNotEmpty()) {
-                CachedAsyncImage(
-                    imageUrl = item.imageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    cachePrefix = "img"
-                )
-
-                // Bottom subtle dark gradient inside card
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.5f)
-                                )
-                            )
-                        )
-                )
-            }
+            CachedAsyncImage(
+                imageUrl = item.imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                cachePrefix = "img",
+                showShimmer = false,
+                error = R.drawable.err
+            )
         }
         
         Spacer(modifier = Modifier.height(6.dp))

@@ -20,6 +20,7 @@ activityCompose = "1.9.3"
 ui = "1.7.5"
 playServicesBase = "18.0.1"
 media3Ui = "1.5.1"
+uiVersion = "1.11.4"
 
 [libraries]
 androidx-animation = { module = "androidx.compose.animation:animation", version = "1.7.5" }
@@ -48,6 +49,7 @@ ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 play-services-base = { group = "com.google.android.gms", name = "play-services-base", version.ref = "playServicesBase" }
 androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3Ui" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "uiVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

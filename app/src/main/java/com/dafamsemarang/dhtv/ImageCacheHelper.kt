@@ -199,7 +199,7 @@ fun CachedAsyncImage(
                 painter = rememberAsyncImagePainter(
                     model = ImageRequest.Builder(context)
                         .data(imgFile)
-                        .crossfade(false)
+                        .crossfade(true) // Crossfade for smooth entry, preventing harsh pop-ins
                         .allowHardware(true) // Speed up rendering via direct GPU hooks
                         .build(),
                     imageLoader = svgAwareImageLoader,

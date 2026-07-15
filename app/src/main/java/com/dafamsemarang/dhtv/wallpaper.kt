@@ -173,7 +173,7 @@ fun WallpaperSection() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f))
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
         )
     }
 }

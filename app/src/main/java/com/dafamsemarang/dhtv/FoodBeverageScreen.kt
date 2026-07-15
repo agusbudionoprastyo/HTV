@@ -291,9 +291,21 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
         focusedItemIndex = 0
     }
 
+    var lastCategoryChangeTime by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+
     LaunchedEffect(focusedCategoryForSelection) {
-        delay(200)
-        selectedCategory = focusedCategoryForSelection
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastChange = currentTime - lastCategoryChangeTime
+        lastCategoryChangeTime = currentTime
+
+        if (selectedCategory == null || timeSinceLastChange > 300) {
+            // Pindah instan kalau ini adalah tap pertama / tidak sedang speed scroll
+            selectedCategory = focusedCategoryForSelection
+        } else {
+            // Aktifkan smart debounce (tunda sedikit) jika mendeteksi spam tombol/speed scroll
+            delay(250)
+            selectedCategory = focusedCategoryForSelection
+        }
     }
 
     // Unified with HomeScreen: Root 8.dp padding removed to allow edge-to-edge scrolling!
@@ -381,18 +393,18 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                                  val isSelected = selectedCategory == null
                                  var isFocused by remember { mutableStateOf(false) }
 
-                                 val borderAlpha = remember { Animatable(0.5f) }
+                                 val borderAlpha = remember { Animatable(0.4f) }
                                  LaunchedEffect(isFocused) {
                                      if (isFocused) {
                                          borderAlpha.animateTo(
                                              targetValue = 1.0f,
                                              animationSpec = infiniteRepeatable(
-                                                 animation = tween(1000, easing = LinearEasing),
+                                                 animation = tween(800, easing = LinearEasing),
                                                  repeatMode = RepeatMode.Reverse
                                              )
                                          )
                                      } else {
-                                         borderAlpha.snapTo(0.5f)
+                                         borderAlpha.snapTo(0.4f)
                                      }
                                  }
 
@@ -465,18 +477,18 @@ fun FoodBeverageScreen(navController: androidx.navigation.NavHostController? = n
                                  val isSelected = selectedCategory == category
                                  var isFocused by remember { mutableStateOf(false) }
 
-                                 val borderAlpha = remember { Animatable(0.5f) }
+                                 val borderAlpha = remember { Animatable(0.4f) }
                                  LaunchedEffect(isFocused) {
                                      if (isFocused) {
                                          borderAlpha.animateTo(
                                              targetValue = 1.0f,
                                              animationSpec = infiniteRepeatable(
-                                                 animation = tween(1000, easing = LinearEasing),
+                                                 animation = tween(800, easing = LinearEasing),
                                                  repeatMode = RepeatMode.Reverse
                                              )
                                          )
                                      } else {
-                                         borderAlpha.snapTo(0.5f)
+                                         borderAlpha.snapTo(0.4f)
                                      }
                                  }
                                 val scale by animateFloatAsState(
@@ -849,19 +861,19 @@ fun MenuItem(
         label = "FocusFadeAlpha"
     )
 
-    val pulseAlpha = remember { Animatable(0.0f) }
+    val pulseAlpha = remember { Animatable(0.4f) }
 
     LaunchedEffect(isFocused) {
         if (isFocused) {
             pulseAlpha.animateTo(
                 targetValue = 1.0f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+                    animation = tween(durationMillis = 800, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse
                 )
             )
         } else {
-            pulseAlpha.snapTo(0.0f)
+            pulseAlpha.snapTo(0.4f)
         }
     }
 
@@ -1202,81 +1214,60 @@ fun ItemDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White, RoundedCornerShape(20.dp))
+                .background(Color(0xFF1E2026), RoundedCornerShape(28.dp))
                 .padding(8.dp)
         ) {
-            var isCloseFocused by remember { mutableStateOf(false) }
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .onFocusChanged { isCloseFocused = it.isFocused }
-                    .clickable(
-                        onClick = onDismiss,
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    )
-                    .background(if (isCloseFocused) Color(0xFFCFDFED) else Color.Transparent)
-                    .align(Alignment.TopEnd),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "\uF057",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = if (isCloseFocused) Color(0xFF1E2026) else Color(0xFFCFDFED),
-                    fontFamily = FontFamily(Font(R.font.icons))
-                )
-            }
             Column(
                 modifier = Modifier
                     .padding(8.dp)
                     .fillMaxWidth()
             ) {
-                // Item Name, Description, and Price
+                // Item Name and Description
                 Text(
                     item.name,
                     style = TextStyle(
                         fontSize = 24.sp,
-                        color = Color(0xff071434),
+                        color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     item.description,
-                    style = TextStyle(fontSize = 16.sp),
+                    style = TextStyle(fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f)),
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    formatIDR(item.price),
-                    style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Quantity Section
+                // Price and Quantity Section
                 Row(
-                    modifier = Modifier.fillMaxWidth(0.5f),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Quantity",
-                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        formatIDR(item.price),
+                        style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .background(Color.LightGray.copy(alpha = .5f), shape = RoundedCornerShape(50))
-                            .fillMaxWidth()
-                            .padding(4.dp)
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
+                        Text(
+                            text = "Qty",
+                            style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .background(Color.White.copy(alpha = 0.1f), shape = RoundedCornerShape(50))
+                                .padding(4.dp)
                         ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                             // Decrease quantity
                             var isMinusFocused by remember { mutableStateOf(false) }
                             Box(
@@ -1294,7 +1285,7 @@ fun ItemDialog(
                             ) {
                                 Text(
                                     text = "\uF056", // Minus icon
-                                    color = if (isMinusFocused) Color(0xFF1E2026) else Color.Gray,
+                                    color = if (isMinusFocused) Color(0xFF1E2026) else Color.White,
                                     style = MaterialTheme.typography.titleLarge,
                                     fontFamily = FontFamily(Font(R.font.icons))
                                 )
@@ -1303,6 +1294,7 @@ fun ItemDialog(
                             Text(
                                 "$quantity",
                                 style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp)
                             )
@@ -1324,10 +1316,11 @@ fun ItemDialog(
                             ) {
                                 Text(
                                     text = "\uF055", // Plus icon
-                                    color = if (isPlusFocused) Color(0xFF1E2026) else Color.Gray,
+                                    color = if (isPlusFocused) Color(0xFF1E2026) else Color.White,
                                     style = MaterialTheme.typography.titleLarge,
                                     fontFamily = FontFamily(Font(R.font.icons))
                                 )
+                            }
                             }
                         }
                     }
@@ -1341,7 +1334,7 @@ fun ItemDialog(
                     }
                     Text(
                         text = "Variant",
-                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -1366,11 +1359,11 @@ fun ItemDialog(
                                     )
                                     .border(
                                         width = if (isVariantFocused || selectedVariant == variant) 2.dp else 1.dp,
-                                        color = if (isVariantFocused || selectedVariant == variant) Color(0xFFCFDFED) else Color.LightGray.copy(alpha = 0.5f),
+                                        color = if (isVariantFocused || selectedVariant == variant) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.3f),
                                         shape = RoundedCornerShape(16.dp)
                                     )
                                     .background(
-                                        if (isVariantFocused) Color(0xFFCFDFED) else if (selectedVariant == variant) Color(0xFFCFDFED).copy(alpha = 0.15f) else Color.White,
+                                        if (isVariantFocused) Color(0xFFCFDFED) else if (selectedVariant == variant) Color(0xFFCFDFED).copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
                                         shape = RoundedCornerShape(16.dp)
                                     )
                             ) {
@@ -1397,7 +1390,7 @@ fun ItemDialog(
                                             text = variant.name,
                                             style = TextStyle(
                                                 fontSize = 12.sp,
-                                                color = if (isVariantFocused) Color(0xFF1E2026) else Color.Unspecified
+                                                color = if (isVariantFocused) Color(0xFF1E2026) else Color.White
                                             ),
                                             maxLines = 2, overflow = TextOverflow.Ellipsis
                                         )
@@ -1410,7 +1403,7 @@ fun ItemDialog(
                                             style = TextStyle(
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isVariantFocused) Color(0xFF1E2026) else Color.Unspecified
+                                                color = if (isVariantFocused) Color(0xFF1E2026) else Color.White
                                             )
                                         )
                                     }
@@ -1425,13 +1418,13 @@ fun ItemDialog(
                 // Special Instructions Section
                 Text(
                     text = "Special Instructions",
-                    style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.LightGray.copy(alpha = 0.5f), shape = RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.1f), shape = RoundedCornerShape(16.dp))
                         .padding(24.dp)
                 ) {
                     Row(
@@ -1440,8 +1433,9 @@ fun ItemDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = specialInstruction,
-                            color = Color.Black,
+                            text = specialInstruction.ifEmpty { "e.g., No spicy, extra cheese" },
+                            color = if (specialInstruction.isEmpty()) Color.White.copy(alpha = 0.4f) else Color.White,
+                            fontSize = 12.sp,
                             modifier = Modifier.weight(1f)
                         )
                         
@@ -1452,11 +1446,11 @@ fun ItemDialog(
                         val instructionText = if (isListening) {
                             "Silakan berbicara..."
                         } else if (specialInstruction.isEmpty()) {
-                            "Klik [OK] untuk bicara"
+                            "Klik OK untuk bicara"
                         } else {
                             "" // Sembunyikan instruksi ketika note sudah terisi!
                         }
-                        val instructionColor = if (isListening) Color(0xFFE91E63) else Color.Gray
+                        val instructionColor = if (isListening) Color(0xFFE91E63) else Color.LightGray
                         val instructionWeight = if (isListening) FontWeight.Bold else FontWeight.Normal
 
                         Row(
@@ -1505,8 +1499,8 @@ fun ItemDialog(
 
                             // 2. UNIFIED TV MIC BUTTON (Captures hold and release events!)
                             val interactionSource = remember { MutableInteractionSource() }
-                            val micBgColor = if (isListening || isMicFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.5f)
-                            val micIconTint = if (isListening || isMicFocused) Color(0xFF1E2026) else Color.Gray
+                            val micBgColor = if (isListening || isMicFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.1f)
+                            val micIconTint = if (isListening || isMicFocused) Color(0xFF1E2026) else Color.White
 
                             Box(
                                 modifier = Modifier
@@ -1572,65 +1566,73 @@ fun ItemDialog(
                 var isAddCartFocused by remember { mutableStateOf(false) }
                 var buttonOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
-                // Animated Pulsing Border Effect when focused
-                val infiniteTransition = rememberInfiniteTransition(label = "pulseBorder")
-                val pulseAlpha by infiniteTransition.animateFloat(
-                    initialValue = 0.3f,
-                    targetValue = 1.0f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1000, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "pulseAlpha"
-                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Add to Cart Button
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { isAddCartFocused = it.isFocused }
-                        .onGloballyPositioned { coords ->
-                            val bounds = coords.boundsInRoot()
-                            buttonOffset = androidx.compose.ui.geometry.Offset(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
-                        }
-                        .clickable(
-                            onClick = {
-                                GlobalCartState.animStartOffset.value = buttonOffset
-                                GlobalCartState.animateTrigger.value++
+                var isCancelFocused by remember { mutableStateOf(false) }
 
-                                // Pass the selected variant (can be null) to the cart handler
-                                onAddToCart(item, quantity, specialInstruction, selectedVariant)
-                                onDismiss()
-                            },
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        )
-                        .border(
-                            width = 4.dp,
-                            color = if (isAddCartFocused) Color(0xFF81D4FA).copy(alpha = pulseAlpha) else Color.Transparent,
-                            shape = RoundedCornerShape(50)
-                        )
-                        .padding(6.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Cancel Button
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .weight(0.25f)
                             .height(48.dp)
                             .clip(RoundedCornerShape(50))
-                            .background(Color(0xFFE91E63))
-                            .align(Alignment.Center)
+                            .onFocusChanged { isCancelFocused = it.isFocused }
+                            .clickable(
+                                onClick = onDismiss,
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            )
+                            .background(if (isCancelFocused) Color(0xFFCFDFED) else Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            style = TextStyle(
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isCancelFocused) Color(0xFF1E2026) else Color.White
+                            ),
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
+
+                    // Add to Cart Button
+                    Box(
+                        modifier = Modifier
+                            .weight(0.75f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(50))
+                            .onFocusChanged { isAddCartFocused = it.isFocused }
+                            .onGloballyPositioned { coords ->
+                                val bounds = coords.boundsInRoot()
+                                buttonOffset = androidx.compose.ui.geometry.Offset(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+                            }
+                            .clickable(
+                                onClick = {
+                                    GlobalCartState.animStartOffset.value = buttonOffset
+                                    GlobalCartState.animateTrigger.value++
+
+                                    // Pass the selected variant (can be null) to the cart handler
+                                    onAddToCart(item, quantity, specialInstruction, selectedVariant)
+                                    onDismiss()
+                                },
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            )
+                            .background(if (isAddCartFocused) Color(0xFFCFDFED) else Color(0xFFE91E63))
                     ) {
                         Text(
                             text = "Add to Cart - ${formatIDR(item.price * quantity + (selectedVariant?.price ?: 0) * quantity)}",
                             style = TextStyle(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = if (isAddCartFocused) Color(0xFF1E2026) else Color.White
                             ),
-                            modifier = Modifier
-                                .align(Alignment.Center)
+                            modifier = Modifier.align(Alignment.Center)
                         )
                     }
                 }

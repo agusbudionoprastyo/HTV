@@ -161,9 +161,9 @@ fun HeaderSection(currentRoute: String? = "home") {
                 Box(
                     modifier = Modifier
                         .padding(start = 58.dp)
-                        .width(456.dp)
-                        .height(88.dp)
-                        .offset(x = (-4).dp, y = (-4).dp)
+                        .requiredWidth(460.dp)
+                        .requiredHeight(92.dp)
+                        .offset(x = (-6).dp, y = (-6).dp)
                         .onFocusChanged { 
                             isFocused = it.isFocused 
                             // Preserve last page on focus loss as explicitly requested!
@@ -209,9 +209,9 @@ fun HeaderSection(currentRoute: String? = "home") {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .border(
-                                    width = 2.dp,
+                                    width = 3.dp,
                                     color = Color.White.copy(alpha = focusPulseAlpha.value),
-                                    shape = RoundedCornerShape(20.dp) // Concentric shape: 16.dp (card corner) + 4.dp (gap) = 20.dp
+                                    shape = RoundedCornerShape(22.dp) // Concentric shape: 16.dp (card corner) + 6.dp (gap) = 22.dp
                                 )
                         )
                     }
