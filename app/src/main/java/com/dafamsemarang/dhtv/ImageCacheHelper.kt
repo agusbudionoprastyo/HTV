@@ -36,6 +36,17 @@ import androidx.compose.ui.graphics.Color
 
 
 
+// Singleton ImageLoader to share memory cache across all CachedAsyncImage instances
+private var sharedSvgImageLoader: coil.ImageLoader? = null
+
+private fun getSharedSvgImageLoader(context: Context): coil.ImageLoader {
+    return sharedSvgImageLoader ?: coil.ImageLoader.Builder(context.applicationContext)
+        .components {
+            add(coil.decode.SvgDecoder.Factory())
+        }
+        .build().also { sharedSvgImageLoader = it }
+}
+
 /**
  * Download and cache image to local storage
  */
@@ -138,13 +149,7 @@ fun CachedAsyncImage(
     showShimmer: Boolean = true
 ) {
     val context = LocalContext.current
-    val svgAwareImageLoader = remember(context) {
-        coil.ImageLoader.Builder(context)
-            .components {
-                add(coil.decode.SvgDecoder.Factory())
-            }
-            .build()
-    }
+    val svgAwareImageLoader = getSharedSvgImageLoader(context)
     
     val sanitizedUrl = remember(imageUrl) { imageUrl.replace(" ", "%20") }
     val cacheFileName = remember(sanitizedUrl) {
