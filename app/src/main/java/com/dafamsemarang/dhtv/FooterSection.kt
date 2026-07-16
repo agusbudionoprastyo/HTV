@@ -271,6 +271,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     // Pre-fetch Wi-Fi Data
     var wifiSsid by remember { mutableStateOf("") }
     var wifiPassword by remember { mutableStateOf("") }
+    var wifiIsWebLogin by remember { mutableStateOf(false) }
     var wifiLoading by remember { mutableStateOf(true) }
     var wifiQrBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
 
@@ -291,6 +292,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 .addOnSuccessListener { snapshot ->
                     wifiSsid = snapshot.child("ssid").getValue(String::class.java) ?: ""
                     wifiPassword = snapshot.child("password").getValue(String::class.java) ?: ""
+                    wifiIsWebLogin = snapshot.child("isWebLogin").getValue(Boolean::class.java) ?: false
                     wifiLoading = false
                 }
                 .addOnFailureListener {
@@ -320,10 +322,10 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     }
 
     // Pre-generate Wi-Fi QR Bitmap
-    LaunchedEffect(wifiSsid, wifiPassword) {
+    LaunchedEffect(wifiSsid, wifiPassword, wifiIsWebLogin) {
         if (wifiSsid.isNotEmpty()) {
             val bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                generateWifiQRCode(wifiSsid, wifiPassword)
+                generateWifiQRCode(wifiSsid, wifiPassword, wifiIsWebLogin)
             }
             wifiQrBitmap = bitmap
         }
@@ -392,7 +394,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     val hotelFocusRequester = remember { FocusRequester() }
     val requestFocusRequester = remember { FocusRequester() }
     val myRequestFocusRequester = remember { FocusRequester() }
-    val screensaverFocusRequester = remember { FocusRequester() }
     val dndFocusRequester = remember { FocusRequester() }
     val wifiFocusRequester = remember { FocusRequester() }
     val whatsappFocusRequester = remember { FocusRequester() }
@@ -415,7 +416,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                 "footer_food" -> foodFocusRequester.requestFocus()
                                 "footer_hotel" -> hotelFocusRequester.requestFocus()
                                 "footer_contact" -> requestFocusRequester.requestFocus()
-                                "footer_screensaver" -> screensaverFocusRequester.requestFocus()
                                 "footer_dnd" -> dndFocusRequester.requestFocus()
                                 "footer_wifi" -> wifiFocusRequester.requestFocus()
                                 "footer_whatsapp" -> whatsappFocusRequester.requestFocus()
@@ -439,9 +439,9 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         val isActive = ScreenSaverManager.isScreenSaverActive
         if (wasScreenSaverActive && !isActive) {
             try {
-                screensaverFocusRequester.requestFocus()
+                homeFocusRequester.requestFocus()
             } catch (e: Exception) {
-                Log.e("FooterSection", "Failed to refocus screensaver button: ${e.message}")
+                Log.e("FooterSection", "Failed to refocus home button: ${e.message}")
             }
         }
         wasScreenSaverActive = isActive
@@ -685,7 +685,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                     "footer_food" -> foodFocusRequester
                                     "footer_hotel" -> hotelFocusRequester
                                     "footer_contact" -> requestFocusRequester
-                                    "footer_screensaver" -> screensaverFocusRequester
                                     "footer_dnd" -> dndFocusRequester
                                     "footer_wifi" -> wifiFocusRequester
                                     "footer_whatsapp" -> whatsappFocusRequester
@@ -773,54 +772,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                 }
             }
 
-            // Capsule 5 (Screensaver)
-            Box {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(RoundedCornerShape(50.dp))
-                        .background(
-                            color = Color(207, 223, 237).copy(alpha = baseAlpha),
-                            shape = RoundedCornerShape(50.dp)
-                        )
-                )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start,
-                    modifier = Modifier.padding(4.dp)
-                ) {
-                    SmallServiceButton(
-                        iconRes = R.drawable.ic_screensaver,
-                        onClick = {
-                            val elapsed = System.currentTimeMillis() - ScreenSaverManager.lastDismissedTime
-                            if (elapsed > 500) {
-                                try {
-                                    val intent = Intent(Intent.ACTION_MAIN).apply {
-                                        setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    // Fallback to in-app screensaver
-                                    ScreenSaverManager.isScreenSaverActive = true
-                                }
-                            } else {
-                                Log.d("FooterSection", "Ignored screensaver button click due to debounce cool-down ($elapsed ms)")
-                            }
-                        },
-                        title = "Screensaver",
-                        isActive = true,
-                        focusRequester = screensaverFocusRequester,
-                        onFocusStateChange = { isFocused ->
-                            if (isFocused) {
-                                GlobalFocusTracker.lastFocusedItem = "footer_screensaver"
-                                GlobalFocusTracker.lastFocusedFooterItem = "footer_screensaver"
-                            }
-                        }
-                    )
-                }
-            }
 
             // Capsule 3 (DND / Wi-Fi / WhatsApp)
             Box {
@@ -916,9 +867,11 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     SmallServiceButton(
                         iconRes = null,
                         buttonText = "Home",
-                        modifier = Modifier.onGloballyPositioned { coords ->
-                            homeButtonBoundsInRoot = coords.boundsInRoot()
-                        },
+                        modifier = Modifier
+                            .width(73.dp)
+                            .onGloballyPositioned { coords ->
+                                homeButtonBoundsInRoot = coords.boundsInRoot()
+                            },
                         onClick = {
                             if (currentRoute != "home") navController?.navigate("home") {
                                 popUpTo("home") { saveState = true }
@@ -942,6 +895,8 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         useOriginalTint = true,
                         isHome3D = false
                     )
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     // F&B button – NOT wrapped, track its position via onGloballyPositioned
                     Box(
@@ -975,6 +930,8 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         )
                     }
 
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Box(
                         modifier = Modifier
                             .onGloballyPositioned { coords ->
@@ -1005,6 +962,8 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             }
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     SmallServiceButton(
                         iconRes = R.drawable.ic_info_circle,
@@ -1459,6 +1418,8 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         WifiQRCodeDialog(
             ssid = wifiSsid,
             password = wifiPassword,
+            isWebLogin = wifiIsWebLogin,
+            roomNumber = DataRepository.guestInfo.value?.room ?: deviceID ?: "",
             loading = wifiLoading,
             qrCodeBitmap = wifiQrBitmap,
             onDismiss = { showDialog = false }
@@ -2770,7 +2731,7 @@ fun NotificationButtonDialog(
     var isDeleting by remember { mutableStateOf(false) }
 
     var isFocused by remember { mutableStateOf(false) }
-    val focusPulseAlpha = remember { Animatable(0.0f) }
+    val focusPulseAlpha = remember { Animatable(0.4f) }
 
     // Animasi pergeseran offset card notifikasi
     val offsetX by animateDpAsState(
@@ -2828,12 +2789,12 @@ fun NotificationButtonDialog(
             focusPulseAlpha.animateTo(
                 targetValue = 1.0f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+                    animation = tween(durationMillis = 1000, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse
                 )
             )
         } else {
-            focusPulseAlpha.snapTo(0.0f)
+            focusPulseAlpha.snapTo(0.4f)
             isHoldingDpadLeft = false
             deleteProgress = 0f
         }
@@ -2982,11 +2943,11 @@ fun NotificationButtonDialog(
                 .fillMaxWidth()
                 .offset(x = offsetX)
                 .border(
-                    width = 2.dp,
+                    width = 3.dp,
                     color = Color.White.copy(alpha = if (isFocused && !showDeleteButton) focusPulseAlpha.value else 0f),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(18.dp)
                 )
-                .padding(4.dp)
+                .padding(6.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(
                     color = Color.White.copy(alpha = 0.05f),
@@ -3373,8 +3334,7 @@ fun SmallServiceButton(
     ) {
         var boxModifier = if (buttonText != null) {
             Modifier
-                .fillMaxHeight()
-                .wrapContentWidth()
+                .matchParentSize()
                 .clip(RoundedCornerShape(18.dp))
         } else {
             Modifier
@@ -3640,6 +3600,8 @@ fun SmallServiceButtonWithBadge(
 fun WifiQRCodeDialog(
     ssid: String,
     password: String,
+    isWebLogin: Boolean = false,
+    roomNumber: String = "",
     loading: Boolean,
     qrCodeBitmap: ImageBitmap?,
     onDismiss: () -> Unit
@@ -3817,6 +3779,29 @@ fun WifiQRCodeDialog(
                                                 }
                                             }
                                             
+                                            if (isWebLogin) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(54.dp)
+                                                            .background(Color.White.copy(0.1f), CircleShape),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(id = R.drawable.keyboard),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(28.dp),
+                                                            tint = Color.White
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.width(16.dp))
+                                                    Column {
+                                                        Text("Username", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
+                                                        Text(roomNumber, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Box(
                                                     modifier = Modifier
@@ -4607,9 +4592,12 @@ fun getTimeAgo(timestamp: Long): String {
     }
 }
 
-fun generateWifiQRCode(ssid: String, password: String): ImageBitmap {
-    val wifiUrl = "WIFI:T:WPA;S:$ssid;P:$password;;"
-
+fun generateWifiQRCode(ssid: String, password: String, isWebLogin: Boolean = false): ImageBitmap {
+    val wifiUrl = if (isWebLogin || password.trim().isEmpty()) {
+        "WIFI:T:nopass;S:$ssid;;"
+    } else {
+        "WIFI:T:WPA;S:$ssid;P:$password;;"
+    }
     val writer = QRCodeWriter()
     val bitMatrix = writer.encode(wifiUrl, BarcodeFormat.QR_CODE, 512, 512)
 
