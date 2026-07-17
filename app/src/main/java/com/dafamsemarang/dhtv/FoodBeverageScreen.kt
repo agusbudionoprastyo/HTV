@@ -905,7 +905,9 @@ fun MenuItem(
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     when (keyEvent.key) {
                         Key.DirectionDown -> {
-                            if (!isAddActive) {
+                            if (!item.isActive) {
+                                false // Let focus escape to cart if inactive
+                            } else if (!isAddActive) {
                                 isAddActive = true
                                 true // Consume event to stay inside the card!
                             } else {
@@ -938,16 +940,18 @@ fun MenuItem(
             }
             .clickable(
                 onClick = {
-                    if (isAddActive) {
-                        val offset = addButtonCoords?.let {
-                            androidx.compose.ui.geometry.Offset(
-                                x = it.left + it.width / 2,
-                                y = it.top + it.height / 2
-                            )
-                        } ?: androidx.compose.ui.geometry.Offset.Zero
-                        onAddClick(offset)
-                    } else {
-                        onCardClick()
+                    if (item.isActive) {
+                        if (isAddActive) {
+                            val offset = addButtonCoords?.let {
+                                androidx.compose.ui.geometry.Offset(
+                                    x = it.left + it.width / 2,
+                                    y = it.top + it.height / 2
+                                )
+                            } ?: androidx.compose.ui.geometry.Offset.Zero
+                            onAddClick(offset)
+                        } else {
+                            onCardClick()
+                        }
                     }
                 },
                 indication = null,
@@ -962,6 +966,7 @@ fun MenuItem(
                 .padding(6.dp) // The Floating Air Gap (6.dp padding - 3.dp border width = 3.dp gap, equal to border size!)
                 .clip(RoundedCornerShape(24.dp))
                 .background(color = Color(207, 223, 237).copy(alpha = 0.25f))
+                .alpha(if (item.isActive) 1f else 0.5f)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 
@@ -986,6 +991,24 @@ fun MenuItem(
                             error = R.drawable.err,
                             cachePrefix = "food"
                         )
+                        if (!item.isActive) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.4f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "SOLD OUT",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .background(Color.Red.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                     }
                     
                     // Title stays outside, below the image
@@ -1023,12 +1046,14 @@ fun MenuItem(
                     )
                     
                     // Compute dynamic button colors based on the state machine
-                    val btnBg = if (isAddActive && isFocused) {
+                    val btnBg = if (!item.isActive) {
+                        Color.Gray.copy(alpha = 0.3f)
+                    } else if (isAddActive && isFocused) {
                         Color(0xFFE91E63) // Pink padat ketika difokuskan / ditekan DirectionDown
                     } else {
                         Color.White.copy(alpha = 0.15f) // Putih transparan tipis saat pasif
                     }
-                    val btnText = Color.White
+                    val btnText = if (!item.isActive) Color.White.copy(alpha = 0.5f) else Color.White
                     
                     // Passive visual Add Button (Appearance driven by parent focus state)
                     Box(

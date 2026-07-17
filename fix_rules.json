@@ -1,0 +1,4 @@
+    "weather": {
+      ".read": true,
+      ".write": true
+    },

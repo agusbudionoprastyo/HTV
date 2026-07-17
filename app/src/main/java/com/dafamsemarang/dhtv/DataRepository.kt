@@ -162,12 +162,25 @@ object DataRepository {
     private var weatherSettingListener: ValueEventListener? = null
     private var liveWeatherListener: ValueEventListener? = null
     private var forecastListener: ValueEventListener? = null
+    private var weatherSyncListener: ValueEventListener? = null
     private var fidsSettingListener: ValueEventListener? = null
     private var flightInfoListener: ValueEventListener? = null
     private var guestInfoListener: ValueEventListener? = null
     private var dndListener: ValueEventListener? = null
     private var contactListener: ValueEventListener? = null
     private var branchLatLngListener: ValueEventListener? = null
+    private var syncBannerListener: ValueEventListener? = null
+    private var activeSyncBannerRef: DatabaseReference? = null
+    
+    private var syncMenuListener: ValueEventListener? = null
+    private var activeSyncMenuRef: DatabaseReference? = null
+    
+    private var syncHotelInfoListener: ValueEventListener? = null
+    private var activeSyncHotelInfoRef: DatabaseReference? = null
+    
+    private var syncRequestListener: ValueEventListener? = null
+    private var activeSyncRequestRef: DatabaseReference? = null
+
 
  
     private var activeBranchId: String? = null
@@ -186,6 +199,7 @@ object DataRepository {
     private var activeWeatherSettingRef: DatabaseReference? = null
     private var activeLiveWeatherRef: DatabaseReference? = null
     private var activeForecastRef: DatabaseReference? = null
+    private var activeWeatherSyncRef: DatabaseReference? = null
     private var activeFidsSettingRef: DatabaseReference? = null
     private var activeFlightInfoRef: DatabaseReference? = null
     private var activeGuestInfoRef: DatabaseReference? = null
@@ -213,7 +227,11 @@ object DataRepository {
             healthAndWellnessListener != null &&
             discoverDestinationListener != null &&
             contactListener != null &&
-            branchLatLngListener != null
+            branchLatLngListener != null &&
+            syncBannerListener != null &&
+            syncMenuListener != null &&
+            syncHotelInfoListener != null &&
+            syncRequestListener != null
 
         ) {
             Log.d("DataRepository", "Preload already active for branch: $branchId")
@@ -232,10 +250,9 @@ object DataRepository {
         menuListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val items = snapshot.children.mapNotNull { child ->
-                    val raw = child.value as? Map<*, *>
-                    val isActive = raw?.get("isActive") as? Boolean == true
-                    if (!isActive) return@mapNotNull null
-                    child.getValue(MenuItemData::class.java)?.copy(branchId = branchId)
+                    val parsedItem = child.getValue(MenuItemData::class.java)?.copy(branchId = branchId)
+                    // Ensure the isActive flag is correctly mapped from the raw data
+                    parsedItem?.copy(isActive = child.child("isActive").getValue(Boolean::class.java) ?: true)
                 }
                 menuItems.value = items
                 isMenuLoaded.value = true
@@ -246,7 +263,7 @@ object DataRepository {
                 isMenuLoaded.value = true
             }
         }
-        menuRef.addValueEventListener(menuListener!!)
+        // Removed to use Sync Trigger: menuRef.addValueEventListener(menuListener!!)
  
         // Preload Requests
         val requestRef = db.child("BRANCHES").child(branchId).child("GUEST_REQUEST").child("requests")
@@ -263,7 +280,7 @@ object DataRepository {
                 isRequestLoaded.value = true
             }
         }
-        requestRef.addValueEventListener(requestListener!!)
+        // Removed to use Sync Trigger: requestRef\.addValueEventListener\(requestListener!!\)
  
         // Preload Hotel Info - Hotel Facility
         val hotelFacRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("HOTEL_FACILITY")
@@ -279,7 +296,7 @@ object DataRepository {
                 isHotelFacilitiesLoaded.value = true
             }
         }
-        hotelFacRef.addValueEventListener(hotelFacilitiesListener!!)
+        // Removed to use Sync Trigger: hotelFacRef\.addValueEventListener\(hotelFacilitiesListener!!\)
 
         // Preload Hotel Info - Rooms Facility
         val roomFacRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("ROOMS_FACILITY")
@@ -295,7 +312,7 @@ object DataRepository {
                 isRoomFacilitiesLoaded.value = true
             }
         }
-        roomFacRef.addValueEventListener(roomFacilitiesListener!!)
+        // Removed to use Sync Trigger: roomFacRef\.addValueEventListener\(roomFacilitiesListener!!\)
 
         // Preload Hotel Info - Emergency Procedure
         val emergRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("EMERGENCY_PROCEDURE")
@@ -311,7 +328,7 @@ object DataRepository {
                 isEmergencyProcedureLoaded.value = true
             }
         }
-        emergRef.addValueEventListener(emergencyProcedureListener!!)
+        // Removed to use Sync Trigger: emergRef\.addValueEventListener\(emergencyProcedureListener!!\)
 
         // Preload Hotel Info - Health & Wellness
         val healthRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("HEALTH_WELLNESS")
@@ -327,7 +344,7 @@ object DataRepository {
                 isHealthWellnessLoaded.value = true
             }
         }
-        healthRef.addValueEventListener(healthAndWellnessListener!!)
+        // Removed to use Sync Trigger: healthRef\.addValueEventListener\(healthAndWellnessListener!!\)
 
         // Preload Hotel Info - Discover Destination
         val discoverRef = db.child("BRANCHES").child(branchId).child("HOTEL_INFO").child("DISCOVER_DESTINATION")
@@ -343,7 +360,7 @@ object DataRepository {
                 isDiscoverDestinationLoaded.value = true
             }
         }
-        discoverRef.addValueEventListener(discoverDestinationListener!!)
+        // Removed to use Sync Trigger: discoverRef\.addValueEventListener\(discoverDestinationListener!!\)
  
         // Preload Banners (from BANNER node)
         val slideshowRef = db.child("BRANCHES").child(branchId).child("BANNER")
@@ -391,7 +408,7 @@ object DataRepository {
                 isLoadingSlideshow.value = false
             }
         }
-        slideshowRef.addValueEventListener(slideshowListener!!)
+        // Removed to use Sync Trigger: slideshowRef.addValueEventListener(slideshowListener!!)
  
         // Old VIDEO node disabled/bypassed as per banner migration
         videoUrls.value = emptyList()
@@ -409,7 +426,7 @@ object DataRepository {
                 Log.e("DataRepository", "Company icon preload failed: ${error.message}")
             }
         }
-        iconRef.addValueEventListener(companyIconListener!!)
+        // Removed to use Sync Trigger: iconRef\.addValueEventListener\(companyIconListener!!\)
 
         // Preload Weather config
         val weatherRef = db.child("BRANCHES").child(branchId).child("SETTING").child("WEATHER")
@@ -525,7 +542,7 @@ object DataRepository {
                 Log.e("DataRepository", "Contact preload failed: ${error.message}")
             }
         }
-        contactRef.addValueEventListener(contactListener!!)
+        // Removed to use Sync Trigger: contactRef\.addValueEventListener\(contactListener!!\)
 
         // Preload hotel coordinates from BRANCHES/{branchId}/LONGLAT_BRANCH
         val branchLatLngRef = db.child("BRANCHES").child(branchId).child("LONGLAT_BRANCH")
@@ -539,7 +556,7 @@ object DataRepository {
                 Log.e("DataRepository", "BranchLatLng preload failed: ${error.message}")
             }
         }
-        branchLatLngRef.addValueEventListener(branchLatLngListener!!)
+        // Removed to use Sync Trigger: branchLatLngRef\.addValueEventListener\(branchLatLngListener!!\)
 
         // Preload Subscription Config from BRANCHES/{branchId}/SUBSCRIPTION_STATUS & EXPIRED_DATE
         val subStatusBranchRef = db.child("BRANCHES").child(branchId).child("SUBSCRIPTION_STATUS")
@@ -625,16 +642,76 @@ object DataRepository {
                 Log.e("DataRepository", "BranchName preload failed: ${error.message}")
             }
         }
-        branchNameRef.addValueEventListener(branchNameListener!!)
+        // Removed to use Sync Trigger: branchNameRef.addValueEventListener(branchNameListener!!)
+        
+        // 1. BANNER SYNC TRIGGER
+        val syncBannerRef = db.child("BRANCHES").child(branchId).child("SETTING").child("last_sync_banner")
+        activeSyncBannerRef = syncBannerRef
+        syncBannerListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                Log.d("DataRepository", "Banner Sync timestamp changed. Fetching banners...")
+                activeSlideshowRef?.addListenerForSingleValueEvent(slideshowListener!!)
+                activeCompanyIconRef?.addListenerForSingleValueEvent(companyIconListener!!)
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "Banner Sync listener cancelled: ${error.message}")
+            }
+        }
+        syncBannerRef.addValueEventListener(syncBannerListener!!)
+
+        // 2. MENU F&B SYNC TRIGGER
+        val syncMenuRef = db.child("BRANCHES").child(branchId).child("SETTING").child("last_sync_menu_fnb")
+        activeSyncMenuRef = syncMenuRef
+        syncMenuListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                Log.d("DataRepository", "Menu Sync timestamp changed. Fetching menus...")
+                activeMenuRef?.addListenerForSingleValueEvent(menuListener!!)
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "Menu Sync listener cancelled: ${error.message}")
+            }
+        }
+        syncMenuRef.addValueEventListener(syncMenuListener!!)
+
+        // 3. HOTEL INFO SYNC TRIGGER
+        val syncHotelInfoRef = db.child("BRANCHES").child(branchId).child("SETTING").child("last_sync_hotel_info")
+        activeSyncHotelInfoRef = syncHotelInfoRef
+        syncHotelInfoListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                Log.d("DataRepository", "Hotel Info Sync timestamp changed. Fetching hotel info...")
+                activeHotelFacilitiesRef?.addListenerForSingleValueEvent(hotelFacilitiesListener!!)
+                activeRoomFacilitiesRef?.addListenerForSingleValueEvent(roomFacilitiesListener!!)
+                activeEmergencyProcedureRef?.addListenerForSingleValueEvent(emergencyProcedureListener!!)
+                activeHealthAndWellnessRef?.addListenerForSingleValueEvent(healthAndWellnessListener!!)
+                activeDiscoverDestinationRef?.addListenerForSingleValueEvent(discoverDestinationListener!!)
+                activeBranchLatLngRef?.addListenerForSingleValueEvent(branchLatLngListener!!)
+                activeBranchNameRef?.addListenerForSingleValueEvent(branchNameListener!!)
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "Hotel Info Sync listener cancelled: ${error.message}")
+            }
+        }
+        syncHotelInfoRef.addValueEventListener(syncHotelInfoListener!!)
+
+        // 4. REQUEST SERVICE SYNC TRIGGER
+        val syncRequestRef = db.child("BRANCHES").child(branchId).child("SETTING").child("last_sync_request_service")
+        activeSyncRequestRef = syncRequestRef
+        syncRequestListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                Log.d("DataRepository", "Request Sync timestamp changed. Fetching requests...")
+                activeRequestRef?.addListenerForSingleValueEvent(requestListener!!)
+            }
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("DataRepository", "Request Sync listener cancelled: ${error.message}")
+            }
+        }
+        syncRequestRef.addValueEventListener(syncRequestListener!!)
     }
 
     private fun setupWeatherListeners(db: DatabaseReference, city: String?) {
-        activeLiveWeatherRef?.let { ref -> liveWeatherListener?.let { ref.removeEventListener(it) } }
-        activeForecastRef?.let { ref -> forecastListener?.let { ref.removeEventListener(it) } }
-        liveWeatherListener = null
-        forecastListener = null
-        activeLiveWeatherRef = null
-        activeForecastRef = null
+        activeWeatherSyncRef?.let { ref -> weatherSyncListener?.let { ref.removeEventListener(it) } }
+        weatherSyncListener = null
+        activeWeatherSyncRef = null
  
         if (city.isNullOrEmpty()) {
             liveWeather.value = null
@@ -642,77 +719,57 @@ object DataRepository {
             return
         }
  
-        // Live Weather Listener
         val liveRef = db.child("weather").child("liveWeather")
-        activeLiveWeatherRef = liveRef
-        liveWeatherListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                try {
-                    val matchingNode = if (snapshot.child(city).exists()) {
-                        snapshot.child(city)
-                    } else {
-                        snapshot.children.find { 
-                            it.child("city").getValue(String::class.java)?.equals(city, ignoreCase = true) == true 
-                        }
-                    }
- 
-                    if (matchingNode != null) {
-                        liveWeather.value = FirebaseWeatherData.parseLiveWeather(matchingNode)
-                        Log.d("DataRepository", "Parsed live weather for $city")
-                    } else {
-                        if (snapshot.child("city").getValue(String::class.java)?.equals(city, ignoreCase = true) == true) {
-                            liveWeather.value = FirebaseWeatherData.parseLiveWeather(snapshot)
-                            Log.d("DataRepository", "Parsed single live weather node for $city")
-                        } else {
-                            Log.w("DataRepository", "No live weather data found matching city: $city")
-                            liveWeather.value = null
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("DataRepository", "Error parsing live weather: ${e.message}", e)
-                }
-            }
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("DataRepository", "Live weather listener cancelled: ${error.message}")
-            }
-        }
-        liveRef.addValueEventListener(liveWeatherListener!!)
- 
-        // Forecast Listener
         val forecastRef = db.child("weather").child("forecast")
-        activeForecastRef = forecastRef
-        forecastListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                try {
-                    val matchingNode = if (snapshot.child(city).exists()) {
-                        snapshot.child(city)
-                    } else {
-                        snapshot.children.find { 
-                            it.child("city").getValue(String::class.java)?.equals(city, ignoreCase = true) == true 
-                        }
-                    }
- 
-                    if (matchingNode != null) {
-                        forecastData.value = FirebaseWeatherData.parseForecastData(matchingNode)
-                        Log.d("DataRepository", "Parsed forecast data for $city")
-                    } else {
-                        if (snapshot.child("city").getValue(String::class.java)?.equals(city, ignoreCase = true) == true) {
-                            forecastData.value = FirebaseWeatherData.parseForecastData(snapshot)
-                            Log.d("DataRepository", "Parsed single forecast node for $city")
+        val weatherSync = db.child("weather").child("last_updated")
+
+        activeWeatherSyncRef = weatherSync
+        weatherSyncListener = object : ValueEventListener {
+            override fun onDataChange(syncSnapshot: DataSnapshot) {
+                Log.d("DataRepository", "Weather Sync trigger changed, fetching live and forecast data...")
+                liveRef.get().addOnSuccessListener { snapshot ->
+                    try {
+                        val matchingNode = if (snapshot.child(city).exists()) {
+                            snapshot.child(city)
                         } else {
-                            Log.w("DataRepository", "No forecast data found matching city: $city")
-                            forecastData.value = null
+                            snapshot.children.find { 
+                                it.child("city").getValue(String::class.java)?.equals(city, ignoreCase = true) == true 
+                            }
                         }
-                    }
-                } catch (e: Exception) {
-                    Log.e("DataRepository", "Error parsing forecast data: ${e.message}", e)
+                        if (matchingNode != null) {
+                            liveWeather.value = FirebaseWeatherData.parseLiveWeather(matchingNode)
+                            Log.d("DataRepository", "Parsed live weather for $city")
+                        } else {
+                            if (snapshot.child("city").getValue(String::class.java)?.equals(city, ignoreCase = true) == true) {
+                                liveWeather.value = FirebaseWeatherData.parseLiveWeather(snapshot)
+                            }
+                        }
+                    } catch (e: Exception) { }
+                }
+
+                forecastRef.get().addOnSuccessListener { snapshot ->
+                    try {
+                        val matchingNode = if (snapshot.child(city).exists()) {
+                            snapshot.child(city)
+                        } else {
+                            snapshot.children.find { 
+                                it.child("city").getValue(String::class.java)?.equals(city, ignoreCase = true) == true 
+                            }
+                        }
+                        if (matchingNode != null) {
+                            forecastData.value = FirebaseWeatherData.parseForecastData(matchingNode)
+                            Log.d("DataRepository", "Parsed forecast data for $city")
+                        } else {
+                            if (snapshot.child("city").getValue(String::class.java)?.equals(city, ignoreCase = true) == true) {
+                                forecastData.value = FirebaseWeatherData.parseForecastData(snapshot)
+                            }
+                        }
+                    } catch (e: Exception) { }
                 }
             }
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("DataRepository", "Forecast listener cancelled: ${error.message}")
-            }
+            override fun onCancelled(error: DatabaseError) {}
         }
-        forecastRef.addValueEventListener(forecastListener!!)
+        weatherSync.addValueEventListener(weatherSyncListener!!)
     }
 
     private fun setupFlightInfoListener(db: DatabaseReference, icaoCode: String, active: Boolean) {
@@ -726,30 +783,29 @@ object DataRepository {
             return
         }
  
-        val flightRef = db.child("FlightInfo")
+        val upperIcao = icaoCode.uppercase(Locale.US)
+        var name = "$upperIcao Airport"
+        db.child("FlightInfo").child("config").child("Airports").get().addOnSuccessListener { configSnap ->
+            for (airportConfig in configSnap.children) {
+                val icao = airportConfig.child("ICAO_Code").getValue(String::class.java)
+                if (icao != null && icao.equals(upperIcao, ignoreCase = true)) {
+                    val fetchedName = airportConfig.child("airpotName").getValue(String::class.java)
+                    if (fetchedName != null) {
+                        name = fetchedName
+                        flightAirportName.value = name
+                    }
+                    break
+                }
+            }
+        }
+        flightAirportName.value = name
+ 
+        // 2. Real-time listener ONLY for the specific airport to save bandwidth
+        val flightRef = db.child("FlightInfo").child(upperIcao)
         activeFlightInfoRef = flightRef
         flightInfoListener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
+            override fun onDataChange(airportSnapshot: DataSnapshot) {
                 try {
-                    val upperIcao = icaoCode.uppercase(Locale.US)
-                    val airportSnapshot = snapshot.child(upperIcao)
-                    val airportCode = airportSnapshot.key ?: upperIcao
-                    
-                    var name = when (icaoCode.uppercase(Locale.US)) {
-                        "WARS" -> "Ahmad Yani Airport"
-                        "WARR" -> "Juanda Airport"
-                        else -> "$icaoCode Airport"
-                    }
-                    val configAirports = snapshot.child("config").child("Airports")
-                    for (airportConfig in configAirports.children) {
-                        val icao = airportConfig.child("ICAO_Code").getValue(String::class.java)
-                        if (icao != null && icao.equals(airportCode, ignoreCase = true)) {
-                            name = airportConfig.child("airpotName").getValue(String::class.java) ?: name
-                            break
-                        }
-                    }
-                    flightAirportName.value = name
- 
                     // Parse Arrivals
                     val arrivalsList = mutableListOf<Flight>()
                     val arrivalsSnap = airportSnapshot.child("arrivals")
@@ -866,6 +922,9 @@ object DataRepository {
 
         activeCompanyIconRef?.let { ref -> companyIconListener?.let { ref.removeEventListener(it) } }
         activeWeatherSettingRef?.let { ref -> weatherSettingListener?.let { ref.removeEventListener(it) } }
+        activeWeatherSyncRef?.let { ref -> weatherSyncListener?.let { ref.removeEventListener(it) } }
+        weatherSyncListener = null
+        activeWeatherSyncRef = null
         activeLiveWeatherRef?.let { ref -> liveWeatherListener?.let { ref.removeEventListener(it) } }
         activeForecastRef?.let { ref -> forecastListener?.let { ref.removeEventListener(it) } }
         activeFidsSettingRef?.let { ref -> fidsSettingListener?.let { ref.removeEventListener(it) } }
@@ -926,6 +985,22 @@ object DataRepository {
         activeDndRef = null
         activeContactRef = null
         activeBranchLatLngRef = null
+        activeSyncBannerRef?.let { ref -> syncBannerListener?.let { ref.removeEventListener(it) } }
+        syncBannerListener = null
+        activeSyncBannerRef = null
+        
+        activeSyncMenuRef?.let { ref -> syncMenuListener?.let { ref.removeEventListener(it) } }
+        syncMenuListener = null
+        activeSyncMenuRef = null
+        
+        activeSyncHotelInfoRef?.let { ref -> syncHotelInfoListener?.let { ref.removeEventListener(it) } }
+        syncHotelInfoListener = null
+        activeSyncHotelInfoRef = null
+        
+        activeSyncRequestRef?.let { ref -> syncRequestListener?.let { ref.removeEventListener(it) } }
+        syncRequestListener = null
+        activeSyncRequestRef = null
+
         activeSubscriptionStatusRef = null
         activeSubscriptionExpiredRef = null
         activeSubscriptionSettingStatusRef = null

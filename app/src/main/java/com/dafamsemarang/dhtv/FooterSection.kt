@@ -272,6 +272,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     var wifiSsid by remember { mutableStateOf("") }
     var wifiPassword by remember { mutableStateOf("") }
     var wifiIsWebLogin by remember { mutableStateOf(false) }
+    var wifiUser by remember { mutableStateOf("") }
     var wifiLoading by remember { mutableStateOf(true) }
     var wifiQrBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
 
@@ -284,25 +285,31 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     var waLoading by remember { mutableStateOf(true) }
     var waQrBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
 
-    LaunchedEffect(branchId) {
+    DisposableEffect(branchId) {
+        var wifiListener: com.google.firebase.database.ValueEventListener? = null
+        var contactListener: com.google.firebase.database.ValueEventListener? = null
+
         if (branchId != null) {
-            // Fetch Wi-Fi Settings
-            database.child("BRANCHES").child(branchId).child("SETTING/WIFI")
-                .get()
-                .addOnSuccessListener { snapshot ->
+            // Realtime listener for Wi-Fi Settings
+            val wifiRef = database.child("BRANCHES").child(branchId).child("SETTING/WIFI")
+            wifiListener = object : com.google.firebase.database.ValueEventListener {
+                override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
                     wifiSsid = snapshot.child("ssid").getValue(String::class.java) ?: ""
                     wifiPassword = snapshot.child("password").getValue(String::class.java) ?: ""
                     wifiIsWebLogin = snapshot.child("isWebLogin").getValue(Boolean::class.java) ?: false
+                    wifiUser = snapshot.child("user").getValue(String::class.java) ?: ""
                     wifiLoading = false
                 }
-                .addOnFailureListener {
+                override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
                     wifiLoading = false
                 }
+            }
+            wifiRef.addValueEventListener(wifiListener)
 
-            // Fetch Contact Settings
-            database.child("BRANCHES").child(branchId).child("SETTING/CONTACT")
-                .get()
-                .addOnSuccessListener { snapshot ->
+            // Realtime listener for Contact Settings
+            val contactRef = database.child("BRANCHES").child(branchId).child("SETTING/CONTACT")
+            contactListener = object : com.google.firebase.database.ValueEventListener {
+                override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
                     waPhone = snapshot.child("PHONE").getValue(String::class.java) ?: ""
                     val rawMessage = snapshot.child("MESSAGE").getValue(String::class.java) ?: ""
                     try {
@@ -315,9 +322,18 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     waAddress = snapshot.child("ADDRESS").getValue(String::class.java) ?: ""
                     waLoading = false
                 }
-                .addOnFailureListener {
+                override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
                     waLoading = false
                 }
+            }
+            contactRef.addValueEventListener(contactListener)
+        }
+        
+        onDispose {
+            if (branchId != null) {
+                if (wifiListener != null) database.child("BRANCHES").child(branchId).child("SETTING/WIFI").removeEventListener(wifiListener)
+                if (contactListener != null) database.child("BRANCHES").child(branchId).child("SETTING/CONTACT").removeEventListener(contactListener)
+            }
         }
     }
 
@@ -1419,6 +1435,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             ssid = wifiSsid,
             password = wifiPassword,
             isWebLogin = wifiIsWebLogin,
+            user = wifiUser,
             roomNumber = DataRepository.guestInfo.value?.room ?: deviceID ?: "",
             loading = wifiLoading,
             qrCodeBitmap = wifiQrBitmap,
@@ -3601,6 +3618,7 @@ fun WifiQRCodeDialog(
     ssid: String,
     password: String,
     isWebLogin: Boolean = false,
+    user: String = "",
     roomNumber: String = "",
     loading: Boolean,
     qrCodeBitmap: ImageBitmap?,
@@ -3788,7 +3806,7 @@ fun WifiQRCodeDialog(
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Icon(
-                                                            painter = painterResource(id = R.drawable.keyboard),
+                                                            painter = painterResource(id = R.drawable.ic_user),
                                                             contentDescription = null,
                                                             modifier = Modifier.size(28.dp),
                                                             tint = Color.White
@@ -3797,7 +3815,7 @@ fun WifiQRCodeDialog(
                                                     Spacer(modifier = Modifier.width(16.dp))
                                                     Column {
                                                         Text("Username", fontSize = 14.sp, color = Color.White.copy(alpha=0.6f))
-                                                        Text(roomNumber, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                                        Text(if (user.isNotEmpty()) user else roomNumber, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
                                                     }
                                                 }
                                             }
