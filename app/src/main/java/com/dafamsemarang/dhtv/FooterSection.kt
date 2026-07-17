@@ -246,6 +246,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     //    var pinInput by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
     var showWaDialog by remember { mutableStateOf(false) }
+    var showSmartRoomDialog by remember { mutableStateOf(false) }
     var showNotificationButtonDialog by remember { mutableStateOf(false) }
     var showNotificationDialog by remember { mutableStateOf(false) }
     val isDndActive by DataRepository.isDndActive
@@ -414,6 +415,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     val wifiFocusRequester = remember { FocusRequester() }
     val whatsappFocusRequester = remember { FocusRequester() }
     val notificationFocusRequester = remember { FocusRequester() }
+    val smartRoomFocusRequester = remember { FocusRequester() }
     val settingsFocusRequester = remember { FocusRequester() }
 
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
@@ -431,10 +433,14 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                 "footer_home" -> homeFocusRequester.requestFocus()
                                 "footer_food" -> foodFocusRequester.requestFocus()
                                 "footer_hotel" -> hotelFocusRequester.requestFocus()
-                                "footer_contact" -> requestFocusRequester.requestFocus()
+                                "footer_request" -> requestFocusRequester.requestFocus()
+                                "footer_myrequest" -> myRequestFocusRequester.requestFocus()
                                 "footer_dnd" -> dndFocusRequester.requestFocus()
                                 "footer_wifi" -> wifiFocusRequester.requestFocus()
                                 "footer_whatsapp" -> whatsappFocusRequester.requestFocus()
+                                "footer_smartroom" -> smartRoomFocusRequester.requestFocus()
+                                "footer_notification" -> notificationFocusRequester.requestFocus()
+                                "footer_settings" -> settingsFocusRequester.requestFocus()
                             }
                             Log.d("FooterSection", "Successfully restored focus to $lastFocused")
                         } catch (e: Exception) {
@@ -721,6 +727,8 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.Bottom
         ) {
+
+
             // Capsule 1 (Notifications)
             Box {
                 Box(
@@ -856,6 +864,39 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                             if (isFocused) {
                                 GlobalFocusTracker.lastFocusedItem = "footer_whatsapp"
                                 GlobalFocusTracker.lastFocusedFooterItem = "footer_whatsapp"
+                            }
+                        }
+                    )
+                }
+            }
+
+            // Capsule: Smart Home
+            Box {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(50.dp))
+                        .background(
+                            color = Color(207, 223, 237).copy(alpha = baseAlpha),
+                            shape = RoundedCornerShape(50.dp)
+                        )
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start,
+                    modifier = Modifier.padding(4.dp)
+                ) {
+                    SmallServiceButton(
+                        iconRes = R.drawable.ic_smarthome,
+                        onClick = { showSmartRoomDialog = true },
+                        title = "Smart Home",
+                        isActive = true,
+                        focusRequester = smartRoomFocusRequester,
+                        onFocusStateChange = { isFocused ->
+                            if (isFocused) {
+                                GlobalFocusTracker.lastFocusedItem = "footer_smartroom"
+                                GlobalFocusTracker.lastFocusedFooterItem = "footer_smartroom"
                             }
                         }
                     )
@@ -1546,6 +1587,12 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         )
     }
     
+    if (showSmartRoomDialog) {
+        SmartRoomDialog(
+            onDismissRequest = { showSmartRoomDialog = false }
+        )
+    }
+
     FlyingDotOverlay()
 }
 }
@@ -2664,7 +2711,8 @@ fun NotificationButtonDialog(
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 itemsIndexed(sortedNotifications) { index, notification ->
-                                    val itemFocusRequester = focusRequesters.getOrPut(notification.id) { FocusRequester() }
+                                    val itemFocusRequester = remember(notification.id) { FocusRequester() }
+                                    focusRequesters[notification.id] = itemFocusRequester
                                     NotificationItem(
                                         notification = notification,
                                         deleteNotification = {
@@ -5004,7 +5052,8 @@ fun CartDrawer(
                                                 horizontalArrangement = Arrangement.End
                                             ) {
                                                 val minusKey = "minus_${selectedItem.item.name}_${selectedItem.selectedVariant?.name ?: "default"}_${selectedItem.specialInstruction}"
-                                                val minusFocusRequester = focusRequesters.getOrPut(minusKey) { FocusRequester() }
+                                                val minusFocusRequester = remember(minusKey) { FocusRequester() }
+                                                focusRequesters[minusKey] = minusFocusRequester
 
                                                 // Minus or Trash Button
                                                 Box(
@@ -5085,7 +5134,8 @@ fun CartDrawer(
                                                 Spacer(modifier = Modifier.width(8.dp))
 
                                                 val plusKey = "plus_${selectedItem.item.name}_${selectedItem.selectedVariant?.name ?: "default"}_${selectedItem.specialInstruction}"
-                                                val plusFocusRequester = focusRequesters.getOrPut(plusKey) { FocusRequester() }
+                                                val plusFocusRequester = remember(plusKey) { FocusRequester() }
+                                                focusRequesters[plusKey] = plusFocusRequester
 
                                                 // Plus Button
                                                 Box(

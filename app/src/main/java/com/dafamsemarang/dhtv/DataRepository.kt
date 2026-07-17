@@ -59,6 +59,12 @@ object DataRepository {
     val flightDepartures = mutableStateOf<List<Flight>>(emptyList())
     val flightAirportName = mutableStateOf("Ahmad Yani Airport")
 
+    // Smart Home (Tuya)
+    val tuyaDeviceId = mutableStateOf<String?>(null)
+    val tuyaDeviceName = mutableStateOf<String?>("Smart Switch")
+    val tuyaSwitch1State = mutableStateOf(false)
+    val tuyaSwitch2State = mutableStateOf(false)
+
     // Guest & DND
     val guestInfo = mutableStateOf<GuestInfo?>(null)
     val isDndActive = mutableStateOf(false)
@@ -180,7 +186,10 @@ object DataRepository {
     
     private var syncRequestListener: ValueEventListener? = null
     private var activeSyncRequestRef: DatabaseReference? = null
-
+    
+    
+    private var tuyaStatusListener: ValueEventListener? = null
+    private var activeTuyaStatusRef: DatabaseReference? = null
 
  
     private var activeBranchId: String? = null
@@ -206,7 +215,9 @@ object DataRepository {
     private var activeDndRef: DatabaseReference? = null
     private var activeContactRef: DatabaseReference? = null
     private var activeBranchLatLngRef: DatabaseReference? = null
-
+    private var activeTuyaRoomRef: DatabaseReference? = null
+    private var tuyaRoomListener: ValueEventListener? = null
+ 
  
     fun startPreload(context: android.content.Context, branchId: String?) {
         if (branchId == null) return
@@ -243,6 +254,44 @@ object DataRepository {
  
         activeBranchId = branchId
         val db = FirebaseDatabase.getInstance().reference
+
+        // Fetch Room for Tuya
+        val tuyaPrefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+        val roomNumber = tuyaPrefs.getString("room", null)
+        if (!roomNumber.isNullOrEmpty()) {
+            val tuyaRef = db.child("BRANCHES").child(branchId).child("SMART_HOME").child("rooms").child(roomNumber)
+            activeTuyaRoomRef = tuyaRef
+            tuyaRoomListener = object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    if (snapshot.exists()) {
+                        val deviceId = snapshot.child("deviceId").getValue(String::class.java)
+                        tuyaDeviceId.value = deviceId
+                        tuyaDeviceName.value = snapshot.child("deviceName").getValue(String::class.java) ?: "Lampu Kamar"
+                        
+                        if (deviceId != null) {
+                            // Listen to webhook-updated status
+                            activeTuyaStatusRef?.removeEventListener(tuyaStatusListener!!)
+                            val statusRef = db.child("SMART_HOME").child("devices").child(deviceId).child("status")
+                            activeTuyaStatusRef = statusRef
+                            tuyaStatusListener = object : ValueEventListener {
+                                override fun onDataChange(statusSnap: DataSnapshot) {
+                                    if (statusSnap.exists()) {
+                                        tuyaSwitch1State.value = statusSnap.child("switch_1").getValue(Boolean::class.java) ?: false
+                                        tuyaSwitch2State.value = statusSnap.child("switch_2").getValue(Boolean::class.java) ?: false
+                                    }
+                                }
+                                override fun onCancelled(error: DatabaseError) {}
+                            }
+                            statusRef.addValueEventListener(tuyaStatusListener!!)
+                        }
+                    } else {
+                        tuyaDeviceId.value = null
+                    }
+                }
+                override fun onCancelled(error: DatabaseError) {}
+            }
+            tuyaRef.addValueEventListener(tuyaRoomListener!!)
+        }
         
         // Preload Menu items
         val menuRef = db.child("BRANCHES").child(branchId).child("FOOD_BEVERAGE").child("food")
