@@ -238,6 +238,8 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
     val branchId = sharedPreferences.getString("branchId", null)
     val guestInfo by DataRepository.guestInfo
     val folioId = guestInfo?.folio
+    val smartDevices by DataRepository.smartDevicesList
+    val hasSmartRoom = smartDevices.isNotEmpty()
 
     Log.d("FooterSection", "Initializing FooterSection with deviceID: $deviceID, branchId: $branchId")
 
@@ -891,7 +893,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         iconRes = null,
                         buttonText = "Home",
                         modifier = Modifier
-                            .width(48.dp)
+                            .width(if (hasSmartRoom) 48.dp else 86.dp)
                             .onGloballyPositioned { coords ->
                                 homeButtonBoundsInRoot = coords.boundsInRoot()
                             },
@@ -919,37 +921,39 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         isHome3D = false
                     )
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                    if (hasSmartRoom) {
+                        Spacer(modifier = Modifier.width(2.dp))
 
-                    // Smart Home button
-                    Box(
-                        modifier = Modifier.wrapContentSize()
-                    ) {
-                        SmallServiceButton(
-                            iconRes = R.drawable.ic_smarthome,
-                            onClick = {
-                                if (currentRoute != "smarthome") navController?.navigate("smarthome") {
-                                    popUpTo("home") { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
+                        // Smart Home button
+                        Box(
+                            modifier = Modifier.wrapContentSize()
+                        ) {
+                            SmallServiceButton(
+                                iconRes = R.drawable.ic_smarthome,
+                                onClick = {
+                                    if (currentRoute != "smarthome") navController?.navigate("smarthome") {
+                                        popUpTo("home") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                title = null,
+                                onFocusAction = {
+                                    pendingNavigationRoute = "smarthome"
+                                },
+                                isActive = currentRoute == "smarthome",
+                                focusRequester = GlobalCartState.smartHomeFooterFocusRequester,
+                                onFocusStateChange = { isFocused ->
+                                    if (isFocused) {
+                                        GlobalFocusTracker.lastFocusedItem = "footer_smartroom"
+                                        GlobalFocusTracker.lastFocusedFooterItem = "footer_smartroom"
+                                    }
                                 }
-                            },
-                            title = null,
-                            onFocusAction = {
-                                pendingNavigationRoute = "smarthome"
-                            },
-                            isActive = currentRoute == "smarthome",
-                            focusRequester = SmartRoomGlobalFocus.focusRequester,
-                            onFocusStateChange = { isFocused ->
-                                if (isFocused) {
-                                    GlobalFocusTracker.lastFocusedItem = "footer_smartroom"
-                                    GlobalFocusTracker.lastFocusedFooterItem = "footer_smartroom"
-                                }
-                            }
-                        )
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
 
                     // F&B button – NOT wrapped, track its position via onGloballyPositioned
                     Box(
@@ -983,7 +987,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
 
                     Box(
                         modifier = Modifier
@@ -1016,7 +1020,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
 
                     SmallServiceButton(
                         iconRes = R.drawable.ic_info_circle,
@@ -1118,7 +1122,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                     }
                 }
 
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(2.dp))
             }
 
             // Jam

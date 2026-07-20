@@ -59,13 +59,26 @@ object DataRepository {
     val flightDepartures = mutableStateOf<List<Flight>>(emptyList())
     val flightAirportName = mutableStateOf("Ahmad Yani Airport")
 
-    // Smart Home (Tuya)
-    val tuyaDeviceId = mutableStateOf<String?>(null)
-    val tuyaDeviceName = mutableStateOf<String?>("Smart Switch")
-    val tuyaSwitch1State = mutableStateOf(false)
-    val tuyaSwitch2State = mutableStateOf(false)
-    val tuyaSwitch1Name = mutableStateOf<String?>("")
-    val tuyaSwitch2Name = mutableStateOf<String?>("")
+    // Smart Home (Tuya) - Dynamic Layout
+    data class SmartDeviceData(
+        val deviceId: String,
+        val deviceName: String,
+        val type: String, // "switch", "ac", "curtain"
+        // Specific to switch
+        val switch1Name: String? = null,
+        val switch2Name: String? = null,
+        val switch3Name: String? = null,
+        // Status properties
+        var switch1State: Boolean = false,
+        var switch2State: Boolean = false,
+        var switch3State: Boolean = false,
+        var acPowerState: Boolean = false,
+        var acTemp: Int = 24,
+        var acMode: String = "cool",
+        var curtainState: String = "stop"
+    )
+
+    val smartDevicesList = mutableStateOf<List<SmartDeviceData>>(emptyList())
 
     // Guest & DND
     val guestInfo = mutableStateOf<GuestInfo?>(null)
@@ -84,6 +97,10 @@ object DataRepository {
 
     private var branchNameListener: ValueEventListener? = null
     private var activeBranchNameRef: DatabaseReference? = null
+
+    // Tuya Listeners
+    private val tuyaStatusListeners = mutableMapOf<String, ValueEventListener>()
+    private val activeTuyaStatusRefs = mutableMapOf<String, DatabaseReference>()
 
     private var subStatusBranch: String? = null
     private var subStatusSetting: String? = null
@@ -257,39 +274,86 @@ object DataRepository {
         activeBranchId = branchId
         val db = FirebaseDatabase.getInstance().reference
 
-        // Fetch Room for Tuya
+        // Fetch Room for Tuya (Dynamic Devices)
         val tuyaPrefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
         val roomNumber = tuyaPrefs.getString("room", null)
         if (!roomNumber.isNullOrEmpty()) {
-            val tuyaRef = db.child("BRANCHES").child(branchId).child("SMART_HOME").child("rooms").child(roomNumber)
+            val tuyaRef = db.child("BRANCHES").child(branchId).child("SMART_HOME").child("rooms").child(roomNumber).child("devices")
             activeTuyaRoomRef = tuyaRef
             tuyaRoomListener = object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
+                    // Clear old listeners
+                    activeTuyaStatusRefs.forEach { (id, ref) ->
+                        tuyaStatusListeners[id]?.let { ref.removeEventListener(it) }
+                    }
+                    activeTuyaStatusRefs.clear()
+                    tuyaStatusListeners.clear()
+
+                    val newDevices = mutableListOf<SmartDeviceData>()
+                    
                     if (snapshot.exists()) {
-                        val deviceId = snapshot.child("deviceId").getValue(String::class.java)
-                        tuyaDeviceId.value = deviceId
-                        tuyaDeviceName.value = snapshot.child("deviceName").getValue(String::class.java) ?: "Lampu Kamar"
-                        tuyaSwitch1Name.value = snapshot.child("switch1Name").getValue(String::class.java) ?: ""
-                        tuyaSwitch2Name.value = snapshot.child("switch2Name").getValue(String::class.java) ?: ""
-                        
-                        if (deviceId != null) {
-                            // Listen to webhook-updated status
-                            activeTuyaStatusRef?.removeEventListener(tuyaStatusListener!!)
-                            val statusRef = db.child("SMART_HOME").child("devices").child(deviceId).child("status")
-                            activeTuyaStatusRef = statusRef
-                            tuyaStatusListener = object : ValueEventListener {
-                                override fun onDataChange(statusSnap: DataSnapshot) {
-                                    if (statusSnap.exists()) {
-                                        tuyaSwitch1State.value = statusSnap.child("switch_1").getValue(Boolean::class.java) ?: false
-                                        tuyaSwitch2State.value = statusSnap.child("switch_2").getValue(Boolean::class.java) ?: false
+                        for (child in snapshot.children) {
+                            val deviceId = child.child("deviceId").getValue(String::class.java) 
+                                ?: child.child("dveiceId").getValue(String::class.java) 
+                                ?: continue
+                            val deviceName = child.child("deviceName").getValue(String::class.java) 
+                                ?: child.child("deaviceName").getValue(String::class.java) 
+                                ?: "Unknown Device"
+                            val type = child.child("type").getValue(String::class.java) ?: "switch"
+                            
+                            val switch1Name = child.child("switch1Name").getValue(String::class.java)
+                            val switch2Name = child.child("switch2Name").getValue(String::class.java)
+                            val switch3Name = child.child("switch3Name").getValue(String::class.java)
+                            
+                            val deviceData = SmartDeviceData(
+                                deviceId = deviceId,
+                                deviceName = deviceName,
+                                type = type,
+                                switch1Name = switch1Name,
+                                switch2Name = switch2Name,
+                                switch3Name = switch3Name
+                            )
+                            newDevices.add(deviceData)
+                        }
+                    }
+                    
+                    // Assign to state and setup listeners
+                    smartDevicesList.value = newDevices
+                    
+                    newDevices.forEach { device ->
+                        val statusRef = db.child("SMART_HOME").child("devices").child(device.deviceId).child("status")
+                        val listener = object : ValueEventListener {
+                            override fun onDataChange(statusSnap: DataSnapshot) {
+                                if (statusSnap.exists()) {
+                                    val currentList = smartDevicesList.value.toMutableList()
+                                    val index = currentList.indexOfFirst { it.deviceId == device.deviceId }
+                                    if (index != -1) {
+                                        val updatedDevice = currentList[index].copy()
+                                        when (updatedDevice.type) {
+                                            "switch" -> {
+                                                updatedDevice.switch1State = statusSnap.child("switch_1").getValue(Boolean::class.java) ?: false
+                                                updatedDevice.switch2State = statusSnap.child("switch_2").getValue(Boolean::class.java) ?: false
+                                                updatedDevice.switch3State = statusSnap.child("switch_3").getValue(Boolean::class.java) ?: false
+                                            }
+                                            "ac" -> {
+                                                updatedDevice.acPowerState = statusSnap.child("switch").getValue(Boolean::class.java) ?: false
+                                                updatedDevice.acTemp = statusSnap.child("temp_set").getValue(Int::class.java) ?: 24
+                                                updatedDevice.acMode = statusSnap.child("mode").getValue(String::class.java) ?: "cool"
+                                            }
+                                            "curtain" -> {
+                                                updatedDevice.curtainState = statusSnap.child("control").getValue(String::class.java) ?: "stop"
+                                            }
+                                        }
+                                        currentList[index] = updatedDevice
+                                        smartDevicesList.value = currentList
                                     }
                                 }
-                                override fun onCancelled(error: DatabaseError) {}
                             }
-                            statusRef.addValueEventListener(tuyaStatusListener!!)
+                            override fun onCancelled(error: DatabaseError) {}
                         }
-                    } else {
-                        tuyaDeviceId.value = null
+                        activeTuyaStatusRefs[device.deviceId] = statusRef
+                        tuyaStatusListeners[device.deviceId] = listener
+                        statusRef.addValueEventListener(listener)
                     }
                 }
                 override fun onCancelled(error: DatabaseError) {}
