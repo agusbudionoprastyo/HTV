@@ -128,6 +128,10 @@ object GlobalFocusTracker {
     var lastFocusedFooterItem: String? = null // format: "footer_{name}"
 }
 
+object HomeShortcutFocus {
+    val firstItemRequester = androidx.compose.ui.focus.FocusRequester()
+}
+
 
 data class SupportedApp(
     val packageName: String,
@@ -2972,7 +2976,9 @@ fun ServiceButtonsSection(
                             focusRequester = focusRequesters.getOrNull(index),
                             installedApps = installedApps.filter { !shortcutSlots.contains(it.packageName) },
                             canMove = index != 0,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .then(if (index == 0) Modifier.focusRequester(HomeShortcutFocus.firstItemRequester) else Modifier)
                         )
                     }
                 }

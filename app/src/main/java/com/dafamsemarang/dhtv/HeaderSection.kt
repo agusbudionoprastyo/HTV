@@ -235,11 +235,11 @@ fun HeaderSection(currentRoute: String? = "home") {
                             transitionSpec = {
                                 val isSlidingRight = targetState == (initialState + 1) % 3
                                 if (isSlidingRight) {
-                                    (slideInHorizontally { width -> width } + fadeIn(animationSpec = tween(300)))
-                                        .togetherWith(slideOutHorizontally { width -> -width } + fadeOut(animationSpec = tween(300)))
-                                } else {
                                     (slideInHorizontally { width -> -width } + fadeIn(animationSpec = tween(300)))
                                         .togetherWith(slideOutHorizontally { width -> width } + fadeOut(animationSpec = tween(300)))
+                                } else {
+                                    (slideInHorizontally { width -> width } + fadeIn(animationSpec = tween(300)))
+                                        .togetherWith(slideOutHorizontally { width -> -width } + fadeOut(animationSpec = tween(300)))
                                 }
                             },
                             label = "weather_transition"
@@ -746,6 +746,7 @@ fun HeaderSection(currentRoute: String? = "home") {
     } else {
             // Replacement container for non-home screens
             val headerReplacement = when (targetRoute) {
+                    "smarthome" -> Pair(R.drawable.ic_smarthome, "Smart Room")
                     "cantingfood" -> Pair(R.drawable.ic_room_service, "Room Service")
                     "contact" -> Pair(R.drawable.ic_request_service, "Request Service")
                     "hotel_guide" -> Pair(R.drawable.ic_info_circle, "Hotel Info")

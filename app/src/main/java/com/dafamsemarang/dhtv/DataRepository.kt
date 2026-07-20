@@ -64,6 +64,8 @@ object DataRepository {
     val tuyaDeviceName = mutableStateOf<String?>("Smart Switch")
     val tuyaSwitch1State = mutableStateOf(false)
     val tuyaSwitch2State = mutableStateOf(false)
+    val tuyaSwitch1Name = mutableStateOf<String?>("")
+    val tuyaSwitch2Name = mutableStateOf<String?>("")
 
     // Guest & DND
     val guestInfo = mutableStateOf<GuestInfo?>(null)
@@ -267,6 +269,8 @@ object DataRepository {
                         val deviceId = snapshot.child("deviceId").getValue(String::class.java)
                         tuyaDeviceId.value = deviceId
                         tuyaDeviceName.value = snapshot.child("deviceName").getValue(String::class.java) ?: "Lampu Kamar"
+                        tuyaSwitch1Name.value = snapshot.child("switch1Name").getValue(String::class.java) ?: ""
+                        tuyaSwitch2Name.value = snapshot.child("switch2Name").getValue(String::class.java) ?: ""
                         
                         if (deviceId != null) {
                             // Listen to webhook-updated status

@@ -40,7 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 // Ordered list of main screens — determines slide direction
-private val mainScreenOrder = listOf("home", "cantingfood", "contact", "hotel_guide")
+private val mainScreenOrder = listOf("home", "smarthome", "cantingfood", "contact", "hotel_guide")
 
 /** Returns +1 if navigating forward (slide from right), -1 if backward (slide from left) */
 private fun slideDirection(from: String?, to: String?): Int {
@@ -245,6 +245,18 @@ fun AppNavigation() {
                 CheckoutReminder()
             }
 
+            // ── SMART HOME ──────────────────────────────────────────────────
+            composable(
+                "smarthome",
+                enterTransition = { mainEnterTransition(slideDistance) },
+                exitTransition = { mainExitTransition(slideDistance) },
+                popEnterTransition = { mainEnterTransition(slideDistance) },
+                popExitTransition = { mainExitTransition(slideDistance) }
+            ) {
+                SmartHomeScreen(navController)
+                CheckoutReminder()
+            }
+
             // ── F&B ─────────────────────────────────────────────────────────
             composable(
                 "cantingfood",
@@ -284,7 +296,7 @@ fun AppNavigation() {
 
         // Hoisted Persistent Header and Footer - Immediately ready when entering from Welcome Screen.
         // Retains full persistence and buttery-smooth rendering without Haze GPU shader overhead.
-        val showHeaderFooter = currentRoute in listOf("home", "hotel_guide", "contact", "cantingfood")
+        val showHeaderFooter = currentRoute in listOf("home", "smarthome", "hotel_guide", "contact", "cantingfood")
         AnimatedVisibility(
             visible = showHeaderFooter,
             enter = fadeIn(animationSpec = tween(durationMillis = 500)),
