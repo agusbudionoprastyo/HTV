@@ -504,12 +504,7 @@ fun SmartActionBtn(
         modifier = modifier
             .defaultMinSize(minWidth = 1.dp, minHeight = 1.dp)
             .then(
-                if (useGradient) Modifier.background(
-                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.1f), Color.White)
-                    ),
-                    shape = androidx.compose.foundation.shape.CircleShape
-                ) else Modifier
+                if (useGradient) Modifier.background(Color.Transparent).border(2.dp, Color.White.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape) else Modifier
             )
             .onFocusChanged { if (it.isFocused) onFocus() }
             .smartButtonBorder(isFocused = isFocused, isLoading = isLoading),
