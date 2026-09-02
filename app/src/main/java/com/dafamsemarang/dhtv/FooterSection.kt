@@ -486,24 +486,6 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         }
     }
 
-    BackHandler(enabled = true) {
-        if (!isFooterFocused) {
-            try {
-                when (currentRoute) {
-                    "home" -> homeFocusRequester.requestFocus()
-                    "cantingfood" -> foodFocusRequester.requestFocus()
-                    "hotel_guide" -> hotelFocusRequester.requestFocus()
-                    "contact" -> requestFocusRequester.requestFocus()
-                }
-            } catch (e: Exception) {
-                Log.e("FooterSection", "Failed to auto-focus footer on back press: ${e.message}")
-            }
-        } else {
-            // User is already focused on footer, do nothing to prevent going back to previous screen
-            Log.d("FooterSection", "Back pressed while footer focused - action ignored")
-        }
-    }
-
 
 
     fun setAudioVolume(isMuted: Boolean) {

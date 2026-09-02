@@ -534,7 +534,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
             )
             if (enGreetingFile != null && !hasNavigatedState.value && !audioDisabledState.value) {
                 playAudioFile(context, enGreetingFile)
-                try { enGreetingFile.delete() } catch (e: Exception) {}
+                // Audio file is cached, do not delete it
             }
         }
         
@@ -561,7 +561,7 @@ fun WelcomeScreen(onNavigateToHome: () -> Unit) {
             )
             if (idGreetingFile != null && !hasNavigatedState.value && !audioDisabledState.value) {
                 playAudioFile(context, idGreetingFile)
-                try { idGreetingFile.delete() } catch (e: Exception) {}
+                // Audio file is cached, do not delete it
             }
         }
 

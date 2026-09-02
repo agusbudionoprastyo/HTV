@@ -120,7 +120,7 @@ fun HeaderSection(currentRoute: String? = "home") {
                 }
             }
 
-            val mainScreenOrder = listOf("home", "cantingfood", "contact", "hotel_guide")
+            val mainScreenOrder = listOf("home", "smarthome", "cantingfood", "contact", "hotel_guide")
             val getSlideDirection = { from: String?, to: String? ->
                 val fromIndex = mainScreenOrder.indexOf(from ?: "home")
                 val toIndex = mainScreenOrder.indexOf(to ?: "home")

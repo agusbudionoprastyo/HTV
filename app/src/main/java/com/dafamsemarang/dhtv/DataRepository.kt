@@ -74,7 +74,8 @@ object DataRepository {
         var switch3State: Boolean = false,
         var acPowerState: Boolean = false,
         var acTemp: Int = 24,
-        var acMode: String = "cool",
+        var acMode: String = "0",
+        var acFan: String = "0",
         var curtainState: String = "stop"
     )
 
@@ -336,9 +337,10 @@ object DataRepository {
                                                 updatedDevice.switch3State = statusSnap.child("switch_3").getValue(Boolean::class.java) ?: false
                                             }
                                             "ac" -> {
-                                                updatedDevice.acPowerState = statusSnap.child("switch").getValue(Boolean::class.java) ?: false
-                                                updatedDevice.acTemp = statusSnap.child("temp_set").getValue(Int::class.java) ?: 24
-                                                updatedDevice.acMode = statusSnap.child("mode").getValue(String::class.java) ?: "cool"
+                                                updatedDevice.acPowerState = statusSnap.child("switch_power").getValue(Boolean::class.java) ?: false
+                                                updatedDevice.acTemp = statusSnap.child("temperature").getValue(Int::class.java) ?: 24
+                                                updatedDevice.acMode = statusSnap.child("mode").getValue(String::class.java) ?: "0"
+                                                updatedDevice.acFan = statusSnap.child("fan").getValue(String::class.java) ?: "0"
                                             }
                                             "curtain" -> {
                                                 updatedDevice.curtainState = statusSnap.child("control").getValue(String::class.java) ?: "stop"

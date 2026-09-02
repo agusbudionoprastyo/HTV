@@ -241,6 +241,9 @@ fun AppNavigation() {
                 popEnterTransition = { mainEnterTransition(slideDistance) },
                 popExitTransition = { mainExitTransition(slideDistance) }
             ) {
+                androidx.activity.compose.BackHandler {
+                    ScreenSaverManager.isScreenSaverActive = true
+                }
                 HomeScreen(navController)
                 CheckoutReminder()
             }

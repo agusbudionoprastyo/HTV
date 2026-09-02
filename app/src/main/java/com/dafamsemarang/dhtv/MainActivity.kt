@@ -1,9 +1,9 @@
 package com.dafamsemarang.dhtv
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
-import android.os.PowerManager
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
@@ -27,6 +27,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.lifecycle.lifecycleScope
 import com.dafamsemarang.dhtv.ui.components.UpdateProgress
 import com.dafamsemarang.dhtv.ui.theme.dhtvTheme
@@ -40,7 +45,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.ui.Alignment
@@ -63,7 +67,6 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
     private var shouldShowPairing by mutableStateOf(false)
     private lateinit var updateManager: UpdateManager
     private var updateInfo by mutableStateOf<UpdateManager.UpdateInfo?>(null)
-    private var showAccessibilityPrompt by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -171,19 +174,11 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                         if (isPaired) {
                             deviceManager = tempDeviceManager
                             Log.d("MainActivity", "Device is paired, DeviceManager initialized")
-                            // STB BOOT ONBOARDING: Launch system screensaver (Somnambulator) immediately on first boot/launch, unless it's a config change!
+                            // STB BOOT ONBOARDING: Launch in-app screensaver immediately on first boot/launch, unless it's a config change!
                             val fromConfigChange = intent.getBooleanExtra("from_config_change", false)
                             if (!fromConfigChange) {
-                                try {
-                                    val screensaverIntent = Intent(Intent.ACTION_MAIN).apply {
-                                        setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    startActivity(screensaverIntent)
-                                    Log.d("MainActivity", "Successfully triggered system screensaver (Somnambulator) on boot")
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Failed to launch system screensaver on boot: ${e.message}")
-                                }
+                                ScreenSaverManager.isScreenSaverActive = true
+                                Log.d("MainActivity", "Successfully triggered in-app screensaver on boot")
                             } else {
                                 Log.d("MainActivity", "Bypassing immediate screensaver on configuration change restart")
                             }
@@ -228,7 +223,18 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
                             deviceManager = DeviceManager(this@MainActivity)
                         )
                     } else {
-                        AppNavigation()
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            AppNavigation()
+                            
+                            AnimatedVisibility(
+                                visible = ScreenSaverManager.isScreenSaverActive,
+                                enter = fadeIn(animationSpec = tween(1200)),
+                                exit = fadeOut(animationSpec = tween(800)),
+                                modifier = Modifier.fillMaxSize().zIndex(999f)
+                            ) {
+                                ScreenSaverOverlay()
+                            }
+                        }
                     }
 
 
@@ -243,7 +249,7 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
             
             // Clear pairing information from SharedPreferences
             val sharedPrefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-            sharedPrefs.edit().run {
+            sharedPrefs.edit().apply {
                 remove("deviceID")
                 remove("branchId")
                 remove("room")
@@ -259,9 +265,9 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
             }
             
             // Restart the activity to completely reset navigation and clear memory references
-            val intent = intent
+            val restartIntent = intent
             finish()
-            startActivity(intent)
+            startActivity(restartIntent)
         }
     }
 
@@ -282,14 +288,15 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         }
     }
 
+    @SuppressLint("UnsafeIntentLaunch")
     override fun onConfigChanged() {
         runOnUiThread {
             Log.d("MainActivity", "Device configuration changed (room/branchId), restarting to apply new settings")
-            val intent = intent.apply {
+            val restartIntent = intent.apply {
                 putExtra("from_config_change", true)
             }
             finish()
-            startActivity(intent)
+            startActivity(restartIntent)
         }
     }
 
@@ -338,55 +345,7 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         }
     }
 
-    private fun isAccessibilityServiceEnabled(): Boolean {
-        val expectedComponentName = ComponentName(this, LauncherAccessibilityService::class.java)
-        val enabledServicesSetting = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
 
-        val colonSplitter = TextUtils.SimpleStringSplitter(':')
-        colonSplitter.setString(enabledServicesSetting)
-
-        while (colonSplitter.hasNext()) {
-            val componentNameString = colonSplitter.next()
-            val enabledService = ComponentName.unflattenFromString(componentNameString)
-            if (enabledService != null && enabledService == expectedComponentName) {
-                return true
-            }
-        }
-        return false
-    }
-
-    private fun openAccessibilitySettings() {
-        try {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            startActivity(intent)
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Could not open accessibility settings", e)
-            Toast.makeText(this, "Could not open accessibility settings.", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun openHomeSettings() {
-        try {
-            // Direct attempt to open Default Home Settings (Android 10+)
-            val intent = Intent(Settings.ACTION_HOME_SETTINGS)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            startActivity(intent)
-        } catch (e: Exception) {
-            try {
-                // Fallback for Android TV general settings if home intent fails
-                val intent = Intent(Settings.ACTION_SETTINGS)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                startActivity(intent)
-                Toast.makeText(this, "Find 'Home App' or 'Default Apps' in Settings", Toast.LENGTH_LONG).show()
-            } catch (e2: Exception) {
-                Log.e("MainActivity", "Could not open settings", e2)
-            }
-        }
-    }
 
     override fun onResume() {
         super.onResume()
@@ -403,10 +362,11 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         }
     }
     
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleIntent(intent)
+    @SuppressLint("UnsafeIntentLaunch")
+    override fun onNewIntent(newIntent: Intent) {
+        super.onNewIntent(newIntent)
+        setIntent(newIntent)
+        handleIntent(newIntent)
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -421,29 +381,16 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         }
     }
 
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Reset the inactivity timer on any key press
+        ScreenSaverManager.triggerInactivity(this)
+
         if (DataRepository.isAppLocked.value) {
             // Block all input actions (like D-pad navigation, back button, home triggers) when app is locked due to expired subscription
             return true
         }
         return super.dispatchKeyEvent(event)
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            Log.d("MainActivity", "Global BACK key pressed - Forcing native Screensaver via Somnambulator")
-            try {
-                val intent = Intent().apply {
-                    setClassName("com.android.systemui", "com.android.systemui.Somnambulator")
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                startActivity(intent)
-                return true // Consume key event globally
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Failed to launch native screensaver from global key listener: ${e.message}")
-            }
-        }
-        return super.onKeyDown(keyCode, event)
     }
 
     override fun onPause() {
@@ -473,7 +420,6 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
 fun LockOverlay(message: String) {
     val context = LocalContext.current
     val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
-    val deviceId = sharedPrefs.getString("deviceID", "Unknown") ?: "Unknown"
     val branchId = sharedPrefs.getString("branchId", "Unknown") ?: "Unknown"
     val room = sharedPrefs.getString("room", "Unknown") ?: "Unknown"
     
@@ -549,7 +495,7 @@ fun LockOverlay(message: String) {
                     letterSpacing = 1.sp
                 )
                 Spacer(modifier = Modifier.height(14.dp))
-                Text(text = "$room", color = Color.White.copy(alpha = 0.9f), fontSize = 23.sp)
+                Text(text = room, color = Color.White.copy(alpha = 0.9f), fontSize = 23.sp)
                 Text(text = displayBranchName, color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
                 Text(text = "$deviceName • $ipAddress", color = Color.White.copy(alpha = 0.9f), fontSize = 8.sp)
             }

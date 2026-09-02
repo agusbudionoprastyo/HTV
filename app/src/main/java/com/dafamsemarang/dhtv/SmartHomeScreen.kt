@@ -9,8 +9,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.focusable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +90,9 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
     
     val smartDevices by DataRepository.smartDevicesList
     var focusedItem by remember { mutableStateOf<String?>(null) }
+    var debounceJobTemp by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var debounceJobMode by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var debounceJobFan by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val acDevice = smartDevices.find { it.type == "ac" }
     val curtainDevice = smartDevices.find { it.type == "curtain" }
@@ -112,17 +121,12 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                 )
             }
         } else {
-            Column(
+            Row(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // BARIS 1: AC (1/4 lebar) dan Curtain (3/4 lebar)
-                Row(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
-                    // AC Card (1/4)
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                // KOLOM 1: AC (1/3 lebar)
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                         if (acDevice != null) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -134,73 +138,272 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
                                         .background(Color(207, 223, 237).copy(alpha = 0.15f))
-                                        
-                                        .padding(12.dp),
+                                        .padding(24.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                                        val composition by com.airbnb.lottie.compose.rememberLottieComposition(com.airbnb.lottie.compose.LottieCompositionSpec.RawRes(R.raw.split_ac))
-                                        val progress by com.airbnb.lottie.compose.animateLottieCompositionAsState(
-                                            composition = composition,
-                                            iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever
-                                        )
-                                        com.airbnb.lottie.compose.LottieAnimation(
-                                            composition = composition,
-                                            progress = { progress },
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("${acDevice.acTemp}°C", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        SmartActionBtn(
-                                            iconRes = R.drawable.ic_power_batton,
-                                            useGradient = true,
-                                            isActive = acDevice.acPowerState,
-                                            isFocused = focusedItem == "ac_power",
-                                            onFocus = { focusedItem = "ac_power" },
-                                            onClickAction = { sendTuyaCommand(acDevice.deviceId, "switch", !acDevice.acPowerState) },
-                                            modifier = Modifier.size(40.dp).focusRequester(SmartRoomGlobalFocus.focusRequester)
-                                        )
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        // TOP HEADER
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().offset(y = (-8).dp)
+                                        ) {
+                                            // Title Centered
+                                            Text(
+                                                "Air Conditioner", 
+                                                color = Color.White, 
+                                                fontWeight = FontWeight.Bold, 
+                                                fontSize = 16.sp,
+                                                modifier = Modifier.align(Alignment.Center)
+                                            )
+                                        }
                                         
-                                        SmartActionBtn(
-                                            text = "MODE",
-                                            isFocused = focusedItem == "ac_mode",
-                                            onFocus = { focusedItem = "ac_mode" },
-                                            onClickAction = {  },
-                                            modifier = Modifier.width(76.dp).height(40.dp),
-                                            fontSize = 12.sp,
-                                            useGradient = true
-                                        )
+                                        // TEMPERATURE DIAL
+                                        Box(
+                                            modifier = Modifier.size(180.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                                                val strokeWidth = 8.dp.toPx()
+                                                val startAngle = 135f
+                                                val sweepAngle = 270f
+                                                
+                                                // Background arc
+                                                drawArc(
+                                                    color = Color.White.copy(alpha = 0.2f),
+                                                    startAngle = startAngle,
+                                                    sweepAngle = sweepAngle,
+                                                    useCenter = false,
+                                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                                                )
+                                                
+                                                // Foreground (Progress) arc
+                                                if (acDevice.acPowerState) {
+                                                    val temp = acDevice.acTemp.coerceIn(18, 30)
+                                                    val progress = (temp - 18f) / (30f - 18f)
+                                                    drawArc(
+                                                        color = Color(0xFF29B6F6),
+                                                        startAngle = startAngle,
+                                                        sweepAngle = sweepAngle * progress,
+                                                        useCenter = false,
+                                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                                                    )
+                                                }
+                                            }
+                                            
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text(
+                                                    text = "${acDevice.acTemp}°C", 
+                                                    color = Color.White, 
+                                                    fontSize = 54.sp, 
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.split_ac))
+                                                val progress by animateLottieCompositionAsState(
+                                                    composition = composition,
+                                                    iterations = LottieConstants.IterateForever,
+                                                    isPlaying = acDevice.acPowerState
+                                                )
+                                                LottieAnimation(
+                                                    composition = composition,
+                                                    progress = { progress },
+                                                    modifier = Modifier.height(30.dp)
+                                                )
+                                            }
+                                        }
                                         
-                                        SmartActionBtn(
-                                            iconRes = R.drawable.ic_add,
-                                            useGradient = true,
-                                            isFocused = focusedItem == "ac_temp_up",
-                                            onFocus = { focusedItem = "ac_temp_up" },
-                                            onClickAction = { sendTuyaCommand(acDevice.deviceId, "temp_set", acDevice.acTemp + 1) },
-                                            modifier = Modifier.size(40.dp)
-                                        )
+                                        // +/- BUTTONS
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).offset(y = (-32).dp),
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            SmartActionBtn(
+                                                iconRes = R.drawable.ic_minus,
+                                                isFocused = focusedItem == "ac_temp_down",
+                                                onFocus = { focusedItem = "ac_temp_down" },
+                                                onClickAction = { 
+                                                    val newTemp = maxOf(18, acDevice.acTemp - 1)
+                                                    DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
+                                                        if (d.deviceId == acDevice.deviceId) d.copy(acTemp = newTemp) else d 
+                                                    }
+                                                    debounceJobTemp?.cancel()
+                                                    debounceJobTemp = coroutineScope.launch {
+                                                        kotlinx.coroutines.delay(600)
+                                                        sendTuyaCommand(acDevice.deviceId, "T", newTemp.toString())
+                                                    }
+                                                },
+                                                modifier = Modifier.size(42.dp)
+                                            )
+                                            
+                                            SmartActionBtn(
+                                                iconRes = R.drawable.ic_add,
+                                                isFocused = focusedItem == "ac_temp_up",
+                                                onFocus = { focusedItem = "ac_temp_up" },
+                                                onClickAction = { 
+                                                    val newTemp = minOf(30, acDevice.acTemp + 1)
+                                                    DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
+                                                        if (d.deviceId == acDevice.deviceId) d.copy(acTemp = newTemp) else d 
+                                                    }
+                                                    debounceJobTemp?.cancel()
+                                                    debounceJobTemp = coroutineScope.launch {
+                                                        kotlinx.coroutines.delay(600)
+                                                        sendTuyaCommand(acDevice.deviceId, "T", newTemp.toString())
+                                                    }
+                                                },
+                                                modifier = Modifier.size(42.dp)
+                                            )
+                                        }
+                                        
+                                        // MODES AND FAN
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            // MODE SECTION
+                                            Column(
+                                                modifier = Modifier.weight(2f),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                val modeStr = when(acDevice.acMode) { "0" -> "COLD"; "1" -> "HEAT"; "2" -> "AUTO"; "3" -> "DRY"; "4" -> "FAN"; else -> "AUTO" }
+                                                val modeIconRes = when(acDevice.acMode) { "0" -> R.drawable.cold; "1" -> R.drawable.heat; "3" -> R.drawable.humidi; "4" -> R.drawable.fan; else -> R.drawable.ic_setting }
+                                                
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    androidx.compose.material3.Icon(
+                                                        painter = androidx.compose.ui.res.painterResource(id = modeIconRes),
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Text(modeStr, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                }
+                                                Spacer(modifier = Modifier.height(8.dp))
 
-                                        SmartActionBtn(
-                                            iconRes = R.drawable.ic_minus,
-                                            useGradient = true,
-                                            isFocused = focusedItem == "ac_temp_down",
-                                            onFocus = { focusedItem = "ac_temp_down" },
-                                            onClickAction = { sendTuyaCommand(acDevice.deviceId, "temp_set", acDevice.acTemp - 1) },
-                                            modifier = Modifier.size(40.dp)
-                                        )
+                                                val isModeFocused = focusedItem == "ac_mode_btn"
+                                                val modeContentColor = if (isModeFocused) Color(0xFF1E1E1E) else Color.White
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(44.dp)
+                                                        .clip(RoundedCornerShape(50))
+                                                        .background(if (isModeFocused) Color.White else Color.White.copy(alpha = 0.15f))
+                                                        .onFocusChanged { if (it.isFocused) focusedItem = "ac_mode_btn" }
+                                                        .clickable(enabled = acDevice.deviceId != null) {
+                                                            val modeList = listOf("0", "1", "2", "3", "4") // COLD, HEAT, AUTO, DRY, FAN
+                                                            val nextMode = modeList[(maxOf(0, modeList.indexOf(acDevice.acMode)) + 1) % modeList.size]
+                                                            DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
+                                                                if (d.deviceId == acDevice.deviceId) d.copy(acMode = nextMode) else d 
+                                                            }
+                                                            debounceJobMode?.cancel()
+                                                            debounceJobMode = coroutineScope.launch {
+                                                                kotlinx.coroutines.delay(600)
+                                                                sendTuyaCommand(acDevice.deviceId, "M", nextMode)
+                                                            }
+                                                        }
+                                                        .focusable(),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text("MODE", color = modeContentColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                                }
+                                            }
+
+                                            // FAN SECTION
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                val fanText = when(acDevice.acFan) { "0" -> "AUTO"; "1" -> "LOW"; "2" -> "MID"; "3" -> "HIGH"; else -> "AUTO" }
+                                                Text(fanText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                Spacer(modifier = Modifier.height(8.dp))
+
+                                                val isFanFocused = focusedItem == "ac_fan_btn"
+                                                val fanContentColor = if (isFanFocused) Color(0xFF1E1E1E) else Color.White
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(44.dp)
+                                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                                        .background(if (isFanFocused) Color.White else Color.White.copy(alpha = 0.15f))
+                                                        .onFocusChanged { if (it.isFocused) focusedItem = "ac_fan_btn" }
+                                                        .clickable(enabled = acDevice.deviceId != null) {
+                                                            val fanModes = listOf("0", "1", "2", "3")
+                                                            val nextFan = fanModes[(maxOf(0, fanModes.indexOf(acDevice.acFan)) + 1) % fanModes.size]
+                                                            DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
+                                                                if (d.deviceId == acDevice.deviceId) d.copy(acFan = nextFan) else d 
+                                                            }
+                                                            debounceJobFan?.cancel()
+                                                            debounceJobFan = coroutineScope.launch {
+                                                                kotlinx.coroutines.delay(600)
+                                                                sendTuyaCommand(acDevice.deviceId, "F", nextFan)
+                                                            }
+                                                        }
+                                                        .focusable(),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    androidx.compose.material3.Icon(
+                                                        painter = androidx.compose.ui.res.painterResource(id = R.drawable.fan),
+                                                        contentDescription = "Fan",
+                                                        tint = fanContentColor,
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            // POWER SECTION
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                val powerText = if (acDevice.acPowerState) "ON" else "OFF"
+                                                Text(powerText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                Spacer(modifier = Modifier.height(8.dp))
+
+                                                val isPowerFocused = focusedItem == "ac_power_btn"
+                                                val powerContentColor = if (isPowerFocused) Color(0xFF1E1E1E) else Color.White
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(44.dp)
+                                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                                        .background(if (isPowerFocused) Color.White else if(acDevice.acPowerState) Color(0xFF29B6F6) else Color.White.copy(alpha = 0.15f))
+                                                        .onFocusChanged { if (it.isFocused) focusedItem = "ac_power_btn" }
+                                                        .clickable(enabled = acDevice.deviceId != null) {
+                                                            coroutineScope.launch {
+                                                                val newState = !acDevice.acPowerState
+                                                                DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
+                                                                    if (d.deviceId == acDevice.deviceId) d.copy(acPowerState = newState) else d 
+                                                                }
+                                                                if (newState) sendTuyaCommand(acDevice.deviceId, "PowerOn", "PowerOn")
+                                                                else sendTuyaCommand(acDevice.deviceId, "PowerOff", "PowerOff")
+                                                            }
+                                                        }
+                                                        .focusable(),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    androidx.compose.material3.Icon(
+                                                        painter = androidx.compose.ui.res.painterResource(id = R.drawable.power_button),
+                                                        contentDescription = "Power",
+                                                        tint = powerContentColor,
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        
+
                                     }
-                                }
-                            }
+                                } }
                         }
                     }
-                    }
                     
-                    // Curtain Card
-                    Box(modifier = Modifier.weight(2f).fillMaxHeight()) {
+                    // KOLOM 2: Curtain (Baris atas) dan Switch (Baris bawah)
+                    Column(
+                        modifier = Modifier.weight(2f).fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Curtain Card
+                        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         if (curtainDevice != null) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -255,13 +458,11 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                         }
                     }
                     }
-                }
-                
-                // BARIS 2: Cards untuk Switch (Dinamis sesuai jumlah device)
-                Row(
-                    modifier = Modifier.fillMaxWidth().weight(1.5f).focusProperties { down = GlobalCartState.smartHomeFooterFocusRequester },
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
+                        // BARIS 2: Cards untuk Switch (Dinamis sesuai jumlah device)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().weight(1.5f).focusProperties { down = GlobalCartState.smartHomeFooterFocusRequester },
+                            horizontalArrangement = Arrangement.spacedBy(24.dp)
+                        ) {
                     switchDevices.forEach { switchDevice ->
                         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                             Column(
@@ -320,38 +521,11 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
         }
     }
 }
+}
 @Composable
 fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolean, isFocused: Boolean, onFocus: () -> Unit, onToggle: suspend () -> Unit) {
-    var isLoading by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     
-    val borderAlpha = remember { Animatable(0.4f) }
-    LaunchedEffect(isFocused) {
-        if (isFocused) {
-            borderAlpha.animateTo(
-                targetValue = 1.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(800, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                )
-            )
-        } else {
-            borderAlpha.snapTo(0.4f)
-        }
-    }
-    
-    val infiniteTransition = rememberInfiniteTransition()
-    val ledRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing)
-        ),
-        label = "LedRotation"
-    )
-    
-
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxSize(),
@@ -360,53 +534,11 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                
-                .then(
-                    if (isLoading) {
-                        Modifier.drawWithCache {
-                            val strokeWidth = 3.dp.toPx()
-                            val stroke = Stroke(width = strokeWidth)
-                            val inset = strokeWidth / 2f
-                            onDrawWithContent {
-                                drawContent()
-                                val shader = android.graphics.SweepGradient(
-                                    size.width / 2f, 
-                                    size.height / 2f, 
-                                    intArrayOf(android.graphics.Color.TRANSPARENT, android.graphics.Color.parseColor("#80FFFFFF"), android.graphics.Color.WHITE, android.graphics.Color.TRANSPARENT),
-                                    floatArrayOf(0f, 0.4f, 0.5f, 1f)
-                                )
-                                val matrix = android.graphics.Matrix()
-                                matrix.postRotate(ledRotation, size.width / 2f, size.height / 2f)
-                                shader.setLocalMatrix(matrix)
-                                val rotatedBrush = ShaderBrush(shader)
-
-                                drawRoundRect(
-                                    brush = rotatedBrush,
-                                    topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
-                                    size = androidx.compose.ui.geometry.Size(size.width - strokeWidth, size.height - strokeWidth),
-                                    style = stroke,
-                                    cornerRadius = CornerRadius(14.dp.toPx() - inset, 14.dp.toPx() - inset)
-                                )
-                            }
-                        }
-                    } else if (isFocused) {
-                        Modifier.border(
-                            width = 3.dp,
-                            color = Color.White.copy(alpha = borderAlpha.value),
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                    } else Modifier
-                )
                 .onFocusChanged { if (it.isFocused) onFocus() }
                 .clip(RoundedCornerShape(14.dp))
                 .clickable(enabled = deviceId != null) {
-                    if (!isLoading) {
-                        coroutineScope.launch {
-                            isLoading = true
-                            onToggle()
-                            kotlinx.coroutines.delay(1500)
-                            isLoading = false
-                        }
+                    coroutineScope.launch {
+                        onToggle()
                     }
                 }
         ) {
@@ -432,15 +564,21 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                         .padding(bottom = if (state) 0.dp else 6.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
-                            if (state) androidx.compose.ui.graphics.Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color(0xFF29B6F6))
-                            )
-                            else androidx.compose.ui.graphics.Brush.verticalGradient(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
                                 colors = listOf(Color.Transparent, Color.White)
                             )
                         ),
                     contentAlignment = Alignment.Center
                 ) {
+                    // Focus Overlay
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                if (isFocused) Color.White else Color.Transparent
+                            )
+                    )
+                    
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -448,10 +586,13 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val contentColor = if (isFocused) Color(0xFF1E1E1E) else Color.Black.copy(alpha = 0.6f)
+                        val indicatorColor = if (state) Color(0xFF29B6F6) else Color.Black.copy(alpha = 0.2f)
+                        
                         // Text Label
                         Text(
                             text = name,
-                            color = if (state) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.4f),
+                            color = contentColor,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -462,10 +603,7 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                                 .width(24.dp)
                                 .height(4.dp)
                                 .clip(RoundedCornerShape(50))
-                                .background(
-                                    if (state) Color.White.copy(alpha = 0.8f)
-                                    else Color.Black.copy(alpha = 0.4f)
-                                )
+                                .background(indicatorColor)
                         )
                     }
                 }
@@ -480,6 +618,7 @@ fun SmartActionBtn(
     text: String = "",
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     iconRes: Int? = null,
+    iconSize: androidx.compose.ui.unit.Dp = 24.dp,
     isActive: Boolean? = null,
     isFocused: Boolean,
     onFocus: () -> Unit,
@@ -488,17 +627,13 @@ fun SmartActionBtn(
     fontSize: androidx.compose.ui.unit.TextUnit = 20.sp,
     useGradient: Boolean = false
 ) {
-    var isLoading by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    val contentColor = if (isFocused) Color(0xFF1E1E1E) else Color.White
 
     Button(
         onClick = {
-            if (isLoading) return@Button
             coroutineScope.launch {
-                isLoading = true
                 onClickAction()
-                kotlinx.coroutines.delay(1500)
-                isLoading = false
             }
         },
         modifier = modifier
@@ -506,95 +641,29 @@ fun SmartActionBtn(
             .then(
                 if (useGradient) Modifier.background(Color.Transparent).border(2.dp, Color.White.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape) else Modifier
             )
-            .onFocusChanged { if (it.isFocused) onFocus() }
-            .smartButtonBorder(isFocused = isFocused, isLoading = isLoading),
+            .onFocusChanged { if (it.isFocused) onFocus() },
         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (useGradient) Color.Transparent else if (isActive == true) Color(0xFF1976D2) else if (isActive == false) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha=0.15f)
+            containerColor = if (useGradient) Color.Transparent else if (isFocused) Color.White else if (isActive == true) Color(0xFF29B6F6) else Color.White.copy(alpha = 0.15f)
         )
     ) {
         if (iconRes != null) {
             androidx.compose.material3.Icon(
                 painter = androidx.compose.ui.res.painterResource(id = iconRes),
                 contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
+                tint = contentColor,
+                modifier = Modifier.size(iconSize)
             )
         } else if (icon != null) {
-            androidx.compose.material3.Icon(imageVector = icon, contentDescription = null, tint = Color.White)
+            androidx.compose.material3.Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
         }
         if ((icon != null || iconRes != null) && text.isNotEmpty()) {
             Spacer(modifier = Modifier.width(4.dp))
         }
         if (text.isNotEmpty()) {
-            Text(text, fontSize = fontSize, color = Color.White)
+            Text(text, fontSize = fontSize, color = contentColor)
         }
     }
 }
 
-fun Modifier.smartButtonBorder(
-    isFocused: Boolean,
-    isLoading: Boolean
-): Modifier = composed {
-    val borderAlpha = remember { Animatable(0.4f) }
-    LaunchedEffect(isFocused) {
-        if (isFocused) {
-            borderAlpha.animateTo(
-                targetValue = 1.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(800, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                )
-            )
-        } else {
-            borderAlpha.snapTo(0.4f)
-        }
-    }
 
-    val infiniteTransition = rememberInfiniteTransition()
-    val ledRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing)
-        ),
-        label = "LedRotation"
-    )
-
-    this.then(
-        if (isLoading) {
-            Modifier.drawWithCache {
-                val strokeWidth = 3.dp.toPx()
-                val stroke = Stroke(width = strokeWidth)
-                val inset = strokeWidth / 2f
-                onDrawWithContent {
-                    drawContent()
-                    val shader = android.graphics.SweepGradient(
-                        size.width / 2f, 
-                        size.height / 2f, 
-                        intArrayOf(android.graphics.Color.TRANSPARENT, android.graphics.Color.parseColor("#80FFFFFF"), android.graphics.Color.WHITE, android.graphics.Color.TRANSPARENT),
-                        floatArrayOf(0f, 0.4f, 0.5f, 1f)
-                    )
-                    val matrix = android.graphics.Matrix()
-                    matrix.postRotate(ledRotation, size.width / 2f, size.height / 2f)
-                    shader.setLocalMatrix(matrix)
-                    val rotatedBrush = ShaderBrush(shader)
-
-                    drawRoundRect(
-                        brush = rotatedBrush,
-                        topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
-                        size = androidx.compose.ui.geometry.Size(size.width - strokeWidth, size.height - strokeWidth),
-                        style = stroke,
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f - inset, size.height / 2f - inset)
-                    )
-                }
-            }
-        } else if (isFocused) {
-            Modifier.border(
-                width = 3.dp,
-                color = Color.White.copy(alpha = borderAlpha.value),
-                shape = RoundedCornerShape(50)
-            )
-        } else Modifier
-    )
-}

@@ -87,8 +87,8 @@ object ScreenSaverManager {
     private var idleJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     
-    // Default idle timeout: 2 minutes (120,000 milliseconds)
-    private const val IDLE_TIMEOUT_MS = 120_000L 
+    // Idle timeout, defaults to 2 minutes (120,000 milliseconds)
+    var idleTimeoutMs by mutableStateOf(120_000L) 
     private var isListenerAttached = false
 
     // Firebase Listener References for clean disposal
@@ -157,8 +157,8 @@ object ScreenSaverManager {
         appContext = context.applicationContext
         if (isListenerAttached) return
         
-        // Auto-configure the Google TV / Android TV OS daydream settings in the background
-        autoConfigureSystemScreensaver(context)
+        // Auto-configure the OS screensaver has been removed in favor of in-app overlay
+        // autoConfigureSystemScreensaver(context)
         
         // Trigger initial cache check if there's an existing videoUrl
         if (videoUrl.isNotEmpty()) {
@@ -368,7 +368,15 @@ object ScreenSaverManager {
                         isWelcomeScreenActive = newWelcomeActive
                     }
                     
-                    Log.d("ScreenSaverManager", "Screensaver settings loaded: isVideoActive=$isVideoActive, isWelcomeScreenActive=$isWelcomeScreenActive, activeImagesCount=${activeImages.size}")
+                    // Parse Timeout Settings (in seconds, default 120s)
+                    val timeoutSeconds = snapshot.child("TIMEOUT_SECONDS").getValue(Long::class.java)
+                    if (timeoutSeconds != null && timeoutSeconds > 0) {
+                        idleTimeoutMs = timeoutSeconds * 1000L
+                    } else {
+                        idleTimeoutMs = 120_000L // Default fallback
+                    }
+                    
+                    Log.d("ScreenSaverManager", "Screensaver settings loaded: isVideoActive=$isVideoActive, isWelcomeScreenActive=$isWelcomeScreenActive, timeout=${idleTimeoutMs}ms")
                 } catch (e: Exception) {
                     Log.e("ScreenSaverManager", "Error parsing Firebase screensaver settings: ${e.message}", e)
                 }
@@ -394,7 +402,7 @@ object ScreenSaverManager {
         }
         
         idleJob = scope.launch {
-            delay(IDLE_TIMEOUT_MS)
+            delay(idleTimeoutMs)
             
             val hasVideo = isVideoActive && videoUrl.isNotEmpty()
             val hasImages = activeImages.isNotEmpty()
@@ -490,8 +498,8 @@ fun ScreenSaverOverlay() {
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     val nativeCode = keyEvent.nativeKeyEvent.keyCode
                     Log.d("ScreenSaverOverlay", "Screensaver: Key pressed ($nativeCode) - exiting screensaver instantly!")
-                    if (context is android.service.dreams.DreamService) {
-                        context.finish()
+                    if (false) { // Condition to avoid unresolved references while maintaining structure
+                        // No longer DreamService
                     } else {
                         ScreenSaverManager.lastDismissedTime = System.currentTimeMillis()
                         ScreenSaverManager.isScreenSaverActive = false
@@ -505,9 +513,10 @@ fun ScreenSaverOverlay() {
         var isPlayingAudio by remember { mutableStateOf(false) }
 
         // Start 5 seconds delay timer when screensaver media starts, play audio, and fade card out on completion
-        LaunchedEffect(Unit) {
+        LaunchedEffect(ScreenSaverManager.isWelcomeScreenActive) {
             if (ScreenSaverManager.isWelcomeScreenActive) return@LaunchedEffect
             delay(5000)
+            if (ScreenSaverManager.isWelcomeScreenActive) return@LaunchedEffect
             showWelcomeCard = true
             
             // Audio synthesis logic:
@@ -539,7 +548,7 @@ fun ScreenSaverOverlay() {
                                 while (player.isPlaying) { delay(100) }
                             } finally {
                                 player.release()
-                                try { enFile.delete() } catch (e: Exception) {}
+                                // Audio file is cached, do not delete it
                             }
                         }
                     }
@@ -584,7 +593,7 @@ fun ScreenSaverOverlay() {
                                 while (player.isPlaying) { delay(100) }
                             } finally {
                                 player.release()
-                                try { idFile.delete() } catch (e: Exception) {}
+                                // Audio file is cached, do not delete it
                             }
                         }
                     }
@@ -621,14 +630,8 @@ fun ScreenSaverOverlay() {
             // Option 3: Full-screen Personalized Welcome Screen as Screensaver!
             WelcomeScreen(
                 onNavigateToHome = {
-                    if (context is android.service.dreams.DreamService) {
-                        // Native DreamService flow: launch activity with home navigation extra and close service
-                        val intent = Intent(context, MainActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                            putExtra("navigate_to", "home")
-                        }
-                        context.startActivity(intent)
-                        context.finish()
+                    if (false) { // Kept block for layout stability, native flow disabled
+                        // context.finish()
                     } else {
                         // In-app screensaver flow: close screensaver overlay and navigate to Home Screen
                         ScreenSaverManager.isScreenSaverActive = false
@@ -773,10 +776,10 @@ fun VideoScreenSaver(url: String, isPlayingAudio: Boolean) {
 
     AndroidView(
         factory = { ctx ->
-            android.view.SurfaceView(ctx).apply {
-                holder.addCallback(object : android.view.SurfaceHolder.Callback {
-                    override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-                        val surface = holder.surface
+            android.view.TextureView(ctx).apply {
+                surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
+                    override fun onSurfaceTextureAvailable(surfaceTexture: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                        val surface = android.view.Surface(surfaceTexture)
                         currentSurface = surface
                         
                         try {
@@ -812,9 +815,9 @@ fun VideoScreenSaver(url: String, isPlayingAudio: Boolean) {
                         }
                     }
 
-                    override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {}
+                    override fun onSurfaceTextureSizeChanged(surfaceTexture: android.graphics.SurfaceTexture, width: Int, height: Int) {}
 
-                    override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
+                    override fun onSurfaceTextureDestroyed(surfaceTexture: android.graphics.SurfaceTexture): Boolean {
                         try {
                             mediaPlayerInstance?.stop()
                             mediaPlayerInstance?.release()
@@ -822,8 +825,11 @@ fun VideoScreenSaver(url: String, isPlayingAudio: Boolean) {
                         mediaPlayerInstance = null
                         currentSurface?.release()
                         currentSurface = null
+                        return true
                     }
-                })
+                    
+                    override fun onSurfaceTextureUpdated(surfaceTexture: android.graphics.SurfaceTexture) {}
+                }
             }
         },
         update = { surfaceView ->

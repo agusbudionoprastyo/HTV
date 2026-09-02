@@ -8,10 +8,21 @@ import java.io.File
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object GoogleTtsHelper {
+
+    private fun md5(string: String): String {
+        return try {
+            val bytes = MessageDigest.getInstance("MD5").digest(string.toByteArray())
+            bytes.joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            string.hashCode().toString() // Fallback
+        }
+    }
+
     suspend fun synthesizeSpeech(
         context: Context,
         text: String,
@@ -19,6 +30,14 @@ object GoogleTtsHelper {
         voiceName: String
     ): File? = withContext(Dispatchers.IO) {
         try {
+            val cacheKey = md5("${text}_${languageCode}_${voiceName}")
+            val cachedFile = File(context.cacheDir, "tts_cache_$cacheKey.mp3")
+
+            if (cachedFile.exists() && cachedFile.length() > 0) {
+                Log.d("GoogleTtsHelper", "Using cached TTS audio: ${cachedFile.absolutePath}")
+                return@withContext cachedFile
+            }
+
             val apiKey = com.google.firebase.FirebaseApp.getInstance().options.apiKey
             if (apiKey.isNullOrEmpty()) {
                 Log.e("GoogleTtsHelper", "Firebase API Key is null or empty")
@@ -57,10 +76,20 @@ object GoogleTtsHelper {
                 
                 if (audioContentBase64.isNotEmpty()) {
                     val audioBytes = Base64.decode(audioContentBase64, Base64.DEFAULT)
-                    val tempFile = File(context.cacheDir, "temp_greeting_${System.currentTimeMillis()}.mp3")
-                    tempFile.writeBytes(audioBytes)
-                    Log.d("GoogleTtsHelper", "Speech synthesized successfully: ${tempFile.absolutePath}")
-                    return@withContext tempFile
+                    cachedFile.writeBytes(audioBytes)
+                    Log.d("GoogleTtsHelper", "Speech synthesized and cached successfully: ${cachedFile.absolutePath}")
+                    
+                    try {
+                        context.cacheDir.listFiles()?.forEach { file ->
+                            if (file.name.startsWith("temp_greeting_")) {
+                                file.delete()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("GoogleTtsHelper", "Failed to clean old temp files", e)
+                    }
+
+                    return@withContext cachedFile
                 }
             } else {
                 val errorMsg = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
