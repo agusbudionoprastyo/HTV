@@ -474,6 +474,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         CurtainVisualizer(
                                             deviceId = curtainDevice.deviceId,
                                             curtainState = curtainDevice.curtainState,
+                                            curtainPercent = curtainDevice.curtainPercent,
                                             modifier = Modifier.weight(0.5f).fillMaxHeight()
                                         )
                                     }
@@ -695,6 +696,7 @@ fun SmartActionBtn(
 fun CurtainVisualizer(
     deviceId: String,
     curtainState: String, // "open", "close", "stop"
+    curtainPercent: Int, // 0-100 real percentage (0 = open, 100 = closed)
     modifier: Modifier = Modifier
 ) {
     // Read initial position from app memory (defaults to 0f if not yet saved)
@@ -703,16 +705,20 @@ fun CurtainVisualizer(
     
     val isInitialLoad = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
     var prevState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(curtainState) }
+    var prevPercent = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(curtainPercent) }
     
     // Save current position to app memory constantly as it animates
     androidx.compose.runtime.LaunchedEffect(openProgress.value) {
         DataRepository.localCurtainPositions[deviceId] = openProgress.value
     }
     
-    androidx.compose.runtime.LaunchedEffect(curtainState) {
+    androidx.compose.runtime.LaunchedEffect(curtainState, curtainPercent) {
+        val targetProgress = 1f - (curtainPercent / 100f)
+        
         if (isInitialLoad.value) {
             isInitialLoad.value = false
             prevState.value = curtainState
+            prevPercent.value = curtainPercent
             return@LaunchedEffect
         }
         
@@ -732,6 +738,13 @@ fun CurtainVisualizer(
                     }
                 }
                 "stop" -> openProgress.stop()
+            }
+        } else if (curtainPercent != prevPercent.value) {
+            prevPercent.value = curtainPercent
+            val distance = kotlin.math.abs(targetProgress - openProgress.value)
+            val duration = (distance * 5000).toInt()
+            if (duration > 0) {
+                openProgress.animateTo(targetProgress, androidx.compose.animation.core.tween(duration, easing = androidx.compose.animation.core.LinearEasing))
             }
         }
     }
