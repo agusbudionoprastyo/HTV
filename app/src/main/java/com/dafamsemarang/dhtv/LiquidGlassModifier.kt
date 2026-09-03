@@ -176,3 +176,30 @@ fun Modifier.liquidGlass(
             )
     }
 }
+
+fun Modifier.liquidShimmerEffect(): Modifier = composed {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_translate"
+    )
+
+    val shimmerColors = listOf(
+        Color.White.copy(alpha = 0.0f),
+        Color.White.copy(alpha = 0.4f),
+        Color.White.copy(alpha = 0.0f)
+    )
+    
+    this.background(
+        brush = Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset(translateAnim - 400f, translateAnim - 400f),
+            end = Offset(translateAnim, translateAnim)
+        )
+    )
+}

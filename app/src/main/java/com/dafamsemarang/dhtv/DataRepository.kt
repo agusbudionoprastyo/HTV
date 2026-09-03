@@ -76,10 +76,17 @@ object DataRepository {
         var acTemp: Int = 24,
         var acMode: String = "0",
         var acFan: String = "0",
-        var curtainState: String = "stop"
+        var curtainState: String = "stop",
+        var curtainPercent: Int = 0
     )
 
     val smartDevicesList = mutableStateOf<List<SmartDeviceData>>(emptyList())
+    val ignoreDeviceUpdatesUntil = mutableMapOf<String, Long>()
+    val localCurtainPositions = mutableMapOf<String, Float>()
+
+    fun setIgnoreDeviceUpdates(deviceId: String, durationMs: Long = 3500L) {
+        ignoreDeviceUpdatesUntil[deviceId] = System.currentTimeMillis() + durationMs
+    }
 
     // Guest & DND
     val guestInfo = mutableStateOf<GuestInfo?>(null)
@@ -326,6 +333,10 @@ object DataRepository {
                         val listener = object : ValueEventListener {
                             override fun onDataChange(statusSnap: DataSnapshot) {
                                 if (statusSnap.exists()) {
+                                    val ignoreUntil = ignoreDeviceUpdatesUntil[device.deviceId] ?: 0L
+                                    if (System.currentTimeMillis() < ignoreUntil) {
+                                        return
+                                    }
                                     val currentList = smartDevicesList.value.toMutableList()
                                     val index = currentList.indexOfFirst { it.deviceId == device.deviceId }
                                     if (index != -1) {
@@ -344,6 +355,11 @@ object DataRepository {
                                             }
                                             "curtain" -> {
                                                 updatedDevice.curtainState = statusSnap.child("control").getValue(String::class.java) ?: "stop"
+                                                
+                                                // Extract percent_control or percent_state safely
+                                                val percentControl = statusSnap.child("percent_control").getValue(Any::class.java)?.toString()?.toIntOrNull()
+                                                val percentState = statusSnap.child("percent_state").getValue(Any::class.java)?.toString()?.toIntOrNull()
+                                                updatedDevice.curtainPercent = percentControl ?: percentState ?: updatedDevice.curtainPercent
                                             }
                                         }
                                         currentList[index] = updatedDevice

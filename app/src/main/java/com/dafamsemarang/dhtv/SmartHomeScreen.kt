@@ -90,9 +90,6 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
     
     val smartDevices by DataRepository.smartDevicesList
     var focusedItem by remember { mutableStateOf<String?>(null) }
-    var debounceJobTemp by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var debounceJobMode by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var debounceJobFan by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val acDevice = smartDevices.find { it.type == "ac" }
     val curtainDevice = smartDevices.find { it.type == "curtain" }
@@ -126,7 +123,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                 horizontalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 // KOLOM 1: AC (1/3 lebar)
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                Box(modifier = Modifier.weight(1f).fillMaxHeight().focusProperties { down = GlobalCartState.smartHomeFooterFocusRequester }) {
                         if (acDevice != null) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -183,24 +180,36 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 if (acDevice.acPowerState) {
                                                     val temp = acDevice.acTemp.coerceIn(18, 30)
                                                     val progress = (temp - 18f) / (30f - 18f)
+                                                    val sweep = sweepAngle * progress
+                                                    val currentAngle = startAngle + sweep
+                                                    
                                                     drawArc(
-                                                        color = Color(0xFF29B6F6),
+                                                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                                            colors = listOf(Color(0xFF00E9F8), Color(0xFF00E9F8)),
+                                                            start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                                            end = androidx.compose.ui.geometry.Offset(size.width, 0f)
+                                                        ),
                                                         startAngle = startAngle,
-                                                        sweepAngle = sweepAngle * progress,
+                                                        sweepAngle = sweep,
                                                         useCenter = false,
                                                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                                                    )
+                                                    
+                                                    // Indicator circle
+                                                    val arcRadius = size.minDimension / 2
+                                                    val angleInRadians = Math.toRadians(currentAngle.toDouble())
+                                                    val cx = size.width / 2 + arcRadius * Math.cos(angleInRadians).toFloat()
+                                                    val cy = size.height / 2 + arcRadius * Math.sin(angleInRadians).toFloat()
+                                                    
+                                                    drawCircle(
+                                                        color = Color.White,
+                                                        radius = strokeWidth / 2f,
+                                                        center = androidx.compose.ui.geometry.Offset(cx, cy)
                                                     )
                                                 }
                                             }
                                             
                                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Text(
-                                                    text = "${acDevice.acTemp}°C", 
-                                                    color = Color.White, 
-                                                    fontSize = 54.sp, 
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Spacer(modifier = Modifier.height(4.dp))
                                                 val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.split_ac))
                                                 val progress by animateLottieCompositionAsState(
                                                     composition = composition,
@@ -211,6 +220,13 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     composition = composition,
                                                     progress = { progress },
                                                     modifier = Modifier.height(30.dp)
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = if (acDevice.acTemp > 0) "${acDevice.acTemp}°C" else "--°C", 
+                                                    color = if (acDevice.acTemp > 0) Color.White else Color.Transparent, 
+                                                    fontSize = 54.sp, 
+                                                    fontWeight = FontWeight.Bold
                                                 )
                                             }
                                         }
@@ -224,15 +240,15 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                             SmartActionBtn(
                                                 iconRes = R.drawable.ic_minus,
                                                 isFocused = focusedItem == "ac_temp_down",
+                                                transparentWhenUnfocused = true,
                                                 onFocus = { focusedItem = "ac_temp_down" },
                                                 onClickAction = { 
                                                     val newTemp = maxOf(18, acDevice.acTemp - 1)
+                                                    DataRepository.setIgnoreDeviceUpdates(acDevice.deviceId)
                                                     DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
                                                         if (d.deviceId == acDevice.deviceId) d.copy(acTemp = newTemp) else d 
                                                     }
-                                                    debounceJobTemp?.cancel()
-                                                    debounceJobTemp = coroutineScope.launch {
-                                                        kotlinx.coroutines.delay(600)
+                                                    coroutineScope.launch {
                                                         sendTuyaCommand(acDevice.deviceId, "T", newTemp.toString())
                                                     }
                                                 },
@@ -242,15 +258,15 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                             SmartActionBtn(
                                                 iconRes = R.drawable.ic_add,
                                                 isFocused = focusedItem == "ac_temp_up",
+                                                transparentWhenUnfocused = true,
                                                 onFocus = { focusedItem = "ac_temp_up" },
                                                 onClickAction = { 
                                                     val newTemp = minOf(30, acDevice.acTemp + 1)
+                                                    DataRepository.setIgnoreDeviceUpdates(acDevice.deviceId)
                                                     DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
                                                         if (d.deviceId == acDevice.deviceId) d.copy(acTemp = newTemp) else d 
                                                     }
-                                                    debounceJobTemp?.cancel()
-                                                    debounceJobTemp = coroutineScope.launch {
-                                                        kotlinx.coroutines.delay(600)
+                                                    coroutineScope.launch {
                                                         sendTuyaCommand(acDevice.deviceId, "T", newTemp.toString())
                                                     }
                                                 },
@@ -268,7 +284,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 modifier = Modifier.weight(2f),
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
-                                                val modeStr = when(acDevice.acMode) { "0" -> "COLD"; "1" -> "HEAT"; "2" -> "AUTO"; "3" -> "DRY"; "4" -> "FAN"; else -> "AUTO" }
+                                                val modeStr = when(acDevice.acMode) { "0" -> "cold"; "1" -> "heat"; "2" -> "auto"; "3" -> "dry"; "4" -> "fan"; else -> "auto" }
                                                 val modeIconRes = when(acDevice.acMode) { "0" -> R.drawable.cold; "1" -> R.drawable.heat; "3" -> R.drawable.humidi; "4" -> R.drawable.fan; else -> R.drawable.ic_setting }
                                                 
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -294,12 +310,11 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                         .clickable(enabled = acDevice.deviceId != null) {
                                                             val modeList = listOf("0", "1", "2", "3", "4") // COLD, HEAT, AUTO, DRY, FAN
                                                             val nextMode = modeList[(maxOf(0, modeList.indexOf(acDevice.acMode)) + 1) % modeList.size]
+                                                            DataRepository.setIgnoreDeviceUpdates(acDevice.deviceId)
                                                             DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
                                                                 if (d.deviceId == acDevice.deviceId) d.copy(acMode = nextMode) else d 
                                                             }
-                                                            debounceJobMode?.cancel()
-                                                            debounceJobMode = coroutineScope.launch {
-                                                                kotlinx.coroutines.delay(600)
+                                                            coroutineScope.launch {
                                                                 sendTuyaCommand(acDevice.deviceId, "M", nextMode)
                                                             }
                                                         }
@@ -315,7 +330,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 modifier = Modifier.weight(1f),
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
-                                                val fanText = when(acDevice.acFan) { "0" -> "AUTO"; "1" -> "LOW"; "2" -> "MID"; "3" -> "HIGH"; else -> "AUTO" }
+                                                val fanText = when(acDevice.acFan) { "0" -> "auto"; "1" -> "low"; "2" -> "mid"; "3" -> "high"; else -> "auto" }
                                                 Text(fanText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -330,12 +345,11 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                         .clickable(enabled = acDevice.deviceId != null) {
                                                             val fanModes = listOf("0", "1", "2", "3")
                                                             val nextFan = fanModes[(maxOf(0, fanModes.indexOf(acDevice.acFan)) + 1) % fanModes.size]
+                                                            DataRepository.setIgnoreDeviceUpdates(acDevice.deviceId)
                                                             DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
                                                                 if (d.deviceId == acDevice.deviceId) d.copy(acFan = nextFan) else d 
                                                             }
-                                                            debounceJobFan?.cancel()
-                                                            debounceJobFan = coroutineScope.launch {
-                                                                kotlinx.coroutines.delay(600)
+                                                            coroutineScope.launch {
                                                                 sendTuyaCommand(acDevice.deviceId, "F", nextFan)
                                                             }
                                                         }
@@ -356,21 +370,22 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 modifier = Modifier.weight(1f),
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
-                                                val powerText = if (acDevice.acPowerState) "ON" else "OFF"
+                                                val powerText = if (acDevice.acPowerState) "on" else "off"
                                                 Text(powerText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                                 Spacer(modifier = Modifier.height(8.dp))
 
                                                 val isPowerFocused = focusedItem == "ac_power_btn"
-                                                val powerContentColor = if (isPowerFocused) Color(0xFF1E1E1E) else Color.White
+                                                val powerContentColor = if (isPowerFocused) Color(0xFF1E1E1E) else if (acDevice.acPowerState) Color(0xFF00E9F8) else Color.White
                                                 Box(
                                                     modifier = Modifier
                                                         .size(44.dp)
                                                         .clip(androidx.compose.foundation.shape.CircleShape)
-                                                        .background(if (isPowerFocused) Color.White else if(acDevice.acPowerState) Color(0xFF29B6F6) else Color.White.copy(alpha = 0.15f))
+                                                        .background(if (isPowerFocused) Color.White else Color.White.copy(alpha = 0.15f))
                                                         .onFocusChanged { if (it.isFocused) focusedItem = "ac_power_btn" }
                                                         .clickable(enabled = acDevice.deviceId != null) {
                                                             coroutineScope.launch {
                                                                 val newState = !acDevice.acPowerState
+                                                                DataRepository.setIgnoreDeviceUpdates(acDevice.deviceId)
                                                                 DataRepository.smartDevicesList.value = DataRepository.smartDevicesList.value.map { d -> 
                                                                     if (d.deviceId == acDevice.deviceId) d.copy(acPowerState = newState) else d 
                                                                 }
@@ -419,41 +434,49 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .padding(24.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
                                     Row(
-                                        horizontalArrangement = Arrangement.spacedBy(24.dp),
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxSize(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        SmartActionBtn(
-                                            text = "Open",
-                                            isFocused = focusedItem == "curtain_open",
-                                            onFocus = { focusedItem = "curtain_open" },
-                                            onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "open") },
-                                            modifier = Modifier.weight(1f).height(60.dp)
-                                        )
+                                        Row(
+                                            modifier = Modifier.weight(0.5f).fillMaxSize(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.Start)
+                                        ) {
+                                            SmartActionBtn(
+                                                text = "",
+                                                iconRes = R.drawable.curtain_open,
+                                                isFocused = focusedItem == "curtain_open",
+                                                onFocus = { focusedItem = "curtain_open" },
+                                                onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "open") },
+                                                modifier = Modifier.size(52.dp)
+                                            )
+                                            
+                                            SmartActionBtn(
+                                                text = "",
+                                                iconRes = R.drawable.pause,
+                                                isFocused = focusedItem == "curtain_pause",
+                                                onFocus = { focusedItem = "curtain_pause" },
+                                                onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "stop") },
+                                                modifier = Modifier.size(52.dp)
+                                            )
+                                            
+                                            SmartActionBtn(
+                                                text = "",
+                                                iconRes = R.drawable.curtain_close,
+                                                isFocused = focusedItem == "curtain_close",
+                                                onFocus = { focusedItem = "curtain_close" },
+                                                onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "close") },
+                                                modifier = Modifier.size(52.dp)
+                                            )
+                                        }
                                         
-                                        SmartActionBtn(
-                                            text = "Pause",
-                                            isFocused = focusedItem == "curtain_pause",
-                                            onFocus = { focusedItem = "curtain_pause" },
-                                            onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "stop") },
-                                            modifier = Modifier.weight(1f).height(60.dp)
-                                        )
-                                        
-                                        SmartActionBtn(
-                                            text = "Close",
-                                            isFocused = focusedItem == "curtain_close",
-                                            onFocus = { focusedItem = "curtain_close" },
-                                            onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "close") },
-                                            modifier = Modifier.weight(1f).height(60.dp)
+                                        CurtainVisualizer(
+                                            deviceId = curtainDevice.deviceId,
+                                            curtainState = curtainDevice.curtainState,
+                                            modifier = Modifier.weight(0.5f).fillMaxHeight()
                                         )
                                     }
-                                }
                             }
                         }
                     }
@@ -544,16 +567,15 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
         ) {
             // Container for gap between focus border and switch
             Box(modifier = Modifier.fillMaxSize().padding(2.dp)) {
-                // 3D Base Lip (visible when OFF)
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp))
+                        .fillMaxWidth()
+                        .height(20.dp)
+                        .align(Alignment.BottomCenter)
+                        .clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp))
                         .background(
                             if (state) androidx.compose.ui.graphics.SolidColor(Color.Transparent) 
-                            else androidx.compose.ui.graphics.Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.25f))
-                            )
+                            else androidx.compose.ui.graphics.SolidColor(Color(0xFF999999))
                         )
                 )
 
@@ -565,7 +587,9 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             androidx.compose.ui.graphics.Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.White)
+                                0.0f to Color.Transparent,
+                                0.8f to Color.White,
+                                1.0f to Color.White
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -587,7 +611,7 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val contentColor = if (isFocused) Color(0xFF1E1E1E) else Color.Black.copy(alpha = 0.6f)
-                        val indicatorColor = if (state) Color(0xFF29B6F6) else Color.Black.copy(alpha = 0.2f)
+                        val indicatorColor = if (state) Color(0xFF00E9F8) else Color.Black.copy(alpha = 0.2f)
                         
                         // Text Label
                         Text(
@@ -625,7 +649,8 @@ fun SmartActionBtn(
     onClickAction: suspend () -> Unit,
     modifier: Modifier = Modifier,
     fontSize: androidx.compose.ui.unit.TextUnit = 20.sp,
-    useGradient: Boolean = false
+    useGradient: Boolean = false,
+    transparentWhenUnfocused: Boolean = false
 ) {
     val coroutineScope = rememberCoroutineScope()
     val contentColor = if (isFocused) Color(0xFF1E1E1E) else Color.White
@@ -644,7 +669,7 @@ fun SmartActionBtn(
             .onFocusChanged { if (it.isFocused) onFocus() },
         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (useGradient) Color.Transparent else if (isFocused) Color.White else if (isActive == true) Color(0xFF29B6F6) else Color.White.copy(alpha = 0.15f)
+            containerColor = if (useGradient) Color.Transparent else if (isFocused) Color.White else if (isActive == true) Color(0xFF00E9F8) else if (transparentWhenUnfocused) Color.Transparent else Color.White.copy(alpha = 0.15f)
         )
     ) {
         if (iconRes != null) {
@@ -663,6 +688,169 @@ fun SmartActionBtn(
         if (text.isNotEmpty()) {
             Text(text, fontSize = fontSize, color = contentColor)
         }
+    }
+}
+
+@Composable
+fun CurtainVisualizer(
+    deviceId: String,
+    curtainState: String, // "open", "close", "stop"
+    modifier: Modifier = Modifier
+) {
+    // Read initial position from app memory (defaults to 0f if not yet saved)
+    val initialPercent = androidx.compose.runtime.remember { DataRepository.localCurtainPositions[deviceId] ?: 0f }
+    val openProgress = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(initialPercent) }
+    
+    val isInitialLoad = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    var prevState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(curtainState) }
+    
+    // Save current position to app memory constantly as it animates
+    androidx.compose.runtime.LaunchedEffect(openProgress.value) {
+        DataRepository.localCurtainPositions[deviceId] = openProgress.value
+    }
+    
+    androidx.compose.runtime.LaunchedEffect(curtainState) {
+        if (isInitialLoad.value) {
+            isInitialLoad.value = false
+            prevState.value = curtainState
+            return@LaunchedEffect
+        }
+        
+        if (curtainState != prevState.value) {
+            prevState.value = curtainState
+            when (curtainState) {
+                "open" -> {
+                    val durationLeft = ((1f - openProgress.value) * 5000).toInt()
+                    if (durationLeft > 0) {
+                        openProgress.animateTo(1f, androidx.compose.animation.core.tween(durationLeft, easing = androidx.compose.animation.core.LinearEasing))
+                    }
+                }
+                "close" -> {
+                    val durationLeft = (openProgress.value * 5000).toInt()
+                    if (durationLeft > 0) {
+                        openProgress.animateTo(0f, androidx.compose.animation.core.tween(durationLeft, easing = androidx.compose.animation.core.LinearEasing))
+                    }
+                }
+                "stop" -> openProgress.stop()
+            }
+        }
+    }
+    
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        
+        val railHeight = 12.dp.toPx()
+        val railY = 0f
+        
+        val dotRadius = 6.dp.toPx()
+        val outerDotRadius = dotRadius + 2.dp.toPx()
+        
+        val maxOpenDistance = (w / 2f) - (outerDotRadius * 2f) // Opens until curtain is exactly wide enough for the dot to touch the edge
+        val currentOpenOffset = openProgress.value * maxOpenDistance
+        
+        val pleatCount = 6
+        val basePleatWidth = (w / 2f) / pleatCount
+        val compressedPleatWidth = ((w / 2f) - maxOpenDistance) / pleatCount
+        
+        val currentPleatWidth = basePleatWidth - (basePleatWidth - compressedPleatWidth) * openProgress.value
+        
+        
+        // Draw Left Curtain (Anchored at left wall, x=0)
+        // Draw from right to left so the right edge of a pleat overlaps the pleat to its right
+        for (i in pleatCount - 1 downTo 0) {
+            val pleatX = currentPleatWidth * i
+            val path = androidx.compose.ui.graphics.Path()
+            path.addRoundRect(
+                androidx.compose.ui.geometry.RoundRect(
+                    left = pleatX,
+                    top = railY + railHeight / 2f,
+                    right = pleatX + currentPleatWidth * if (i == pleatCount - 1) 1.0f else 1.15f,
+                    bottom = h,
+                    topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                    topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                    bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()),
+                    bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero
+                )
+            )
+            drawPath(path = path, color = Color.White.copy(alpha = 0.85f))
+        }
+        
+        // Draw Right Curtain (Anchored at right wall, x=w)
+        // Draw from left to right so the left edge of a pleat overlaps the pleat to its left
+        for (i in pleatCount - 1 downTo 0) {
+            val pleatX = w - (currentPleatWidth * (i + 1))
+            val path = androidx.compose.ui.graphics.Path()
+            path.addRoundRect(
+                androidx.compose.ui.geometry.RoundRect(
+                    left = pleatX - currentPleatWidth * if (i == pleatCount - 1) 0.0f else 0.15f,
+                    top = railY + railHeight / 2f,
+                    right = pleatX + currentPleatWidth,
+                    bottom = h,
+                    topLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                    topRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                    bottomRightCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero,
+                    bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
+                )
+            )
+            drawPath(path = path, color = Color.White.copy(alpha = 0.85f))
+        }
+        
+        // Rail Drop Shadow (Soft Blur)
+        val shadowPaint = androidx.compose.ui.graphics.Paint().apply {
+            color = Color.Black.copy(alpha = 0.3f)
+            asFrameworkPaint().maskFilter = android.graphics.BlurMaskFilter(
+                6.dp.toPx(),
+                android.graphics.BlurMaskFilter.Blur.NORMAL
+            )
+        }
+        drawContext.canvas.drawRoundRect(
+            left = 0f,
+            top = railY + 4.dp.toPx(),
+            right = w,
+            bottom = railY + railHeight + 4.dp.toPx(),
+            radiusX = railHeight / 2f,
+            radiusY = railHeight / 2f,
+            paint = shadowPaint
+        )
+        
+        // Draw Rail (on top of curtains)
+        drawRoundRect(
+            color = Color.White,
+            topLeft = androidx.compose.ui.geometry.Offset(0f, railY),
+            size = androidx.compose.ui.geometry.Size(w, railHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(railHeight / 2)
+        )
+        
+        // Draw Indicator Dots (exactly anchored to the leading edge of the curtain)
+        val leftDotX = (currentPleatWidth * pleatCount) - outerDotRadius
+        val rightDotX = w - (currentPleatWidth * pleatCount) + outerDotRadius
+        
+        val dotColor = Color(0xFF00E9F8) // Blueish
+        
+        // Left dot
+        drawCircle(
+            color = Color.White,
+            radius = dotRadius + 2.dp.toPx(),
+            center = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f)
+        )
+        drawCircle(
+            color = dotColor,
+            radius = dotRadius,
+            center = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f)
+        )
+        
+        // Right dot
+        drawCircle(
+            color = Color.White,
+            radius = dotRadius + 2.dp.toPx(),
+            center = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
+        )
+        drawCircle(
+            color = dotColor,
+            radius = dotRadius,
+            center = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
+        )
     }
 }
 

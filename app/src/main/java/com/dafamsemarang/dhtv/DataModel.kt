@@ -110,6 +110,7 @@ object GlobalCartState {
     val selectedItems = androidx.compose.runtime.mutableStateListOf<SelectedItem>()
     var cartFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
     val smartHomeFooterFocusRequester = androidx.compose.ui.focus.FocusRequester()
+    val activeFooterFocusRequester = androidx.compose.ui.focus.FocusRequester()
     val animateTrigger = androidx.compose.runtime.mutableStateOf(0)
     val animStartOffset = androidx.compose.runtime.mutableStateOf(androidx.compose.ui.geometry.Offset.Zero)
     val cartBoundsInRoot = androidx.compose.runtime.mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)

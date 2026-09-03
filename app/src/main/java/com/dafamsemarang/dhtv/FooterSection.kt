@@ -3387,6 +3387,18 @@ fun SmallServiceButton(
         if (focusRequester != null) {
             boxModifier = boxModifier.focusRequester(focusRequester)
         }
+        if (isActive) {
+            boxModifier = boxModifier.focusRequester(GlobalCartState.activeFooterFocusRequester)
+        }
+
+        boxModifier = boxModifier.onKeyEvent {
+            if (it.key == Key.Back && it.type == KeyEventType.KeyUp) {
+                ScreenSaverManager.isScreenSaverActive = true
+                true
+            } else {
+                false
+            }
+        }
 
         val bgModifier = if (isHome3D) {
             Modifier
@@ -3560,6 +3572,18 @@ fun SmallServiceButtonWithBadge(
             .clip(CircleShape)
         if (focusRequester != null) {
             boxModifier = boxModifier.focusRequester(focusRequester)
+        }
+        if (isActive) {
+            boxModifier = boxModifier.focusRequester(GlobalCartState.activeFooterFocusRequester)
+        }
+
+        boxModifier = boxModifier.onKeyEvent {
+            if (it.key == Key.Back && it.type == KeyEventType.KeyUp) {
+                ScreenSaverManager.isScreenSaverActive = true
+                true
+            } else {
+                false
+            }
         }
         Box(
             modifier = boxModifier

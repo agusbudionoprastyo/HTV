@@ -304,7 +304,9 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
         try {
             // Ensure screenshot is allowed by removing FLAG_SECURE if it exists
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            Log.d("MainActivity", "Screenshot enabled, WakeLock disabled to let OS Daydream trigger naturally")
+            // Prevent the screen from going to sleep or triggering the native screensaver
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            Log.d("MainActivity", "Screenshot enabled, FLAG_KEEP_SCREEN_ON added to prevent native sleep")
         } catch (e: Exception) {
             Log.e("MainActivity", "Error enabling screenshot: ${e.message}")
         }

@@ -242,7 +242,7 @@ fun AppNavigation() {
                 popExitTransition = { mainExitTransition(slideDistance) }
             ) {
                 androidx.activity.compose.BackHandler {
-                    ScreenSaverManager.isScreenSaverActive = true
+                    try { GlobalCartState.activeFooterFocusRequester.requestFocus() } catch (e: Exception) {}
                 }
                 HomeScreen(navController)
                 CheckoutReminder()
@@ -256,6 +256,9 @@ fun AppNavigation() {
                 popEnterTransition = { mainEnterTransition(slideDistance) },
                 popExitTransition = { mainExitTransition(slideDistance) }
             ) {
+                androidx.activity.compose.BackHandler {
+                    try { GlobalCartState.activeFooterFocusRequester.requestFocus() } catch (e: Exception) {}
+                }
                 SmartHomeScreen(navController)
                 CheckoutReminder()
             }
@@ -268,6 +271,9 @@ fun AppNavigation() {
                 popEnterTransition = { mainEnterTransition(slideDistance) },
                 popExitTransition = { mainExitTransition(slideDistance) }
             ) {
+                androidx.activity.compose.BackHandler {
+                    try { GlobalCartState.activeFooterFocusRequester.requestFocus() } catch (e: Exception) {}
+                }
                 FoodBeverageScreen()
                 CheckoutReminder()
             }
@@ -280,6 +286,9 @@ fun AppNavigation() {
                 popEnterTransition = { mainEnterTransition(slideDistance) },
                 popExitTransition = { mainExitTransition(slideDistance) }
             ) {
+                androidx.activity.compose.BackHandler {
+                    try { GlobalCartState.activeFooterFocusRequester.requestFocus() } catch (e: Exception) {}
+                }
                 ContactUsScreen()
                 CheckoutReminder()
             }
@@ -292,6 +301,9 @@ fun AppNavigation() {
                 popEnterTransition = { mainEnterTransition(slideDistance) },
                 popExitTransition = { mainExitTransition(slideDistance) }
             ) {
+                androidx.activity.compose.BackHandler {
+                    try { GlobalCartState.activeFooterFocusRequester.requestFocus() } catch (e: Exception) {}
+                }
                 HotelInfoScreen()
                 CheckoutReminder()
             }

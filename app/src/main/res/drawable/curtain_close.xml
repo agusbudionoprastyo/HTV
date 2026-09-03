@@ -1,0 +1,40 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+  
+  <!-- Rail -->
+  <path
+      android:pathData="m96.22,4.1h-91.44c-0.83,0 -1.5,0.68 -1.5,1.51v4.8c0,0.83 0.67,1.51 1.5,1.51h91.44c0.83,0 1.5,-0.68 1.5,-1.51v-4.8c0,-0.83 -0.67,-1.51 -1.5,-1.51z"
+      android:fillColor="#000000"/>
+      
+  <!-- Left Curtain Pleats -->
+  <path
+      android:pathData="M 9 13.42 h 8 v 83.48 h -8 z"
+      android:fillColor="#000000"/>
+  <path
+      android:pathData="M 19 13.42 h 8 v 83.48 h -8 z"
+      android:fillColor="#000000"/>
+  <path
+      android:pathData="M 29 13.42 h 8 v 83.48 h -8 z"
+      android:fillColor="#000000"/>
+  <path
+      android:pathData="M 39 13.42 h 8 v 83.48 h -8 z"
+      android:fillColor="#000000"/>
+
+  <!-- Right Curtain Pleats -->
+  <path
+      android:pathData="M 53 13.42 h 8 v 83.48 h -8 z"
+      android:fillColor="#000000"/>
+  <path
+      android:pathData="M 63 13.42 h 8 v 83.48 h -8 z"
+      android:fillColor="#000000"/>
+  <path
+      android:pathData="M 73 13.42 h 8 v 83.48 h -8 z"
+      android:fillColor="#000000"/>
+  <path
+      android:pathData="M 83 13.42 h 8 v 83.48 h -8 z"
+      android:fillColor="#000000"/>
+      
+</vector>
