@@ -429,7 +429,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                             ) {
                                                 val powerText = if (acDevice.acPowerState) "on" else "off"
                                                 Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
-                                                    Text(powerText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                    Text(powerText, color = Color.White, fontWeight = FontWeight.Normal, fontSize = 14.sp)
                                                 }
                                                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -764,7 +764,31 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
 }
 @Composable
 fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolean, isFocused: Boolean, onFocus: () -> Unit, onToggle: suspend () -> Unit) {
-    val coroutineScope = rememberCoroutineScope()
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    
+    var isDropped by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(state) }
+    
+    androidx.compose.runtime.LaunchedEffect(state) {
+        isDropped = state
+    }
+    
+    var isDropFinished by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(isDropped) {
+        if (isDropped) {
+            kotlinx.coroutines.delay(500)
+            isDropFinished = true
+        } else {
+            isDropFinished = false
+        }
+    }
+    
+    // Timeout for optimistic UI updates
+    androidx.compose.runtime.LaunchedEffect(isDropped, state) {
+        if (isDropped != state) {
+            kotlinx.coroutines.delay(3000) // 3 seconds timeout
+            isDropped = state // Revert UI if server didn't respond
+        }
+    }
     
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -778,6 +802,10 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                 .clip(RoundedCornerShape(14.dp))
                 .clickable(enabled = deviceId != null) {
                     coroutineScope.launch {
+                        if (!state) { // Turning ON: Optimistic drop
+                            isDropped = true
+                        }
+                        // Turning OFF: Do nothing optimistically, wait for LaunchedEffect(state)
                         onToggle()
                     }
                 }
@@ -801,13 +829,13 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = if (state) 2.dp else 10.dp)
+                        .padding(bottom = if (isDropped) 2.dp else 10.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             androidx.compose.ui.graphics.Brush.verticalGradient(
                                 0.0f to Color.Transparent,
-                                0.8f to if (state) Color.White else Color.White.copy(alpha = 0.4f),
-                                1.0f to if (state) Color.White else Color.White.copy(alpha = 0.4f)
+                                0.8f to if (isDropped) Color.White else Color.White.copy(alpha = 0.4f),
+                                1.0f to if (isDropped) Color.White else Color.White.copy(alpha = 0.4f)
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -825,7 +853,7 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                     
                     // Hanging Lamp & Light Beam Animation
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = state,
+                        visible = isDropped,
                         enter = androidx.compose.animation.slideInVertically(
                             initialOffsetY = { -it },
                             animationSpec = androidx.compose.animation.core.tween(500, easing = androidx.compose.animation.core.FastOutSlowInEasing)
@@ -849,18 +877,12 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                                 modifier = Modifier.size(56.dp)
                             )
                             
-                            val lightAlpha by transition.animateFloat(
-                                transitionSpec = {
-                                    if (targetState == androidx.compose.animation.EnterExitState.Visible) {
-                                        androidx.compose.animation.core.tween(durationMillis = 300, delayMillis = 700)
-                                    } else {
-                                        androidx.compose.animation.core.tween(durationMillis = 300)
-                                    }
-                                },
+                            val isLightOn = state && isDropFinished
+                            val lightAlpha by androidx.compose.animation.core.animateFloatAsState(
+                                targetValue = if (isLightOn) 1f else 0f,
+                                animationSpec = androidx.compose.animation.core.tween(durationMillis = 300),
                                 label = "LightAlpha"
-                            ) { enterExitState ->
-                                if (enterExitState == androidx.compose.animation.EnterExitState.Visible) 1f else 0f
-                            }
+                            )
                             
                             // Lit Lamp Icon (overlays the unlit one)
                             androidx.compose.foundation.Image(
