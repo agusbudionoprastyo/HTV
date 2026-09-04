@@ -5,7 +5,7 @@
     android:viewportWidth="128"
     android:viewportHeight="128">
     
-  <!-- Bulb (Unlit) using original outer path -->
+  <!-- Bulb (Lit) using original outer path -->
   <path android:pathData="m64.04,127.09c-5.63,0.12 -10.77,-3.18 -13.01,-8.34 -2.24,-5.17 -1.13,-11.17 2.81,-15.2 3.93,-4.02 9.92,-5.26 15.13,-3.13 5.21,2.12 8.62,7.19 8.62,12.82 0.01,1.8 -0.32,3.58 -0.99,5.25 -0.67,1.67 -1.67,3.19 -2.92,4.48 -1.26,1.28 -2.76,2.31 -4.41,3.01 -1.66,0.71 -3.43,1.09 -5.23,1.11z">
       <aapt:attr name="android:fillColor">
           <gradient
@@ -13,9 +13,9 @@
               android:centerX="64"
               android:centerY="114"
               android:gradientRadius="18">
-              <item android:offset="0.0" android:color="#FFEEEEEE" />
-              <item android:offset="0.6" android:color="#FFB3B3B3" />
-              <item android:offset="1.0" android:color="#FF666666" />
+              <item android:offset="0.0" android:color="#FFFFFFFF" />
+              <item android:offset="0.5" android:color="#FFFFD700" />
+              <item android:offset="1.0" android:color="#FFFF8C00" />
           </gradient>
       </aapt:attr>
   </path>

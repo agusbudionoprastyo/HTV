@@ -1,8 +1,6 @@
-
 package com.dafamsemarang.dhtv
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.drawscope.translate
-
-
 import androidx.compose.ui.composed
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
@@ -318,13 +316,13 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 
                                                 Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
                                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                        Text(modeStr, color = Color.White, fontWeight = FontWeight.Normal, fontSize = 14.sp)
                                                         androidx.compose.material3.Icon(
                                                             painter = androidx.compose.ui.res.painterResource(id = modeIconRes),
                                                             contentDescription = null,
                                                             tint = Color.White,
                                                             modifier = Modifier.size(16.dp)
                                                         )
-                                                        Text(modeStr, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                                     }
                                                 }
                                                 Spacer(modifier = Modifier.height(8.dp))
@@ -823,6 +821,91 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                             )
                     )
                     
+                    val contentColor = if (isFocused) Color(0xFF1E1E1E) else Color.Black.copy(alpha = 0.6f)
+                    
+                    // Hanging Lamp & Light Beam Animation
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = state,
+                        enter = androidx.compose.animation.slideInVertically(
+                            initialOffsetY = { -it },
+                            animationSpec = androidx.compose.animation.core.tween(500, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                        ) + androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(400)),
+                        exit = androidx.compose.animation.slideOutVertically(
+                            targetOffsetY = { -it },
+                            animationSpec = androidx.compose.animation.core.tween(500, delayMillis = 500, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                        ) + androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(300, delayMillis = 600)),
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(0.85f), // Light beam spans down to cover most of the switch
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            // Lamp Icon
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(id = R.drawable.hanging_lamp),
+                                contentDescription = "Hanging Lamp",
+                                modifier = Modifier.size(56.dp)
+                            )
+                            
+                            val lightAlpha by transition.animateFloat(
+                                transitionSpec = {
+                                    if (targetState == androidx.compose.animation.EnterExitState.Visible) {
+                                        androidx.compose.animation.core.tween(durationMillis = 300, delayMillis = 700)
+                                    } else {
+                                        androidx.compose.animation.core.tween(durationMillis = 300)
+                                    }
+                                },
+                                label = "LightAlpha"
+                            ) { enterExitState ->
+                                if (enterExitState == androidx.compose.animation.EnterExitState.Visible) 1f else 0f
+                            }
+                            
+                            // Lit Lamp Icon (overlays the unlit one)
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(id = R.drawable.hanging_lamp_lit),
+                                contentDescription = "Hanging Lamp Lit",
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .alpha(lightAlpha)
+                            )
+                            
+                            // Light Beam Cone (Sequenced via alpha)
+                            androidx.compose.foundation.Canvas(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .alpha(lightAlpha)
+                            ) {
+                                val bulbCenterY = (112.5f / 128f) * 56.dp.toPx()
+                                val bulbRadius = (14f / 128f) * 56.dp.toPx()
+                                
+                                // Light Beam Cone
+                                val lampBottomY = bulbCenterY + bulbRadius * 0.2f
+                                val topBeamWidth = 20.dp.toPx() // Restore the wide base of the light beam
+                                
+                                val path = androidx.compose.ui.graphics.Path().apply {
+                                    moveTo(size.width / 2f - topBeamWidth, lampBottomY)
+                                    lineTo(size.width / 2f + topBeamWidth, lampBottomY)
+                                    lineTo(size.width * 0.9f, size.height) // Widen towards the bottom
+                                    lineTo(size.width * 0.1f, size.height)
+                                    close()
+                                }
+                                drawPath(
+                                    path = path,
+                                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        0.0f to Color(0xFFFFD700).copy(alpha = 0.0f),  // Transparent at the very top
+                                        0.15f to Color(0xFFFFD700).copy(alpha = 0.25f), // Much softer peak brightness
+                                        0.5f to Color(0xFFFFD700).copy(alpha = 0.05f),  // Gently fades in the middle
+                                        1.0f to Color(0xFFFFD700).copy(alpha = 0.0f),  // Fully transparent at the bottom
+                                        startY = lampBottomY,
+                                        endY = size.height
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -830,7 +913,6 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val contentColor = if (isFocused) Color(0xFF1E1E1E) else Color.Black.copy(alpha = 0.6f)
                         val indicatorColor = if (state) Color(0xFF00E9F8) else Color.Black.copy(alpha = 0.2f)
                         
                         // Text Label
@@ -1006,7 +1088,8 @@ fun CurtainVisualizer(
         val currentOpenOffset = openProgress.value * maxOpenDistance
         
         val pleatCount = 6
-        val basePleatWidth = (w / 2f) / pleatCount
+        val centerGap = 1.dp.toPx() // Gap from center (total gap will be 2.dp)
+        val basePleatWidth = ((w / 2f) - centerGap) / pleatCount
         val compressedPleatWidth = ((w / 2f) - maxOpenDistance) / pleatCount
         
         val currentPleatWidth = basePleatWidth - (basePleatWidth - compressedPleatWidth) * openProgress.value
@@ -1114,29 +1197,33 @@ fun CurtainVisualizer(
                     else -> 1f
                 }.coerceIn(0f, 1f)
                 
-                // Left Arrow
-                translate(
-                    left = leftCenter.x - dotRadius - iconSize - xOffset,
-                    top = leftCenter.y - (iconSize / 2f)
-                ) {
-                    with(leftIconPainter) {
-                        draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                // Left Arrow (only if not fully open)
+                if (localPercent != 0) {
+                    translate(
+                        left = leftCenter.x - dotRadius - iconSize - xOffset,
+                        top = leftCenter.y - (iconSize / 2f)
+                    ) {
+                        with(leftIconPainter) {
+                            draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                        }
                     }
                 }
                 
-                // Right Arrow
-                translate(
-                    left = leftCenter.x + dotRadius + xOffset,
-                    top = leftCenter.y - (iconSize / 2f)
-                ) {
-                    with(rightIconPainter) {
-                        draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                // Right Arrow (only if not fully closed)
+                if (localPercent != 100) {
+                    translate(
+                        left = leftCenter.x + dotRadius + xOffset,
+                        top = leftCenter.y - (iconSize / 2f)
+                    ) {
+                        with(rightIconPainter) {
+                            draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                        }
                     }
                 }
             }
         }
         drawCircle(
-            color = if (focusedThumb == "left") Color.White.copy(alpha = 0.6f) else Color.Transparent,
+            color = if (focusedThumb == "left" && !isSliderActive) Color.White.copy(alpha = 0.6f) else Color.Transparent,
             radius = dotRadius + 6.dp.toPx(),
             center = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f)
         )
@@ -1169,29 +1256,33 @@ fun CurtainVisualizer(
                     else -> 1f
                 }.coerceIn(0f, 1f)
                 
-                // Left Arrow
-                translate(
-                    left = rightCenter.x - dotRadius - iconSize - xOffset,
-                    top = rightCenter.y - (iconSize / 2f)
-                ) {
-                    with(leftIconPainter) {
-                        draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                // Left Arrow (only if not fully closed)
+                if (localPercent != 100) {
+                    translate(
+                        left = rightCenter.x - dotRadius - iconSize - xOffset,
+                        top = rightCenter.y - (iconSize / 2f)
+                    ) {
+                        with(leftIconPainter) {
+                            draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                        }
                     }
                 }
                 
-                // Right Arrow
-                translate(
-                    left = rightCenter.x + dotRadius + xOffset,
-                    top = rightCenter.y - (iconSize / 2f)
-                ) {
-                    with(rightIconPainter) {
-                        draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                // Right Arrow (only if not fully open)
+                if (localPercent != 0) {
+                    translate(
+                        left = rightCenter.x + dotRadius + xOffset,
+                        top = rightCenter.y - (iconSize / 2f)
+                    ) {
+                        with(rightIconPainter) {
+                            draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                        }
                     }
                 }
             }
         }
         drawCircle(
-            color = if (focusedThumb == "right") Color.White.copy(alpha = 0.6f) else Color.Transparent,
+            color = if (focusedThumb == "right" && !isSliderActive) Color.White.copy(alpha = 0.6f) else Color.Transparent,
             radius = dotRadius + 6.dp.toPx(),
             center = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
         )
