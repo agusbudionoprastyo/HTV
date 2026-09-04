@@ -1,4 +1,7 @@
+
 package com.dafamsemarang.dhtv
+import androidx.compose.ui.graphics.drawscope.translate
+
 
 import androidx.compose.ui.composed
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -37,6 +40,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,6 +55,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -90,6 +97,8 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
     
     val smartDevices by DataRepository.smartDevicesList
     var focusedItem by remember { mutableStateOf<String?>(null) }
+    var isCurtainSliderActive by remember { mutableStateOf(false) }
+    var curtainSliderLocalPercent by remember { mutableStateOf(0) }
 
     val acDevice = smartDevices.find { it.type == "ac" }
     val curtainDevice = smartDevices.find { it.type == "curtain" }
@@ -107,7 +116,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(207, 223, 237).copy(alpha = 0.15f))
+                    .background(Color(207, 223, 237).copy(alpha = 0.3f))
                     .padding(24.dp)
             ) {
                 Text(
@@ -134,7 +143,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxWidth()
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(207, 223, 237).copy(alpha = 0.15f))
+                                        .background(Color(207, 223, 237).copy(alpha = 0.3f))
                                         .padding(24.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -183,11 +192,17 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     val sweep = sweepAngle * progress
                                                     val currentAngle = startAngle + sweep
                                                     
+                                                    val pekat = Color(0xFF00E9F8) // Light blue (power ON color) for 18C
+                                                    val cerah = Color(0xFFB3FBFF) // Brighter cyan for 30C
+                                                    val colorAt0 = androidx.compose.ui.graphics.lerp(pekat, cerah, 225f / 270f)
+                                                    
                                                     drawArc(
-                                                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                                                            colors = listOf(Color(0xFF00E9F8), Color(0xFF00E9F8)),
-                                                            start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                                            end = androidx.compose.ui.geometry.Offset(size.width, 0f)
+                                                        brush = androidx.compose.ui.graphics.Brush.sweepGradient(
+                                                            0.0f to colorAt0,
+                                                            0.125f to cerah,
+                                                            0.375f to pekat,
+                                                            1.0f to colorAt0,
+                                                            center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
                                                         ),
                                                         startAngle = startAngle,
                                                         sweepAngle = sweep,
@@ -231,6 +246,10 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                             }
                                         }
                                         
+                                        val acModeFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+                                        val acFanFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+                                        val acPowerFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+                                        
                                         // +/- BUTTONS
                                         Row(
                                             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).offset(y = (-32).dp),
@@ -252,7 +271,12 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                         sendTuyaCommand(acDevice.deviceId, "T", newTemp.toString())
                                                     }
                                                 },
-                                                modifier = Modifier.size(42.dp)
+                                                modifier = Modifier.size(42.dp).onKeyEvent {
+                                                    if (it.key == androidx.compose.ui.input.key.Key.DirectionDown && it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                                        try { acModeFocusRequester.requestFocus() } catch (e: Exception) {}
+                                                        true
+                                                    } else false
+                                                }
                                             )
                                             
                                             SmartActionBtn(
@@ -270,7 +294,12 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                         sendTuyaCommand(acDevice.deviceId, "T", newTemp.toString())
                                                     }
                                                 },
-                                                modifier = Modifier.size(42.dp)
+                                                modifier = Modifier.size(42.dp).onKeyEvent {
+                                                    if (it.key == androidx.compose.ui.input.key.Key.DirectionDown && it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                                        try { acPowerFocusRequester.requestFocus() } catch (e: Exception) {}
+                                                        true
+                                                    } else false
+                                                }
                                             )
                                         }
                                         
@@ -285,16 +314,18 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
                                                 val modeStr = when(acDevice.acMode) { "0" -> "cold"; "1" -> "heat"; "2" -> "auto"; "3" -> "dry"; "4" -> "fan"; else -> "auto" }
-                                                val modeIconRes = when(acDevice.acMode) { "0" -> R.drawable.cold; "1" -> R.drawable.heat; "3" -> R.drawable.humidi; "4" -> R.drawable.fan; else -> R.drawable.ic_setting }
+                                                val modeIconRes = when(acDevice.acMode) { "0" -> R.drawable.cold; "1" -> R.drawable.heat; "2" -> R.drawable.auto; "3" -> R.drawable.humidi; "4" -> R.drawable.fan; else -> R.drawable.auto }
                                                 
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                    androidx.compose.material3.Icon(
-                                                        painter = androidx.compose.ui.res.painterResource(id = modeIconRes),
-                                                        contentDescription = null,
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Text(modeStr, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                        androidx.compose.material3.Icon(
+                                                            painter = androidx.compose.ui.res.painterResource(id = modeIconRes),
+                                                            contentDescription = null,
+                                                            tint = Color.White,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Text(modeStr, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                    }
                                                 }
                                                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -305,8 +336,9 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                         .fillMaxWidth()
                                                         .height(44.dp)
                                                         .clip(RoundedCornerShape(50))
-                                                        .background(if (isModeFocused) Color.White else Color.White.copy(alpha = 0.15f))
+                                                        .background(if (isModeFocused) Color.White else Color.White.copy(alpha = 0.3f))
                                                         .onFocusChanged { if (it.isFocused) focusedItem = "ac_mode_btn" }
+                                                        .focusRequester(acModeFocusRequester)
                                                         .clickable(enabled = acDevice.deviceId != null) {
                                                             val modeList = listOf("0", "1", "2", "3", "4") // COLD, HEAT, AUTO, DRY, FAN
                                                             val nextMode = modeList[(maxOf(0, modeList.indexOf(acDevice.acMode)) + 1) % modeList.size]
@@ -317,8 +349,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                             coroutineScope.launch {
                                                                 sendTuyaCommand(acDevice.deviceId, "M", nextMode)
                                                             }
-                                                        }
-                                                        .focusable(),
+                                                        },
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Text("MODE", color = modeContentColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -330,8 +361,35 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 modifier = Modifier.weight(1f),
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
-                                                val fanText = when(acDevice.acFan) { "0" -> "auto"; "1" -> "low"; "2" -> "mid"; "3" -> "high"; else -> "auto" }
-                                                Text(fanText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                val fanBars = when(acDevice.acFan) { "1" -> 1; "2" -> 2; "3" -> 3; else -> 0 }
+                                                Box(
+                                                    modifier = Modifier.height(24.dp).offset(y = 2.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        for (i in 1..3) {
+                                                            val isActive = i <= fanBars
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .width(4.dp)
+                                                                    .height(10.dp)
+                                                                    .clip(RoundedCornerShape(2.dp))
+                                                                    .background(if (isActive) Color.White else Color.White.copy(alpha = 0.3f))
+                                                            )
+                                                        }
+                                                        
+                                                        val isAutoActive = acDevice.acFan == "0" || acDevice.acFan == "auto"
+                                                        androidx.compose.material3.Icon(
+                                                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.auto),
+                                                            contentDescription = "Auto",
+                                                            tint = if (isAutoActive) Color.White else Color.White.copy(alpha = 0.3f),
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                }
                                                 Spacer(modifier = Modifier.height(8.dp))
 
                                                 val isFanFocused = focusedItem == "ac_fan_btn"
@@ -340,8 +398,9 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     modifier = Modifier
                                                         .size(44.dp)
                                                         .clip(androidx.compose.foundation.shape.CircleShape)
-                                                        .background(if (isFanFocused) Color.White else Color.White.copy(alpha = 0.15f))
+                                                        .background(if (isFanFocused) Color.White else Color.White.copy(alpha = 0.3f))
                                                         .onFocusChanged { if (it.isFocused) focusedItem = "ac_fan_btn" }
+                                                        .focusRequester(acFanFocusRequester)
                                                         .clickable(enabled = acDevice.deviceId != null) {
                                                             val fanModes = listOf("0", "1", "2", "3")
                                                             val nextFan = fanModes[(maxOf(0, fanModes.indexOf(acDevice.acFan)) + 1) % fanModes.size]
@@ -352,8 +411,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                             coroutineScope.launch {
                                                                 sendTuyaCommand(acDevice.deviceId, "F", nextFan)
                                                             }
-                                                        }
-                                                        .focusable(),
+                                                        },
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     androidx.compose.material3.Icon(
@@ -362,6 +420,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                         tint = fanContentColor,
                                                         modifier = Modifier.size(24.dp)
                                                     )
+                                                    
                                                 }
                                             }
 
@@ -371,7 +430,9 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
                                                 val powerText = if (acDevice.acPowerState) "on" else "off"
-                                                Text(powerText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
+                                                    Text(powerText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                }
                                                 Spacer(modifier = Modifier.height(8.dp))
 
                                                 val isPowerFocused = focusedItem == "ac_power_btn"
@@ -380,8 +441,9 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     modifier = Modifier
                                                         .size(44.dp)
                                                         .clip(androidx.compose.foundation.shape.CircleShape)
-                                                        .background(if (isPowerFocused) Color.White else Color.White.copy(alpha = 0.15f))
+                                                        .background(if (isPowerFocused) Color.White else Color.White.copy(alpha = 0.3f))
                                                         .onFocusChanged { if (it.isFocused) focusedItem = "ac_power_btn" }
+                                                        .focusRequester(acPowerFocusRequester)
                                                         .clickable(enabled = acDevice.deviceId != null) {
                                                             coroutineScope.launch {
                                                                 val newState = !acDevice.acPowerState
@@ -392,8 +454,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                                 if (newState) sendTuyaCommand(acDevice.deviceId, "PowerOn", "PowerOn")
                                                                 else sendTuyaCommand(acDevice.deviceId, "PowerOff", "PowerOff")
                                                             }
-                                                        }
-                                                        .focusable(),
+                                                        },
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     androidx.compose.material3.Icon(
@@ -429,7 +490,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxWidth()
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(207, 223, 237).copy(alpha = 0.15f))
+                                        .background(Color(207, 223, 237).copy(alpha = 0.3f))
                                         
                                         .padding(24.dp),
                                     contentAlignment = Alignment.Center
@@ -438,45 +499,202 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         modifier = Modifier.fillMaxSize(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(
-                                            modifier = Modifier.weight(0.5f).fillMaxSize(),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.Start)
+                                        Box(
+                                            modifier = Modifier.weight(0.5f).fillMaxSize()
                                         ) {
-                                            SmartActionBtn(
-                                                text = "",
-                                                iconRes = R.drawable.curtain_open,
-                                                isFocused = focusedItem == "curtain_open",
-                                                onFocus = { focusedItem = "curtain_open" },
-                                                onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "open") },
-                                                modifier = Modifier.size(52.dp)
+                                            // TOP HEADER
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth().offset(y = (-8).dp),
+                                                horizontalAlignment = Alignment.Start
+                                            ) {
+                                                Text(
+                                                    "Smart Curtain", 
+                                                    color = Color.White, 
+                                                    fontWeight = FontWeight.Bold, 
+                                                    fontSize = 16.sp
+                                                )
+                                                Text(
+                                                    "experimental", 
+                                                    color = Color.White.copy(alpha = 0.5f), 
+                                                    fontSize = 12.sp, 
+                                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                                    modifier = Modifier.offset(y = (-6).dp)
+                                                )
+                                            }
+                                            
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth().align(Alignment.BottomStart),
+                                                verticalArrangement = Arrangement.Bottom,
+                                                horizontalAlignment = Alignment.Start
+                                            ) {
+                                                Row(
+                                                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.Start),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                SmartActionBtn(
+                                                    text = "",
+                                                    iconRes = R.drawable.curtain_open,
+                                                    isFocused = focusedItem == "curtain_open",
+                                                    onFocus = { focusedItem = "curtain_open" },
+                                                    onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "open") },
+                                                    modifier = Modifier.size(52.dp)
+                                                )
+                                                
+                                                SmartActionBtn(
+                                                    text = "",
+                                                    iconRes = R.drawable.pause,
+                                                    isFocused = focusedItem == "curtain_pause",
+                                                    onFocus = { focusedItem = "curtain_pause" },
+                                                    onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "stop") },
+                                                    modifier = Modifier.size(52.dp)
+                                                )
+                                                
+                                                SmartActionBtn(
+                                                    text = "",
+                                                    iconRes = R.drawable.curtain_close,
+                                                    isFocused = focusedItem == "curtain_close",
+                                                    onFocus = { focusedItem = "curtain_close" },
+                                                    onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "close") },
+                                                    modifier = Modifier.size(52.dp)
+                                                )
+                                            } // end of Row
+                                            } // end of Column
+                                        } // end of Box (left area)
+                                        val leftCurtainFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+                                        val rightCurtainFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(0.5f)
+                                                .fillMaxHeight()
+                                        ) {
+                                            CurtainVisualizer(
+                                                deviceId = curtainDevice.deviceId,
+                                                curtainState = curtainDevice.curtainState,
+                                                curtainPercent = curtainDevice.curtainPercent,
+                                                focusedThumb = when(focusedItem) {
+                                                    "curtain_slider_left" -> "left"
+                                                    "curtain_slider_right" -> "right"
+                                                    else -> null
+                                                },
+                                                isSliderActive = isCurtainSliderActive,
+                                                localPercent = if (isCurtainSliderActive) curtainSliderLocalPercent else null,
+                                                modifier = Modifier.fillMaxSize()
                                             )
                                             
-                                            SmartActionBtn(
-                                                text = "",
-                                                iconRes = R.drawable.pause,
-                                                isFocused = focusedItem == "curtain_pause",
-                                                onFocus = { focusedItem = "curtain_pause" },
-                                                onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "stop") },
-                                                modifier = Modifier.size(52.dp)
-                                            )
-                                            
-                                            SmartActionBtn(
-                                                text = "",
-                                                iconRes = R.drawable.curtain_close,
-                                                isFocused = focusedItem == "curtain_close",
-                                                onFocus = { focusedItem = "curtain_close" },
-                                                onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "close") },
-                                                modifier = Modifier.size(52.dp)
-                                            )
+                                            Row(modifier = Modifier.fillMaxSize()) {
+                                                // LEFT THUMB CONTROL
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .fillMaxHeight()
+                                                        .focusRequester(leftCurtainFocus)
+                                                        .onFocusChanged { if (it.isFocused) focusedItem = "curtain_slider_left" }
+                                                        .focusable()
+                                                        .onPreviewKeyEvent { event ->
+                                                            if (event.type == KeyEventType.KeyDown) {
+                                                                if (isCurtainSliderActive) {
+                                                                    when (event.key) {
+                                                                        Key.DirectionLeft -> {
+                                                                            curtainSliderLocalPercent = maxOf(0, curtainSliderLocalPercent - 1)
+                                                                            true
+                                                                        }
+                                                                        Key.DirectionRight -> {
+                                                                            curtainSliderLocalPercent = minOf(100, curtainSliderLocalPercent + 1)
+                                                                            true
+                                                                        }
+                                                                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Back, Key.Escape -> true
+                                                                        else -> true
+                                                                    }
+                                                                } else false
+                                                            } else if (event.type == KeyEventType.KeyUp) {
+                                                                if (isCurtainSliderActive) {
+                                                                    when (event.key) {
+                                                                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Back, Key.Escape -> {
+                                                                            coroutineScope.launch {
+                                                                                sendTuyaCommand(curtainDevice.deviceId, "control", "stop")
+                                                                                sendTuyaCommand(curtainDevice.deviceId, "percent_control", curtainSliderLocalPercent)
+                                                                            }
+                                                                            isCurtainSliderActive = false
+                                                                            true
+                                                                        }
+                                                                        Key.DirectionLeft, Key.DirectionRight -> {
+                                                                            coroutineScope.launch {
+                                                                                sendTuyaCommand(curtainDevice.deviceId, "control", "stop")
+                                                                                sendTuyaCommand(curtainDevice.deviceId, "percent_control", curtainSliderLocalPercent)
+                                                                            }
+                                                                            true
+                                                                        }
+                                                                        else -> true
+                                                                    }
+                                                                } else {
+                                                                    if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                                                                        val currentVisualProgress = DataRepository.localCurtainPositions[curtainDevice.deviceId] ?: (1f - (curtainDevice.curtainPercent / 100f))
+                                                                        curtainSliderLocalPercent = ((1f - currentVisualProgress) * 100).toInt().coerceIn(0, 100)
+                                                                        isCurtainSliderActive = true
+                                                                        true
+                                                                    } else false
+                                                                }
+                                                            } else false
+                                                        }
+                                                )
+                                                // RIGHT THUMB CONTROL
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .fillMaxHeight()
+                                                        .focusRequester(rightCurtainFocus)
+                                                        .onFocusChanged { if (it.isFocused) focusedItem = "curtain_slider_right" }
+                                                        .focusable()
+                                                        .onPreviewKeyEvent { event ->
+                                                            if (event.type == KeyEventType.KeyDown) {
+                                                                if (isCurtainSliderActive) {
+                                                                    when (event.key) {
+                                                                        Key.DirectionLeft -> {
+                                                                            curtainSliderLocalPercent = minOf(100, curtainSliderLocalPercent + 1)
+                                                                            true
+                                                                        }
+                                                                        Key.DirectionRight -> {
+                                                                            curtainSliderLocalPercent = maxOf(0, curtainSliderLocalPercent - 1)
+                                                                            true
+                                                                        }
+                                                                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Back, Key.Escape -> true
+                                                                        else -> true
+                                                                    }
+                                                                } else false
+                                                            } else if (event.type == KeyEventType.KeyUp) {
+                                                                if (isCurtainSliderActive) {
+                                                                    when (event.key) {
+                                                                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Back, Key.Escape -> {
+                                                                            coroutineScope.launch {
+                                                                                sendTuyaCommand(curtainDevice.deviceId, "control", "stop")
+                                                                                sendTuyaCommand(curtainDevice.deviceId, "percent_control", curtainSliderLocalPercent)
+                                                                            }
+                                                                            isCurtainSliderActive = false
+                                                                            true
+                                                                        }
+                                                                        Key.DirectionLeft, Key.DirectionRight -> {
+                                                                            coroutineScope.launch {
+                                                                                sendTuyaCommand(curtainDevice.deviceId, "control", "stop")
+                                                                                sendTuyaCommand(curtainDevice.deviceId, "percent_control", curtainSliderLocalPercent)
+                                                                            }
+                                                                            true
+                                                                        }
+                                                                        else -> true
+                                                                    }
+                                                                } else {
+                                                                    if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                                                                        val currentVisualProgress = DataRepository.localCurtainPositions[curtainDevice.deviceId] ?: (1f - (curtainDevice.curtainPercent / 100f))
+                                                                        curtainSliderLocalPercent = ((1f - currentVisualProgress) * 100).toInt().coerceIn(0, 100)
+                                                                        isCurtainSliderActive = true
+                                                                        true
+                                                                    } else false
+                                                                }
+                                                            } else false
+                                                        }
+                                                )
+                                            }
                                         }
-                                        
-                                        CurtainVisualizer(
-                                            deviceId = curtainDevice.deviceId,
-                                            curtainState = curtainDevice.curtainState,
-                                            curtainPercent = curtainDevice.curtainPercent,
-                                            modifier = Modifier.weight(0.5f).fillMaxHeight()
-                                        )
                                     }
                             }
                         }
@@ -498,7 +716,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxWidth()
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(207, 223, 237).copy(alpha = 0.15f))
+                                        .background(Color(207, 223, 237).copy(alpha = 0.3f))
                                         .padding(16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -570,13 +788,14 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
             Box(modifier = Modifier.fillMaxSize().padding(2.dp)) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(20.dp)
-                        .align(Alignment.BottomCenter)
-                        .clip(RoundedCornerShape(bottomStart = 14.dp, bottomEnd = 14.dp))
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp))
                         .background(
-                            if (state) androidx.compose.ui.graphics.SolidColor(Color.Transparent) 
-                            else androidx.compose.ui.graphics.SolidColor(Color(0xFF999999))
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                0.0f to Color.Transparent,
+                                0.8f to Color.White.copy(alpha = 0.4f),
+                                1.0f to Color.White.copy(alpha = 0.4f)
+                            )
                         )
                 )
 
@@ -584,13 +803,13 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = if (state) 0.dp else 6.dp)
+                        .padding(bottom = if (state) 2.dp else 10.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             androidx.compose.ui.graphics.Brush.verticalGradient(
                                 0.0f to Color.Transparent,
-                                0.8f to Color.White,
-                                1.0f to Color.White
+                                0.8f to if (state) Color.White else Color.White.copy(alpha = 0.4f),
+                                1.0f to if (state) Color.White else Color.White.copy(alpha = 0.4f)
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -670,7 +889,7 @@ fun SmartActionBtn(
             .onFocusChanged { if (it.isFocused) onFocus() },
         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (useGradient) Color.Transparent else if (isFocused) Color.White else if (isActive == true) Color(0xFF00E9F8) else if (transparentWhenUnfocused) Color.Transparent else Color.White.copy(alpha = 0.15f)
+            containerColor = if (useGradient) Color.Transparent else if (isFocused) Color.White else if (isActive == true) Color(0xFF00E9F8) else if (transparentWhenUnfocused) Color.Transparent else Color.White.copy(alpha = 0.3f)
         )
     ) {
         if (iconRes != null) {
@@ -697,6 +916,9 @@ fun CurtainVisualizer(
     deviceId: String,
     curtainState: String, // "open", "close", "stop"
     curtainPercent: Int, // 0-100 real percentage (0 = open, 100 = closed)
+    focusedThumb: String?, // "left", "right", or null
+    isSliderActive: Boolean = false,
+    localPercent: Int? = null,
     modifier: Modifier = Modifier
 ) {
     // Read initial position from app memory (defaults to 0f if not yet saved)
@@ -712,7 +934,15 @@ fun CurtainVisualizer(
         DataRepository.localCurtainPositions[deviceId] = openProgress.value
     }
     
+    androidx.compose.runtime.LaunchedEffect(localPercent) {
+        if (localPercent != null) {
+            val targetProgress = 1f - (localPercent / 100f)
+            openProgress.animateTo(targetProgress, androidx.compose.animation.core.tween(300))
+        }
+    }
+    
     androidx.compose.runtime.LaunchedEffect(curtainState, curtainPercent) {
+        if (localPercent != null) return@LaunchedEffect
         val targetProgress = 1f - (curtainPercent / 100f)
         
         if (isInitialLoad.value) {
@@ -749,6 +979,19 @@ fun CurtainVisualizer(
         }
     }
     
+    val infiniteTransition = rememberInfiniteTransition()
+    val waveAnim = infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(800, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+        )
+    )
+    
+    val leftIconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.left)
+    val rightIconPainter = androidx.compose.ui.res.painterResource(id = R.drawable.right)
+    
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
@@ -757,9 +1000,9 @@ fun CurtainVisualizer(
         val railY = 0f
         
         val dotRadius = 6.dp.toPx()
-        val outerDotRadius = dotRadius + 2.dp.toPx()
+        val outerDotRadius = dotRadius + 6.dp.toPx()
         
-        val maxOpenDistance = (w / 2f) - (outerDotRadius * 2f) // Opens until curtain is exactly wide enough for the dot to touch the edge
+        val maxOpenDistance = (w / 2f) - (dotRadius * 2f)
         val currentOpenOffset = openProgress.value * maxOpenDistance
         
         val pleatCount = 6
@@ -767,10 +1010,9 @@ fun CurtainVisualizer(
         val compressedPleatWidth = ((w / 2f) - maxOpenDistance) / pleatCount
         
         val currentPleatWidth = basePleatWidth - (basePleatWidth - compressedPleatWidth) * openProgress.value
+        val curtainExtension = dotRadius
         
-        
-        // Draw Left Curtain (Anchored at left wall, x=0)
-        // Draw from right to left so the right edge of a pleat overlaps the pleat to its right
+        // Draw Left Curtain
         for (i in pleatCount - 1 downTo 0) {
             val pleatX = currentPleatWidth * i
             val path = androidx.compose.ui.graphics.Path()
@@ -786,11 +1028,18 @@ fun CurtainVisualizer(
                     bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius.Zero
                 )
             )
-            drawPath(path = path, color = Color.White.copy(alpha = 0.85f))
+            drawPath(
+                path = path, 
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    0.0f to Color.White.copy(alpha = 0.3f),
+                    1.0f to Color.White.copy(alpha = 0f),
+                    startY = railY + railHeight / 2f,
+                    endY = h
+                )
+            )
         }
         
-        // Draw Right Curtain (Anchored at right wall, x=w)
-        // Draw from left to right so the left edge of a pleat overlaps the pleat to its left
+        // Draw Right Curtain
         for (i in pleatCount - 1 downTo 0) {
             val pleatX = w - (currentPleatWidth * (i + 1))
             val path = androidx.compose.ui.graphics.Path()
@@ -806,10 +1055,18 @@ fun CurtainVisualizer(
                     bottomLeftCornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
                 )
             )
-            drawPath(path = path, color = Color.White.copy(alpha = 0.85f))
+            drawPath(
+                path = path, 
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    0.0f to Color.White.copy(alpha = 0.3f),
+                    1.0f to Color.White.copy(alpha = 0f),
+                    startY = railY + railHeight / 2f,
+                    endY = h
+                )
+            )
         }
         
-        // Rail Drop Shadow (Soft Blur)
+        // Rail Drop Shadow
         val shadowPaint = androidx.compose.ui.graphics.Paint().apply {
             color = Color.Black.copy(alpha = 0.3f)
             asFrameworkPaint().maskFilter = android.graphics.BlurMaskFilter(
@@ -827,42 +1084,129 @@ fun CurtainVisualizer(
             paint = shadowPaint
         )
         
-        // Draw Rail (on top of curtains)
+        // Draw Rail
         drawRoundRect(
-            color = Color.White,
+            color = Color.White.copy(alpha = 0.6f),
             topLeft = androidx.compose.ui.geometry.Offset(0f, railY),
             size = androidx.compose.ui.geometry.Size(w, railHeight),
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(railHeight / 2)
         )
         
-        // Draw Indicator Dots (exactly anchored to the leading edge of the curtain)
-        val leftDotX = (currentPleatWidth * pleatCount) - outerDotRadius
-        val rightDotX = w - (currentPleatWidth * pleatCount) + outerDotRadius
+        // Draw Indicator Dots
+        val leftDotX = (currentPleatWidth * pleatCount) - curtainExtension
+        val rightDotX = w - (currentPleatWidth * pleatCount) + curtainExtension
         
-        val dotColor = Color(0xFF00E9F8) // Blueish
+        val dotColor = Color(0xFF00E9F8)
+        val blueRingThickness = 2.dp.toPx()
         
-        // Left dot
+        // --- Left dot ---
+        if (focusedThumb == "left" && isSliderActive) {
+            val leftCenter = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f)
+            val waveSpacing = 8.dp.toPx()
+            val iconSize = 12.dp.toPx()
+            
+            for (i in 0 until 2) { // 2 arrows sequentially
+                val progress = i + waveAnim.value
+                val xOffset = progress * waveSpacing
+                val waveAlpha = when {
+                    progress < 0.3f -> progress / 0.3f // fade in quickly
+                    progress > 1.2f -> (2f - progress) / 0.8f // fade out slowly
+                    else -> 1f
+                }.coerceIn(0f, 1f)
+                
+                // Left Arrow
+                translate(
+                    left = leftCenter.x - dotRadius - iconSize - xOffset,
+                    top = leftCenter.y - (iconSize / 2f)
+                ) {
+                    with(leftIconPainter) {
+                        draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                    }
+                }
+                
+                // Right Arrow
+                translate(
+                    left = leftCenter.x + dotRadius + xOffset,
+                    top = leftCenter.y - (iconSize / 2f)
+                ) {
+                    with(rightIconPainter) {
+                        draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                    }
+                }
+            }
+        }
         drawCircle(
-            color = Color.White,
-            radius = dotRadius + 2.dp.toPx(),
+            color = if (focusedThumb == "left") Color.White.copy(alpha = 0.6f) else Color.Transparent,
+            radius = dotRadius + 6.dp.toPx(),
             center = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f)
         )
+        // Big Blueish Dot
         drawCircle(
             color = dotColor,
             radius = dotRadius,
             center = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f)
         )
-        
-        // Right dot
+        // Thin White Ring
         drawCircle(
             color = Color.White,
-            radius = dotRadius + 2.dp.toPx(),
+            radius = dotRadius,
+            center = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = blueRingThickness)
+        )
+
+        // --- Right dot ---
+        if (focusedThumb == "right" && isSliderActive) {
+            val rightCenter = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
+            val waveSpacing = 8.dp.toPx()
+            val iconSize = 12.dp.toPx()
+            
+            for (i in 0 until 2) {
+                val progress = i + waveAnim.value
+                val xOffset = progress * waveSpacing
+                val waveAlpha = when {
+                    progress < 0.3f -> progress / 0.3f // fade in quickly
+                    progress > 1.2f -> (2f - progress) / 0.8f // fade out slowly
+                    else -> 1f
+                }.coerceIn(0f, 1f)
+                
+                // Left Arrow
+                translate(
+                    left = rightCenter.x - dotRadius - iconSize - xOffset,
+                    top = rightCenter.y - (iconSize / 2f)
+                ) {
+                    with(leftIconPainter) {
+                        draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                    }
+                }
+                
+                // Right Arrow
+                translate(
+                    left = rightCenter.x + dotRadius + xOffset,
+                    top = rightCenter.y - (iconSize / 2f)
+                ) {
+                    with(rightIconPainter) {
+                        draw(size = androidx.compose.ui.geometry.Size(iconSize, iconSize), alpha = waveAlpha, colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(dotColor))
+                    }
+                }
+            }
+        }
+        drawCircle(
+            color = if (focusedThumb == "right") Color.White.copy(alpha = 0.6f) else Color.Transparent,
+            radius = dotRadius + 6.dp.toPx(),
             center = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
         )
+        // Big Blueish Dot
         drawCircle(
             color = dotColor,
             radius = dotRadius,
             center = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
+        )
+        // Thin White Ring
+        drawCircle(
+            color = Color.White,
+            radius = dotRadius,
+            center = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = blueRingThickness)
         )
     }
 }
