@@ -351,6 +351,7 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
 
     override fun onResume() {
         super.onResume()
+        ScreenSaverManager.resumeTimer(this)
         
         // Ensure screenshot is always enabled
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -397,6 +398,7 @@ class MainActivity : ComponentActivity(), DeviceManager.DeviceStatusListener {
 
     override fun onPause() {
         super.onPause()
+        ScreenSaverManager.pauseTimer()
     }
 
     override fun onDestroy() {

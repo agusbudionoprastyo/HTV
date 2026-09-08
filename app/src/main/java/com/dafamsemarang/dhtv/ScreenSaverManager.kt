@@ -391,6 +391,19 @@ object ScreenSaverManager {
         isListenerAttached = true
     }
 
+    fun pauseTimer() {
+        idleJob?.cancel()
+        idleJob = null
+        Log.d("ScreenSaverManager", "Screensaver timer paused (app in background)")
+    }
+
+    fun resumeTimer(context: Context) {
+        if (idleJob == null) {
+            Log.d("ScreenSaverManager", "Screensaver timer resumed (app in foreground)")
+            triggerInactivity(context)
+        }
+    }
+
     fun triggerInactivity(context: Context) {
         // Reset the idle timer
         idleJob?.cancel()

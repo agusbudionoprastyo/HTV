@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.ShaderBrush
@@ -113,8 +114,9 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
         if (smartDevices.isEmpty()) {
             Box(
                 modifier = Modifier
+
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(207, 223, 237).copy(alpha = 0.3f))
+                    .background(Color(0xFFFFFFFF).copy(alpha = 0.3f))
                     .padding(24.dp)
             ) {
                 Text(
@@ -125,10 +127,18 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                 )
             }
         } else {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(Color(0xFFFFFFFF).copy(alpha = 0.1f))
+                    .padding(12.dp)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                 // KOLOM 1: AC (1/3 lebar)
                 Box(modifier = Modifier.weight(1f).fillMaxHeight().focusProperties { down = GlobalCartState.smartHomeFooterFocusRequester }) {
                         if (acDevice != null) {
@@ -140,9 +150,10 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f)
+
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(207, 223, 237).copy(alpha = 0.3f))
-                                        .padding(24.dp),
+                                        .background(Color(0xFFFFFFFF).copy(alpha = 0.15f))
+                                        .padding(16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(
@@ -164,11 +175,19 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                             )
                                         }
                                         
-                                        // TEMPERATURE DIAL
+                                        val acModeFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+                                        val acFanFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+                                        val acPowerFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+
+                                        // TEMPERATURE DIAL AND +/- BUTTONS
                                         Box(
-                                            modifier = Modifier.size(180.dp),
-                                            contentAlignment = Alignment.Center
+                                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                                            contentAlignment = Alignment.TopCenter
                                         ) {
+                                            Box(
+                                                modifier = Modifier.size(180.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
                                             androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
                                                 val strokeWidth = 8.dp.toPx()
                                                 val startAngle = 135f
@@ -244,13 +263,10 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                             }
                                         }
                                         
-                                        val acModeFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-                                        val acFanFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-                                        val acPowerFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-                                        
-                                        // +/- BUTTONS
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).offset(y = (-32).dp),
+
+                                            // +/- BUTTONS
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).align(Alignment.BottomCenter).offset(y = 16.dp),
                                             horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
@@ -258,6 +274,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 iconRes = R.drawable.ic_minus,
                                                 isFocused = focusedItem == "ac_temp_down",
                                                 transparentWhenUnfocused = true,
+                                                enabled = acDevice.acMode == "0",
                                                 onFocus = { focusedItem = "ac_temp_down" },
                                                 onClickAction = { 
                                                     val newTemp = maxOf(18, acDevice.acTemp - 1)
@@ -281,6 +298,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 iconRes = R.drawable.ic_add,
                                                 isFocused = focusedItem == "ac_temp_up",
                                                 transparentWhenUnfocused = true,
+                                                enabled = acDevice.acMode == "0",
                                                 onFocus = { focusedItem = "ac_temp_up" },
                                                 onClickAction = { 
                                                     val newTemp = minOf(30, acDevice.acTemp + 1)
@@ -299,6 +317,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     } else false
                                                 }
                                             )
+                                            }
                                         }
                                         
                                         // MODES AND FAN
@@ -474,7 +493,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                     // KOLOM 2: Curtain (Baris atas) dan Switch (Baris bawah)
                     Column(
                         modifier = Modifier.weight(2f).fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         // Curtain Card
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -487,10 +506,11 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f)
+
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(207, 223, 237).copy(alpha = 0.3f))
+                                        .background(Color(0xFFFFFFFF).copy(alpha = 0.15f))
                                         
-                                        .padding(24.dp),
+                                        .padding(16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Row(
@@ -701,7 +721,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                         // BARIS 2: Cards untuk Switch (Dinamis sesuai jumlah device)
                         Row(
                             modifier = Modifier.fillMaxWidth().weight(1.5f).focusProperties { down = GlobalCartState.smartHomeFooterFocusRequester },
-                            horizontalArrangement = Arrangement.spacedBy(24.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                     switchDevices.forEach { switchDevice ->
                         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -713,8 +733,9 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f)
+
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(207, 223, 237).copy(alpha = 0.3f))
+                                        .background(Color(0xFFFFFFFF).copy(alpha = 0.15f))
                                         .padding(16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -730,7 +751,8 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         horizontalArrangement = Arrangement.spacedBy(0.dp)
                                     ) {
                                         if (switchDevice.switch1Name != null) {
-                                            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                            Box(
+                                                modifier = Modifier.weight(1f).fillMaxHeight()) {
                                                 SmartSwitchWidget("${switchDevice.deviceId}_1", switchDevice.switch1Name!!, switchDevice.deviceId, switchDevice.switch1State, focusedItem == "${switchDevice.deviceId}_1", { focusedItem = "${switchDevice.deviceId}_1" }) {
                                                     coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_1", !switchDevice.switch1State) }
                                                 }
@@ -757,6 +779,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                         }
                     }
                 }
+                }
             }
         }
     }
@@ -768,8 +791,11 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
     
     var isDropped by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(state) }
     
+    var isWaiting by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    
     androidx.compose.runtime.LaunchedEffect(state) {
         isDropped = state
+        isWaiting = false
     }
     
     var isDropFinished by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -782,10 +808,11 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
         }
     }
     
-    // Timeout for optimistic UI updates
-    androidx.compose.runtime.LaunchedEffect(isDropped, state) {
-        if (isDropped != state) {
-            kotlinx.coroutines.delay(3000) // 3 seconds timeout
+    // Timeout for API waiting
+    androidx.compose.runtime.LaunchedEffect(isWaiting) {
+        if (isWaiting) {
+            kotlinx.coroutines.delay(5000) // 5 seconds timeout
+            isWaiting = false
             isDropped = state // Revert UI if server didn't respond
         }
     }
@@ -802,6 +829,8 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                 .clip(RoundedCornerShape(14.dp))
                 .clickable(enabled = deviceId != null) {
                     coroutineScope.launch {
+                        if (isWaiting) return@launch
+                        isWaiting = true
                         if (!state) { // Turning ON: Optimistic drop
                             isDropped = true
                         }
@@ -819,8 +848,8 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                         .background(
                             androidx.compose.ui.graphics.Brush.verticalGradient(
                                 0.0f to Color.Transparent,
-                                0.8f to Color.White.copy(alpha = 0.4f),
-                                1.0f to Color.White.copy(alpha = 0.4f)
+                                0.8f to Color.White.copy(alpha = 0.2f),
+                                1.0f to Color.White.copy(alpha = 0.2f)
                             )
                         )
                 )
@@ -834,10 +863,22 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                         .background(
                             androidx.compose.ui.graphics.Brush.verticalGradient(
                                 0.0f to Color.Transparent,
-                                0.8f to if (isDropped) Color.White else Color.White.copy(alpha = 0.4f),
-                                1.0f to if (isDropped) Color.White else Color.White.copy(alpha = 0.4f)
+                                0.8f to if (state || isDropped) Color.White.copy(alpha = 0.4f) else Color.Transparent,
+                                1.0f to if (state || isDropped) Color.White.copy(alpha = 0.4f) else Color.Transparent
                             )
-                        ),
+                        )
+                        .drawBehind {
+                            // Border that follows rounded corners, fading upward
+                            drawRoundRect(
+                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    0.0f to Color.Transparent,
+                                    0.7f to Color.White.copy(alpha = 0.3f),
+                                    1.0f to Color.White.copy(alpha = 0.5f)
+                                ),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx()),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
+                            )
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     // Focus Overlay
@@ -892,6 +933,36 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                                     .size(56.dp)
                                     .alpha(lightAlpha)
                             )
+                            
+                            // 3-Dot Loading Animation
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = isWaiting && isDropFinished,
+                                enter = androidx.compose.animation.fadeIn(),
+                                exit = androidx.compose.animation.fadeOut()
+                            ) {
+                                val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition()
+                                Row(
+                                    modifier = Modifier.padding(top = 64.dp), // Position just below the 56.dp lamp
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    for (i in 0..2) {
+                                        val alpha by infiniteTransition.animateFloat(
+                                            initialValue = 0.2f,
+                                            targetValue = 1f,
+                                            animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                                                animation = androidx.compose.animation.core.tween(400, delayMillis = i * 200),
+                                                repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                                            )
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                                .background((if (isFocused) Color.Black else Color.White).copy(alpha = alpha))
+                                        )
+                                    }
+                                }
+                            }
                             
                             // Light Beam Cone (Sequenced via alpha)
                             androidx.compose.foundation.Canvas(
@@ -974,7 +1045,8 @@ fun SmartActionBtn(
     modifier: Modifier = Modifier,
     fontSize: androidx.compose.ui.unit.TextUnit = 20.sp,
     useGradient: Boolean = false,
-    transparentWhenUnfocused: Boolean = false
+    transparentWhenUnfocused: Boolean = false,
+    enabled: Boolean = true
 ) {
     val coroutineScope = rememberCoroutineScope()
     val contentColor = if (isFocused) Color(0xFF1E1E1E) else Color.White
@@ -985,6 +1057,7 @@ fun SmartActionBtn(
                 onClickAction()
             }
         },
+        enabled = enabled,
         modifier = modifier
             .defaultMinSize(minWidth = 1.dp, minHeight = 1.dp)
             .then(
@@ -993,24 +1066,27 @@ fun SmartActionBtn(
             .onFocusChanged { if (it.isFocused) onFocus() },
         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (useGradient) Color.Transparent else if (isFocused) Color.White else if (isActive == true) Color(0xFF00E9F8) else if (transparentWhenUnfocused) Color.Transparent else Color.White.copy(alpha = 0.3f)
+            containerColor = if (useGradient) Color.Transparent else if (isFocused) Color.White else if (isActive == true) Color(0xFF00E9F8) else if (transparentWhenUnfocused) Color.Transparent else Color.White.copy(alpha = 0.3f),
+            disabledContainerColor = Color.Transparent,
+            disabledContentColor = Color.White.copy(alpha = 0.3f)
         )
     ) {
+        val iconColor = if (!enabled) Color.White.copy(alpha = 0.25f) else contentColor
         if (iconRes != null) {
             androidx.compose.material3.Icon(
                 painter = androidx.compose.ui.res.painterResource(id = iconRes),
                 contentDescription = null,
-                tint = contentColor,
+                tint = iconColor,
                 modifier = Modifier.size(iconSize)
             )
         } else if (icon != null) {
-            androidx.compose.material3.Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
+            androidx.compose.material3.Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(iconSize))
         }
         if ((icon != null || iconRes != null) && text.isNotEmpty()) {
             Spacer(modifier = Modifier.width(4.dp))
         }
         if (text.isNotEmpty()) {
-            Text(text, fontSize = fontSize, color = contentColor)
+            Text(text, fontSize = fontSize, color = iconColor)
         }
     }
 }
@@ -1115,7 +1191,7 @@ fun CurtainVisualizer(
         val compressedPleatWidth = ((w / 2f) - maxOpenDistance) / pleatCount
         
         val currentPleatWidth = basePleatWidth - (basePleatWidth - compressedPleatWidth) * openProgress.value
-        val curtainExtension = dotRadius
+        val curtainExtension = dotRadius + 3.dp.toPx()
         
         // Draw Left Curtain
         for (i in pleatCount - 1 downTo 0) {
@@ -1244,32 +1320,14 @@ fun CurtainVisualizer(
                 }
             }
         }
-        drawCircle(
-            color = if (focusedThumb == "left" && !isSliderActive) Color.White.copy(alpha = 0.6f) else Color.Transparent,
-            radius = dotRadius + 6.dp.toPx(),
-            center = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f)
-        )
-        // Big Blueish Dot
-        drawCircle(
-            color = dotColor,
-            radius = dotRadius,
-            center = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f)
-        )
-        // Thin White Ring
-        drawCircle(
-            color = Color.White,
-            radius = dotRadius,
-            center = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = blueRingThickness)
-        )
-
+        
         // --- Right dot ---
         if (focusedThumb == "right" && isSliderActive) {
             val rightCenter = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
             val waveSpacing = 8.dp.toPx()
             val iconSize = 12.dp.toPx()
             
-            for (i in 0 until 2) {
+            for (i in 0 until 2) { // 2 arrows sequentially
                 val progress = i + waveAnim.value
                 val xOffset = progress * waveSpacing
                 val waveAlpha = when {
@@ -1303,24 +1361,31 @@ fun CurtainVisualizer(
                 }
             }
         }
-        drawCircle(
-            color = if (focusedThumb == "right" && !isSliderActive) Color.White.copy(alpha = 0.6f) else Color.Transparent,
-            radius = dotRadius + 6.dp.toPx(),
-            center = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
-        )
-        // Big Blueish Dot
-        drawCircle(
-            color = dotColor,
-            radius = dotRadius,
-            center = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
-        )
-        // Thin White Ring
-        drawCircle(
-            color = Color.White,
-            radius = dotRadius,
-            center = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = blueRingThickness)
-        )
+        val leftCenter2 = androidx.compose.ui.geometry.Offset(leftDotX, railY + railHeight / 2f)
+        val rightCenter2 = androidx.compose.ui.geometry.Offset(rightDotX, railY + railHeight / 2f)
+        val haloRadius = dotRadius + 6.dp.toPx()
+
+        fun drawDot(center: androidx.compose.ui.geometry.Offset) {
+            drawCircle(color = dotColor, radius = dotRadius, center = center)
+            drawCircle(color = Color.White, radius = dotRadius, center = center,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = blueRingThickness))
+        }
+
+        if (focusedThumb == "left" && !isSliderActive) {
+            // Draw non-focused (right) first, then solid halo, then focused (left) on top
+            drawDot(rightCenter2)
+            drawCircle(color = Color.White, radius = haloRadius, center = leftCenter2)
+            drawDot(leftCenter2)
+        } else if (focusedThumb == "right" && !isSliderActive) {
+            // Draw non-focused (left) first, then solid halo, then focused (right) on top
+            drawDot(leftCenter2)
+            drawCircle(color = Color.White, radius = haloRadius, center = rightCenter2)
+            drawDot(rightCenter2)
+        } else {
+            // No focus ring, just draw both dots normally
+            drawDot(leftCenter2)
+            drawDot(rightCenter2)
+        }
     }
 }
 
