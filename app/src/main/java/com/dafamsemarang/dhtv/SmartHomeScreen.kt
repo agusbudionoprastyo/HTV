@@ -116,7 +116,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                 modifier = Modifier
 
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color.Black.copy(alpha = 1f))
+                    .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
                     .padding(24.dp)
             ) {
                 Text(
@@ -132,7 +132,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                     .fillMaxSize()
 
                     .clip(RoundedCornerShape(32.dp))
-                    .background(Color(0xFFCFDFED).copy(alpha = 0.1f))
+                    .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
                     .padding(12.dp)
             ) {
                 Row(
