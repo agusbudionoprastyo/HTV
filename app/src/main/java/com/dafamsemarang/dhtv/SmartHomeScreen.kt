@@ -91,6 +91,17 @@ object SmartRoomGlobalFocus {
 
 @Composable
 fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null) {
+    var isReadyToRender by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(350) // Wait for NavHost slide transition to finish
+        isReadyToRender = true
+    }
+    
+    if (!isReadyToRender) {
+        // Return a blank skeleton to keep the transition smooth at 60fps
+        Box(modifier = Modifier.fillMaxSize().background(Color.Transparent))
+        return
+    }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
