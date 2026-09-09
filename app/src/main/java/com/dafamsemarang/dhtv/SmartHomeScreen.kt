@@ -114,9 +114,8 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
         if (smartDevices.isEmpty()) {
             Box(
                 modifier = Modifier
-
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
+                    .background(Color(0xFFCFDFED).copy(alpha = 0.3f))
                     .padding(24.dp)
             ) {
                 Text(
@@ -130,9 +129,8 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-
                     .clip(RoundedCornerShape(32.dp))
-                    .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
+                    .background(Color(0xFFCFDFED).copy(alpha = 0.1f))
                     .padding(12.dp)
             ) {
                 Row(
@@ -150,7 +148,6 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f)
-
                                         .clip(RoundedCornerShape(24.dp))
                                         .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
                                         .padding(16.dp),
@@ -506,7 +503,6 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f)
-
                                         .clip(RoundedCornerShape(24.dp))
                                         .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
                                         
@@ -733,7 +729,6 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f)
-
                                         .clip(RoundedCornerShape(24.dp))
                                         .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
                                         .padding(16.dp),
