@@ -152,7 +152,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxWidth()
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFFCFDFED).copy(alpha = 0.3f))
+                                        .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
                                         .padding(16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -507,7 +507,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxWidth()
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFFCFDFED).copy(alpha = 0.3f))
+                                        .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
                                         
                                         .padding(16.dp),
                                     contentAlignment = Alignment.Center
@@ -733,7 +733,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxWidth()
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFFCFDFED).copy(alpha = 0.3f))
+                                        .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
                                         .padding(16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -888,7 +888,7 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                             )
                     )
                     
-                    val contentColor = if (isFocused) Color(0xFF1E1E1E) else Color.Black.copy(alpha = 0.6f)
+                    val contentColor = if (isFocused) Color(0xFF1E1E1E) else Color.White
                     
                     // Hanging Lamp & Light Beam Animation
                     androidx.compose.animation.AnimatedVisibility(
