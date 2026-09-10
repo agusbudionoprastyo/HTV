@@ -74,12 +74,15 @@ suspend fun sendTuyaCommand(deviceId: String, switchCode: String, value: Any): B
                     ]
                 }
             """.trimIndent()
+            android.util.Log.d("TuyaCommand", "Sending to $url: $json")
             val body = json.toRequestBody("application/json".toMediaType())
             val request = Request.Builder().url(url).post(body).build()
             val response = client.newCall(request).execute()
+            val responseBody = response.body?.string()
+            android.util.Log.d("TuyaCommand", "Response Code: ${response.code}, Body: $responseBody")
             response.isSuccessful
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("TuyaCommand", "Error sending tuya command", e)
             false
         }
     }
@@ -91,17 +94,6 @@ object SmartRoomGlobalFocus {
 
 @Composable
 fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null) {
-    var isReadyToRender by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(350) // Wait for NavHost slide transition to finish
-        isReadyToRender = true
-    }
-    
-    if (!isReadyToRender) {
-        // Return a blank skeleton to keep the transition smooth at 60fps
-        Box(modifier = Modifier.fillMaxSize().background(Color.Transparent))
-        return
-    }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
@@ -126,7 +118,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFFCFDFED).copy(alpha = 0.3f))
+                    .background(Color(0xFFCFDFED).copy(alpha = 0.1f))
                     .padding(24.dp)
             ) {
                 Text(
@@ -160,7 +152,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxWidth()
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
+                                        .background(Color(0xFFCFDFED).copy(alpha = 0.3f))
                                         .padding(16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -515,7 +507,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxWidth()
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
+                                        .background(Color(0xFFCFDFED).copy(alpha = 0.3f))
                                         
                                         .padding(16.dp),
                                     contentAlignment = Alignment.Center
@@ -741,7 +733,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxWidth()
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFFCFDFED).copy(alpha = 0.15f))
+                                        .background(Color(0xFFCFDFED).copy(alpha = 0.3f))
                                         .padding(16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
