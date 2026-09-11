@@ -265,15 +265,8 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             }
-                                        }
-                                        
 
-                                            // +/- BUTTONS
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).align(Alignment.BottomCenter).offset(y = 16.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                            // - BUTTON
                                             SmartActionBtn(
                                                 iconRes = R.drawable.ic_minus,
                                                 isFocused = focusedItem == "ac_temp_down",
@@ -290,14 +283,19 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                         sendTuyaCommand(acDevice.deviceId, "T", newTemp.toString())
                                                     }
                                                 },
-                                                modifier = Modifier.size(42.dp).onKeyEvent {
-                                                    if (it.key == androidx.compose.ui.input.key.Key.DirectionDown && it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
-                                                        try { acModeFocusRequester.requestFocus() } catch (e: Exception) {}
-                                                        true
-                                                    } else false
-                                                }
+                                                modifier = Modifier
+                                                    .size(42.dp)
+                                                    .align(Alignment.Center)
+                                                    .offset(x = (-32.0).dp, y = 75.5.dp)
+                                                    .onKeyEvent {
+                                                        if (it.key == androidx.compose.ui.input.key.Key.DirectionDown && it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                                            try { acModeFocusRequester.requestFocus() } catch (e: Exception) {}
+                                                            true
+                                                        } else false
+                                                    }
                                             )
                                             
+                                            // + BUTTON
                                             SmartActionBtn(
                                                 iconRes = R.drawable.ic_add,
                                                 isFocused = focusedItem == "ac_temp_up",
@@ -314,14 +312,18 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                         sendTuyaCommand(acDevice.deviceId, "T", newTemp.toString())
                                                     }
                                                 },
-                                                modifier = Modifier.size(42.dp).onKeyEvent {
-                                                    if (it.key == androidx.compose.ui.input.key.Key.DirectionDown && it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
-                                                        try { acPowerFocusRequester.requestFocus() } catch (e: Exception) {}
-                                                        true
-                                                    } else false
-                                                }
+                                                modifier = Modifier
+                                                    .size(42.dp)
+                                                    .align(Alignment.Center)
+                                                    .offset(x = 32.0.dp, y = 75.5.dp)
+                                                    .onKeyEvent {
+                                                        if (it.key == androidx.compose.ui.input.key.Key.DirectionDown && it.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                                                            try { acPowerFocusRequester.requestFocus() } catch (e: Exception) {}
+                                                            true
+                                                        } else false
+                                                    }
                                             )
-                                            }
+                                        }
                                         }
                                         
                                         // MODES AND FAN
