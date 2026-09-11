@@ -4,51 +4,42 @@
     android:height="128dp"
     android:viewportWidth="128"
     android:viewportHeight="128">
-    
-  <!-- Bulb (Lit) using original outer path -->
-  <path android:pathData="m64.04,127.09c-5.63,0.12 -10.77,-3.18 -13.01,-8.34 -2.24,-5.17 -1.13,-11.17 2.81,-15.2 3.93,-4.02 9.92,-5.26 15.13,-3.13 5.21,2.12 8.62,7.19 8.62,12.82 0.01,1.8 -0.32,3.58 -0.99,5.25 -0.67,1.67 -1.67,3.19 -2.92,4.48 -1.26,1.28 -2.76,2.31 -4.41,3.01 -1.66,0.71 -3.43,1.09 -5.23,1.11z">
-      <aapt:attr name="android:fillColor">
-          <gradient
-              android:type="radial"
-              android:centerX="64"
-              android:centerY="114"
-              android:gradientRadius="18">
-              <item android:offset="0.0" android:color="#FFFFFFFF" />
-              <item android:offset="0.5" android:color="#FFFFD700" />
-              <item android:offset="1.0" android:color="#FFFF8C00" />
-          </gradient>
-      </aapt:attr>
-  </path>
-  
-  <!-- Wire -->
-  <path android:pathData="m64,64.44q-0.3,0 -0.57,-0.12 -0.28,-0.11 -0.49,-0.32 -0.21,-0.21 -0.33,-0.49 -0.11,-0.27 -0.11,-0.57v-60.94c0,-0.4 0.16,-0.78 0.44,-1.06 0.28,-0.28 0.66,-0.44 1.06,-0.44 0.4,0 0.78,0.16 1.06,0.44 0.28,0.28 0.44,0.66 0.44,1.06v60.94q0,0.3 -0.11,0.57 -0.12,0.28 -0.33,0.49 -0.21,0.21 -0.49,0.32 -0.27,0.12 -0.57,0.12z">
-      <aapt:attr name="android:fillColor">
-          <gradient
-              android:type="linear"
-              android:startX="62"
-              android:startY="0"
-              android:endX="66"
-              android:endY="0">
-              <item android:offset="0.0" android:color="#FF333333" />
-              <item android:offset="0.5" android:color="#FF999999" />
-              <item android:offset="1.0" android:color="#FF222222" />
-          </gradient>
-      </aapt:attr>
-  </path>
-  
-  <!-- Dome / Shade -->
-  <path android:pathData="m109.82,112.93c-1.33,-4.39 -3.13,-8.62 -5.36,-12.62 -2.23,-4.01 -4.89,-7.76 -7.92,-11.2 -3.03,-3.44 -6.42,-6.54 -10.11,-9.26 -3.69,-2.72 -7.66,-5.03 -11.84,-6.91q-0.71,-0.33 -1.29,-0.85 -0.58,-0.51 -1,-1.17 -0.41,-0.66 -0.63,-1.41 -0.21,-0.75 -0.21,-1.52v-0.2q0.01,-1.25 -0.46,-2.41 -0.47,-1.16 -1.34,-2.05 -0.88,-0.89 -2.03,-1.38 -1.15,-0.49 -2.4,-0.51h-2.46q-1.25,0.02 -2.4,0.51 -1.15,0.49 -2.03,1.38 -0.87,0.89 -1.34,2.05 -0.47,1.16 -0.46,2.41v0.2q0,0.77 -0.21,1.52 -0.22,0.75 -0.63,1.41 -0.42,0.66 -1,1.17 -0.58,0.52 -1.29,0.85c-4.18,1.88 -8.15,4.19 -11.84,6.91 -3.69,2.72 -7.08,5.82 -10.11,9.26 -3.03,3.44 -5.69,7.19 -7.92,11.2 -2.23,4 -4.03,8.23 -5.36,12.62q-0.13,0.42 -0.17,0.86 -0.03,0.44 0.03,0.87 0.06,0.44 0.22,0.85 0.16,0.42 0.4,0.78 0.24,0.37 0.55,0.67 0.31,0.3 0.68,0.52 0.38,0.22 0.79,0.36 0.41,0.13 0.84,0.17c14.1,1.33 28.3,1.99 42.5,1.99 14.2,0 28.38,-0.66 42.47,-1.99q0.43,-0.04 0.84,-0.17 0.41,-0.14 0.78,-0.36 0.37,-0.22 0.68,-0.52 0.31,-0.3 0.55,-0.67 0.25,-0.36 0.4,-0.78 0.16,-0.41 0.22,-0.85 0.06,-0.43 0.03,-0.87 -0.04,-0.44 -0.17,-0.86z">
-      <aapt:attr name="android:fillColor">
-          <gradient
-              android:type="linear"
-              android:startX="30"
-              android:startY="50"
-              android:endX="100"
-              android:endY="115">
-              <item android:offset="0.0" android:color="#FFAAAAAA" />
-              <item android:offset="0.5" android:color="#FF444444" />
-              <item android:offset="1.0" android:color="#FF2A2A2A" />
-          </gradient>
-      </aapt:attr>
-  </path>
+
+    <!-- Wire -->
+    <path
+        android:pathData="M 63,0 L 65,0 L 65,30 L 63,30 Z"
+        android:fillColor="#FF222222" />
+
+    <!-- Outer dome (Matte black) - DRAWN FIRST -->
+    <path android:pathData="M 14,80 C 14,52.5 36.5,30 64,30 C 91.5,30 114,52.5 114,80 C 114,84.4 91.6,88 64,88 C 36.4,88 14,84.4 14,80 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="14"
+                android:startY="30"
+                android:endX="114"
+                android:endY="96">
+                <item android:offset="0.0" android:color="#FF4A4A4A" />
+                <item android:offset="0.4" android:color="#FF2A2A2A" />
+                <item android:offset="1.0" android:color="#FF151515" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Inner gold interior (Lit) - DRAWN ON TOP -->
+    <path android:pathData="M 14,80 C 14,75.6 36.4,72 64,72 C 91.6,72 114,75.6 114,80 C 114,84.4 91.6,88 64,88 C 36.4,88 14,84.4 14,80 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="64"
+                android:centerY="75"
+                android:gradientRadius="45">
+                <item android:offset="0.0" android:color="#FFFFEEAA" />
+                <item android:offset="0.3" android:color="#FFFFD700" />
+                <item android:offset="0.7" android:color="#FFDAA520" />
+                <item android:offset="1.0" android:color="#FFB8860B" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
 </vector>
