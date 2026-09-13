@@ -747,7 +747,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .weight(1f)
                                         .clip(RoundedCornerShape(24.dp))
                                         .background(Color(0xFF303030))
-                                        .padding(16.dp),
+                                        .padding(0.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(
@@ -759,26 +759,28 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                     val btnCount = listOfNotNull(switchDevice.switch1Name, switchDevice.switch2Name, switchDevice.switch3Name).size
                                     Row(
                                         modifier = Modifier.fillMaxSize(),
-                                        horizontalArrangement = Arrangement.spacedBy(0.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(1.dp)
                                     ) {
                                         if (switchDevice.switch1Name != null) {
                                             Box(
                                                 modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                                SmartSwitchWidget("${switchDevice.deviceId}_1", switchDevice.switch1Name!!, switchDevice.deviceId, switchDevice.switch1State, focusedItem == "${switchDevice.deviceId}_1", { focusedItem = "${switchDevice.deviceId}_1" }) {
+                                                SmartSwitchWidget("${switchDevice.deviceId}_1", switchDevice.switch1Name!!, switchDevice.deviceId, switchDevice.switch1State, focusedItem == "${switchDevice.deviceId}_1", switchIndex = 0, totalSwitches = btnCount, onFocus = { focusedItem = "${switchDevice.deviceId}_1" }) {
                                                     coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_1", !switchDevice.switch1State) }
                                                 }
                                             }
                                         }
                                         if (switchDevice.switch2Name != null) {
                                             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                                SmartSwitchWidget("${switchDevice.deviceId}_2", switchDevice.switch2Name!!, switchDevice.deviceId, switchDevice.switch2State, focusedItem == "${switchDevice.deviceId}_2", { focusedItem = "${switchDevice.deviceId}_2" }) {
+                                                val sIdx = if (switchDevice.switch1Name != null) 1 else 0
+                                                SmartSwitchWidget("${switchDevice.deviceId}_2", switchDevice.switch2Name!!, switchDevice.deviceId, switchDevice.switch2State, focusedItem == "${switchDevice.deviceId}_2", switchIndex = sIdx, totalSwitches = btnCount, onFocus = { focusedItem = "${switchDevice.deviceId}_2" }) {
                                                     coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_2", !switchDevice.switch2State) }
                                                 }
                                             }
                                         }
                                         if (switchDevice.switch3Name != null) {
                                             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                                SmartSwitchWidget("${switchDevice.deviceId}_3", switchDevice.switch3Name!!, switchDevice.deviceId, switchDevice.switch3State, focusedItem == "${switchDevice.deviceId}_3", { focusedItem = "${switchDevice.deviceId}_3" }) {
+                                                val sIdx = listOfNotNull(switchDevice.switch1Name, switchDevice.switch2Name).size
+                                                SmartSwitchWidget("${switchDevice.deviceId}_3", switchDevice.switch3Name!!, switchDevice.deviceId, switchDevice.switch3State, focusedItem == "${switchDevice.deviceId}_3", switchIndex = sIdx, totalSwitches = btnCount, onFocus = { focusedItem = "${switchDevice.deviceId}_3" }) {
                                                     coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_3", !switchDevice.switch3State) }
                                                 }
                                             }
@@ -797,7 +799,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
 }
 }
 @Composable
-fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolean, isFocused: Boolean, onFocus: () -> Unit, onToggle: suspend () -> Unit) {
+fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolean, isFocused: Boolean, switchIndex: Int = 0, totalSwitches: Int = 1, onFocus: () -> Unit, onToggle: suspend () -> Unit) {
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     
     var isDropped by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(state) }
@@ -828,6 +830,24 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
         }
     }
     
+    val isFirst = switchIndex == 0
+    val isLast = switchIndex == totalSwitches - 1
+    val isOnly = totalSwitches == 1
+
+    val outerShape = androidx.compose.foundation.shape.RoundedCornerShape(
+        topStart = if (isFirst || isOnly) 24.dp else 0.dp,
+        bottomStart = if (isFirst || isOnly) 24.dp else 0.dp,
+        topEnd = if (isLast || isOnly) 24.dp else 0.dp,
+        bottomEnd = if (isLast || isOnly) 24.dp else 0.dp
+    )
+
+    val innerShape = androidx.compose.foundation.shape.RoundedCornerShape(
+        topStart = if (isFirst || isOnly) 24.dp else 0.dp,
+        bottomStart = if (isFirst || isOnly) 24.dp else 0.dp,
+        topEnd = if (isLast || isOnly) 24.dp else 0.dp,
+        bottomEnd = if (isLast || isOnly) 24.dp else 0.dp
+    )
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxSize(),
@@ -837,7 +857,7 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
             modifier = Modifier
                 .fillMaxSize()
                 .onFocusChanged { if (it.isFocused) onFocus() }
-                .clip(RoundedCornerShape(14.dp))
+                .clip(outerShape)
                 .clickable(enabled = deviceId != null) {
                     coroutineScope.launch {
                         if (isWaiting) return@launch
@@ -851,12 +871,12 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                 }
         ) {
             // Container for gap between focus border and switch
-            Box(modifier = Modifier.fillMaxSize().padding(2.dp)) {
+            Box(modifier = Modifier.fillMaxSize().padding(0.dp)) {
                 // Base Lip (shadow/depth layer for 3D effect on dark bg)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(innerShape)
                         .background(
                             androidx.compose.ui.graphics.Brush.verticalGradient(
                                 0.0f to Color.Transparent,
@@ -870,27 +890,15 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = if (isDropped) 2.dp else 8.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .padding(bottom = if (isDropped) 0.dp else 4.dp)
+                        .clip(innerShape)
                         .background(
                             androidx.compose.ui.graphics.Brush.verticalGradient(
                                 0.0f to Color.Transparent,
                                 0.7f to Color(0xFF555555).copy(alpha = 0.6f),
                                 1.0f to Color(0xFF444444).copy(alpha = 0.8f)
                             )
-                        )
-                        .drawBehind {
-                            // Border that follows rounded corners, fading upward
-                            drawRoundRect(
-                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    0.0f to Color.Transparent,
-                                    0.7f to Color(0xFF555555).copy(alpha = 0.6f),
-                                    1.0f to Color(0xFF444444).copy(alpha = 0.8f)
-                                ),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx()),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
-                            )
-                        },
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     // Focus Overlay
