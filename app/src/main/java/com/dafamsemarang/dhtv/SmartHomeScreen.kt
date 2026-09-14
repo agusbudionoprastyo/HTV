@@ -110,7 +110,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
     var curtainSliderLocalPercent by remember { mutableStateOf(0) }
 
     val acDevice = smartDevices.find { it.type == "ac" }
-    val curtainDevice = smartDevices.find { it.type == "curtain" }
+    val curtainDevices = smartDevices.filter { it.type == "curtain" }
     val switchDevices = smartDevices.filter { it.type == "switch" }
 
     Box(
@@ -510,19 +510,34 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                     ) {
                         // Curtain Card
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        if (curtainDevice != null) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFF303030)),
-                                    contentAlignment = Alignment.Center
+                        if (curtainDevices.isNotEmpty()) {
+                            var currentCurtainPage by remember { mutableStateOf(0) }
+                            
+                            AnimatedContent(
+                                modifier = Modifier.fillMaxSize(),
+                                targetState = currentCurtainPage,
+                                transitionSpec = {
+                                    if (targetState > initialState) {
+                                        slideInHorizontally(animationSpec = tween(500)) { width -> width } .togetherWith( slideOutHorizontally(animationSpec = tween(500)) { width -> -width } )
+                                    } else {
+                                        slideInHorizontally(animationSpec = tween(500)) { width -> -width } .togetherWith( slideOutHorizontally(animationSpec = tween(500)) { width -> width } )
+                                    }
+                                },
+                                label = "CurtainPagination"
+                            ) { page ->
+                                val curtainDevice = curtainDevices[page]
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(24.dp))
+                                            .background(Color(0xFF303030)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
                                     androidx.compose.foundation.Image(
                                         painter = androidx.compose.ui.res.painterResource(id = R.drawable.curtain_wallpaper),
                                         contentDescription = null,
@@ -571,7 +586,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     isFocused = focusedItem == "curtain_open",
                                                     onFocus = { focusedItem = "curtain_open" },
                                                     onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "open") },
-                                                    modifier = Modifier.size(52.dp),
+                                                    modifier = Modifier.size(40.dp),
                                                     containerColorOverride = Color.White.copy(alpha = 0.3f)
                                                 )
                                                 
@@ -581,7 +596,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     isFocused = focusedItem == "curtain_pause",
                                                     onFocus = { focusedItem = "curtain_pause" },
                                                     onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "stop") },
-                                                    modifier = Modifier.size(52.dp),
+                                                    modifier = Modifier.size(40.dp),
                                                     containerColorOverride = Color.White.copy(alpha = 0.3f)
                                                 )
                                                 
@@ -591,10 +606,43 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     isFocused = focusedItem == "curtain_close",
                                                     onFocus = { focusedItem = "curtain_close" },
                                                     onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "close") },
-                                                    modifier = Modifier.size(52.dp),
+                                                    modifier = Modifier.size(40.dp),
                                                     containerColorOverride = Color.White.copy(alpha = 0.3f)
                                                 )
                                             } // end of Row
+                                            
+                                            if (curtainDevices.size > 1) {
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.Start),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    curtainDevices.forEachIndexed { index, device ->
+                                                        val isSelected = index == currentCurtainPage
+                                                        val tabFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+                                                        
+                                                        LaunchedEffect(page) {
+                                                            if (focusedItem == "curtain_tab_$index") {
+                                                                kotlinx.coroutines.delay(100)
+                                                                try { tabFocus.requestFocus() } catch(e: Exception) {}
+                                                            }
+                                                        }
+                                                        
+                                                        SmartActionBtn(
+                                                            text = device.deviceName ?: "Curtain ${index + 1}",
+                                                            iconRes = null,
+                                                            isFocused = focusedItem == "curtain_tab_$index",
+                                                            onFocus = { focusedItem = "curtain_tab_$index" },
+                                                            onClickAction = { 
+                                                                currentCurtainPage = index 
+                                                            },
+                                                            modifier = Modifier.height(32.dp).padding(horizontal = 12.dp).focusRequester(tabFocus),
+                                                            fontSize = 12.sp,
+                                                            containerColorOverride = if (isSelected) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f)
+                                                        )
+                                                    }
+                                                }
+                                            }
                                             } // end of Column
                                         } // end of Box (left area)
                                         val leftCurtainFocus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -735,6 +783,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                     }
                             }
                         }
+                    }
                     }
                     }
                         // BARIS 2: Cards untuk Switch (Dinamis sesuai jumlah device)
