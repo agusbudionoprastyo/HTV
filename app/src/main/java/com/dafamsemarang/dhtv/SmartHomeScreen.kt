@@ -11,6 +11,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.airbnb.lottie.compose.LottieAnimation
@@ -53,6 +59,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import okhttp3.MediaType.Companion.toMediaType
@@ -118,7 +125,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFFCFDFED).copy(alpha = 0.1f))
+                    .background(Color(0xFF212121))
                     .padding(24.dp)
             ) {
                 Text(
@@ -167,7 +174,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         ) {
                                             // Title Centered
                                             Text(
-                                                "Air Conditioner", 
+                                                acDevice.deviceName ?: "Air Conditioner", 
                                                 color = Color.White, 
                                                 fontWeight = FontWeight.Bold, 
                                                 fontSize = 16.sp,
@@ -535,7 +542,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                 horizontalAlignment = Alignment.Start
                                             ) {
                                                 Text(
-                                                    "Smart Curtain", 
+                                                    curtainDevice.deviceName ?: "Smart Curtain", 
                                                     color = Color.White, 
                                                     fontWeight = FontWeight.Bold, 
                                                     fontSize = 16.sp
@@ -731,73 +738,157 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                     }
                     }
                         // BARIS 2: Cards untuk Switch (Dinamis sesuai jumlah device)
-                        Row(
+                        val pages = switchDevices.chunked(2)
+                        var currentPage by remember { mutableStateOf(0) }
+                        var focusOnPageLoad by remember { mutableStateOf(false) }
+                        var focusDirection by remember { mutableStateOf(1) }
+                        
+                        Box(
                             modifier = Modifier.fillMaxWidth().weight(1.5f).focusProperties { down = GlobalCartState.smartHomeFooterFocusRequester },
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            contentAlignment = Alignment.Center
                         ) {
-                    switchDevices.forEach { switchDevice ->
-                        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Box(
+                            AnimatedContent(
+                                modifier = Modifier.fillMaxSize(),
+                                targetState = currentPage,
+                                transitionSpec = {
+                                    if (targetState > initialState) {
+                                        slideInHorizontally(animationSpec = tween(500)) { width -> width } .togetherWith( slideOutHorizontally(animationSpec = tween(500)) { width -> -width } )
+                                    } else {
+                                        slideInHorizontally(animationSpec = tween(500)) { width -> -width } .togetherWith( slideOutHorizontally(animationSpec = tween(500)) { width -> width } )
+                                    }
+                                }
+                            ) { page ->
+                                val firstSwitchFocusRequester = remember { FocusRequester() }
+                                val lastSwitchFocusRequester = remember { FocusRequester() }
+                                LaunchedEffect(page) {
+                                    if (focusOnPageLoad) {
+                                        kotlinx.coroutines.delay(100)
+                                        try { 
+                                            if (focusDirection == 1) firstSwitchFocusRequester.requestFocus() 
+                                            else lastSwitchFocusRequester.requestFocus() 
+                                        } catch(e:Exception){}
+                                        focusOnPageLoad = false
+                                    }
+                                }
+
+                                val currentDevices = pages.getOrNull(page) ?: emptyList()
+                                val firstDevice = currentDevices.firstOrNull()
+                                val firstSwitchId = firstDevice?.let { "${it.deviceId}_1" }
+
+                                val lastDevice = currentDevices.lastOrNull()
+                                val lastSwitchId = lastDevice?.let {
+                                    if (it.switch3Name != null) "${it.deviceId}_3"
+                                    else if (it.switch2Name != null) "${it.deviceId}_2"
+                                    else "${it.deviceId}_1"
+                                }
+
+                                Row(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFF303030))
-                                        .padding(0.dp),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxSize()
+                                        .onPreviewKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyDown) {
+                                                if (event.key == Key.DirectionRight && focusedItem == lastSwitchId && currentPage < pages.lastIndex) {
+                                                    focusDirection = 1
+                                                    focusOnPageLoad = true
+                                                    currentPage++
+                                                    return@onPreviewKeyEvent true
+                                                }
+                                                if (event.key == Key.DirectionLeft && focusedItem == firstSwitchId && currentPage > 0) {
+                                                    focusDirection = -1
+                                                    focusOnPageLoad = true
+                                                    currentPage--
+                                                    return@onPreviewKeyEvent true
+                                                }
+                                            }
+                                            false
+                                        },
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.fillMaxSize()
-                                    ) {
-                                    
-                                    // Dinamis menghitung berapa gang (kolom)
-                                    val btnCount = listOfNotNull(switchDevice.switch1Name, switchDevice.switch2Name, switchDevice.switch3Name).size
-                                    Row(
-                                        modifier = Modifier.fillMaxSize(),
-                                        horizontalArrangement = Arrangement.spacedBy(1.dp)
-                                    ) {
-                                        if (switchDevice.switch1Name != null) {
+                                    currentDevices.forEach { switchDevice ->
+                                        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
                                             Box(
-                                                modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                                SmartSwitchWidget("${switchDevice.deviceId}_1", switchDevice.switch1Name!!, switchDevice.deviceId, switchDevice.switch1State, focusedItem == "${switchDevice.deviceId}_1", switchIndex = 0, totalSwitches = btnCount, onFocus = { focusedItem = "${switchDevice.deviceId}_1" }) {
-                                                    coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_1", !switchDevice.switch1State) }
-                                                }
-                                            }
-                                        }
-                                        if (switchDevice.switch2Name != null) {
-                                            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                                val sIdx = if (switchDevice.switch1Name != null) 1 else 0
-                                                SmartSwitchWidget("${switchDevice.deviceId}_2", switchDevice.switch2Name!!, switchDevice.deviceId, switchDevice.switch2State, focusedItem == "${switchDevice.deviceId}_2", switchIndex = sIdx, totalSwitches = btnCount, onFocus = { focusedItem = "${switchDevice.deviceId}_2" }) {
-                                                    coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_2", !switchDevice.switch2State) }
-                                                }
-                                            }
-                                        }
-                                        if (switchDevice.switch3Name != null) {
-                                            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                                val sIdx = listOfNotNull(switchDevice.switch1Name, switchDevice.switch2Name).size
-                                                SmartSwitchWidget("${switchDevice.deviceId}_3", switchDevice.switch3Name!!, switchDevice.deviceId, switchDevice.switch3State, focusedItem == "${switchDevice.deviceId}_3", switchIndex = sIdx, totalSwitches = btnCount, onFocus = { focusedItem = "${switchDevice.deviceId}_3" }) {
-                                                    coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_3", !switchDevice.switch3State) }
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(24.dp))
+                                                    .background(Color(0xFF303030))
+                                                    .padding(0.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    modifier = Modifier.fillMaxSize()
+                                                ) {
+                                                
+                                                // Dinamis menghitung berapa gang (kolom)
+                                                val btnCount = listOfNotNull(switchDevice.switch1Name, switchDevice.switch2Name, switchDevice.switch3Name).size
+                                                val isFirstDevice = switchDevice.deviceId == firstDevice?.deviceId
+                                                val isLastDevice = switchDevice.deviceId == lastDevice?.deviceId
+                                                Row(
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    horizontalArrangement = Arrangement.spacedBy(1.dp)
+                                                ) {
+                                                    if (switchDevice.switch1Name != null) {
+                                                        var reqModifier: Modifier = Modifier
+                                                        if (isFirstDevice) reqModifier = reqModifier.focusRequester(firstSwitchFocusRequester)
+                                                        if (isLastDevice && switchDevice.switch2Name == null) reqModifier = reqModifier.focusRequester(lastSwitchFocusRequester)
+                                                        if (reqModifier != Modifier) reqModifier = reqModifier.focusGroup()
+                                                        
+                                                        Box(
+                                                            modifier = Modifier.weight(1f).fillMaxHeight().then(reqModifier)) {
+                                                            SmartSwitchWidget("${switchDevice.deviceId}_1", switchDevice.switch1Name!!, switchDevice.deviceId, switchDevice.switch1State, focusedItem == "${switchDevice.deviceId}_1", switchIndex = 0, totalSwitches = btnCount, onFocus = { focusedItem = "${switchDevice.deviceId}_1" }) {
+                                                                coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_1", !switchDevice.switch1State) }
+                                                            }
+                                                        }
+                                                    }
+                                                    if (switchDevice.switch2Name != null) {
+                                                        var reqModifier: Modifier = Modifier
+                                                        if (isLastDevice && switchDevice.switch3Name == null) reqModifier = reqModifier.focusRequester(lastSwitchFocusRequester).focusGroup()
+                                                        
+                                                        Box(modifier = Modifier.weight(1f).fillMaxHeight().then(reqModifier)) {
+                                                            val sIdx = if (switchDevice.switch1Name != null) 1 else 0
+                                                            SmartSwitchWidget("${switchDevice.deviceId}_2", switchDevice.switch2Name!!, switchDevice.deviceId, switchDevice.switch2State, focusedItem == "${switchDevice.deviceId}_2", switchIndex = sIdx, totalSwitches = btnCount, onFocus = { focusedItem = "${switchDevice.deviceId}_2" }) {
+                                                                coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_2", !switchDevice.switch2State) }
+                                                            }
+                                                        }
+                                                    }
+                                                    if (switchDevice.switch3Name != null) {
+                                                        var reqModifier: Modifier = Modifier
+                                                        if (isLastDevice) reqModifier = reqModifier.focusRequester(lastSwitchFocusRequester).focusGroup()
+                                                        
+                                                        Box(modifier = Modifier.weight(1f).fillMaxHeight().then(reqModifier)) {
+                                                            val sIdx = listOfNotNull(switchDevice.switch1Name, switchDevice.switch2Name).size
+                                                            SmartSwitchWidget("${switchDevice.deviceId}_3", switchDevice.switch3Name!!, switchDevice.deviceId, switchDevice.switch3State, focusedItem == "${switchDevice.deviceId}_3", switchIndex = sIdx, totalSwitches = btnCount, onFocus = { focusedItem = "${switchDevice.deviceId}_3" }) {
+                                                                coroutineScope.launch { sendTuyaCommand(switchDevice.deviceId, "switch_3", !switchDevice.switch3State) }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
+                                    }
+                                }
+                                val remainingSpaces = 2 - currentDevices.size
+                                if (remainingSpaces > 0) {
+                                    repeat(remainingSpaces) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
                                 }
                             }
-                        }
+                            }
                         }
                     }
-                }
                 }
             }
         }
     }
 }
-}
+                                          
 @Composable
 fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolean, isFocused: Boolean, switchIndex: Int = 0, totalSwitches: Int = 1, onFocus: () -> Unit, onToggle: suspend () -> Unit) {
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -893,11 +984,19 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                         .padding(bottom = if (isDropped) 0.dp else 4.dp)
                         .clip(innerShape)
                         .background(
-                            androidx.compose.ui.graphics.Brush.verticalGradient(
-                                0.0f to Color.Transparent,
-                                0.7f to Color(0xFF555555).copy(alpha = 0.6f),
-                                1.0f to Color(0xFF444444).copy(alpha = 0.8f)
-                            )
+                            if (isDropped) {
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    0.0f to Color(0xFF444444).copy(alpha = 0.8f),
+                                    0.3f to Color(0xFF555555).copy(alpha = 0.6f),
+                                    1.0f to Color.Transparent
+                                )
+                            } else {
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    0.0f to Color.Transparent,
+                                    0.7f to Color(0xFF555555).copy(alpha = 0.6f),
+                                    1.0f to Color(0xFF444444).copy(alpha = 0.8f)
+                                )
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -907,11 +1006,19 @@ fun SmartSwitchWidget(id: String, name: String, deviceId: String?, state: Boolea
                             .fillMaxSize()
                             .background(
                                 if (isFocused) {
-                                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                                        0.0f to Color.Transparent,
-                                        0.7f to Color.White.copy(alpha = 0.6f),
-                                        1.0f to Color.White
-                                    )
+                                    if (isDropped) {
+                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                            0.0f to Color.White,
+                                            0.3f to Color.White.copy(alpha = 0.6f),
+                                            1.0f to Color.Transparent
+                                        )
+                                    } else {
+                                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                                            0.0f to Color.Transparent,
+                                            0.7f to Color.White.copy(alpha = 0.6f),
+                                            1.0f to Color.White
+                                        )
+                                    }
                                 } else {
                                     androidx.compose.ui.graphics.Brush.verticalGradient(
                                         0.0f to Color.Transparent,

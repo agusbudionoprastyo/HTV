@@ -438,7 +438,7 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
                                 "footer_dnd" -> dndFocusRequester.requestFocus()
                                 "footer_wifi" -> wifiFocusRequester.requestFocus()
                                 "footer_whatsapp" -> whatsappFocusRequester.requestFocus()
-                                "footer_smartroom" -> SmartRoomGlobalFocus.focusRequester.requestFocus()
+                                "footer_smartroom" -> GlobalCartState.smartHomeFooterFocusRequester.requestFocus()
                                 "footer_notification" -> notificationFocusRequester.requestFocus()
                                 "footer_settings" -> settingsFocusRequester.requestFocus()
                             }
@@ -461,9 +461,20 @@ fun FooterSection(navController: androidx.navigation.NavHostController? = null) 
         val isActive = ScreenSaverManager.isScreenSaverActive
         if (wasScreenSaverActive && !isActive) {
             try {
-                homeFocusRequester.requestFocus()
+                when (currentRoute) {
+                    "home" -> homeFocusRequester.requestFocus()
+                    "cantingfood" -> foodFocusRequester.requestFocus()
+                    "hotel_guide" -> hotelFocusRequester.requestFocus()
+                    "hotel_services" -> requestFocusRequester.requestFocus()
+                    "my_request" -> myRequestFocusRequester.requestFocus()
+                    "smarthome" -> GlobalCartState.smartHomeFooterFocusRequester.requestFocus()
+                    "contact" -> whatsappFocusRequester.requestFocus()
+                    "notification" -> notificationFocusRequester.requestFocus()
+                    "settings" -> settingsFocusRequester.requestFocus()
+                    else -> homeFocusRequester.requestFocus()
+                }
             } catch (e: Exception) {
-                Log.e("FooterSection", "Failed to refocus home button: ${e.message}")
+                Log.e("FooterSection", "Failed to refocus footer button: ${e.message}")
             }
         }
         wasScreenSaverActive = isActive
