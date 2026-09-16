@@ -510,21 +510,89 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                     ) {
                         // Curtain Card
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        if (curtainDevices.isNotEmpty()) {
-                            var currentCurtainPage by remember { mutableStateOf(0) }
-                            
-                            AnimatedContent(
-                                modifier = Modifier.fillMaxSize(),
-                                targetState = currentCurtainPage,
-                                transitionSpec = {
-                                    if (targetState > initialState) {
-                                        slideInHorizontally(animationSpec = tween(500)) { width -> width } .togetherWith( slideOutHorizontally(animationSpec = tween(500)) { width -> -width } )
-                                    } else {
-                                        slideInHorizontally(animationSpec = tween(500)) { width -> -width } .togetherWith( slideOutHorizontally(animationSpec = tween(500)) { width -> width } )
-                                    }
-                                },
-                                label = "CurtainPagination"
-                            ) { page ->
+                            if (curtainDevices.isNotEmpty()) {
+                                val cardFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+                                val innerFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+                                val isCurtainCardFocused = focusedItem == "curtain_card"
+                                var curtainFocusDirection by remember { mutableIntStateOf(1) }
+                                val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition()
+                                val pulseAlpha by infiniteTransition.animateFloat(
+                                    initialValue = 0.3f,
+                                    targetValue = 1f,
+                                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                                        animation = androidx.compose.animation.core.tween(800, easing = androidx.compose.animation.core.LinearEasing),
+                                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                                    ),
+                                    label = "PulseAlpha"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .drawBehind {
+                                            if (isCurtainCardFocused) {
+                                                drawRoundRect(
+                                                    color = Color.White.copy(alpha = pulseAlpha),
+                                                    style = Stroke(width = 3.dp.toPx()),
+                                                    cornerRadius = CornerRadius(28.5.dp.toPx(), 28.5.dp.toPx()),
+                                                    topLeft = androidx.compose.ui.geometry.Offset(-4.5.dp.toPx(), -4.5.dp.toPx()),
+                                                    size = androidx.compose.ui.geometry.Size(size.width + 9.dp.toPx(), size.height + 9.dp.toPx())
+                                                )
+                                            }
+                                        }
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .focusRequester(cardFocus)
+                                        .onFocusChanged { if (it.isFocused) focusedItem = "curtain_card" }
+                                        .focusable()
+                                        .onPreviewKeyEvent { event ->
+                                            if (event.type == KeyEventType.KeyDown && focusedItem == "curtain_card") {
+                                                when (event.key) {
+                                                    Key.DirectionRight -> {
+                                                        if (curtainDevices.size > 1) {
+                                                            curtainFocusDirection = 1
+                                                            GlobalCartState.smartHomeCurrentCurtainPage = (GlobalCartState.smartHomeCurrentCurtainPage + 1) % curtainDevices.size
+                                                            return@onPreviewKeyEvent true
+                                                        }
+                                                    }
+                                                    Key.DirectionLeft -> {
+                                                        if (curtainDevices.size > 1) {
+                                                            curtainFocusDirection = -1
+                                                            GlobalCartState.smartHomeCurrentCurtainPage = (GlobalCartState.smartHomeCurrentCurtainPage - 1 + curtainDevices.size) % curtainDevices.size
+                                                            return@onPreviewKeyEvent true
+                                                        }
+                                                    }
+                                                    Key.DirectionDown -> {
+                                                        if (switchDevices.isEmpty()) {
+                                                            try { GlobalCartState.smartHomeFooterFocusRequester.requestFocus() } catch(e: Exception) {}
+                                                            return@onPreviewKeyEvent true
+                                                        }
+                                                    }
+                                                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                                        try { innerFocus.requestFocus() } catch(e: Exception) {}
+                                                        return@onPreviewKeyEvent true
+                                                    }
+                                                }
+                                            }
+                                            false
+                                        }
+                                ) {
+                                    coil.compose.AsyncImage(
+                                        model = R.drawable.curtain_wallpaper,
+                                        contentDescription = null,
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp))
+                                    )
+                                    AnimatedContent(
+                                        modifier = Modifier.fillMaxSize(),
+                                        targetState = GlobalCartState.smartHomeCurrentCurtainPage,
+                                        transitionSpec = {
+                                            if (curtainFocusDirection > 0) {
+                                                slideInHorizontally(animationSpec = tween(500)) { width -> width } .togetherWith( slideOutHorizontally(animationSpec = tween(500)) { width -> -width } )
+                                            } else {
+                                                slideInHorizontally(animationSpec = tween(500)) { width -> -width } .togetherWith( slideOutHorizontally(animationSpec = tween(500)) { width -> width } )
+                                            }
+                                        },
+                                        label = "CurtainPagination"
+                                    ) { page ->
                                 val curtainDevice = curtainDevices[page]
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -535,15 +603,21 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                             .fillMaxWidth()
                                             .weight(1f)
                                             .clip(RoundedCornerShape(24.dp))
-                                            .background(Color(0xFF303030)),
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.type == KeyEventType.KeyDown) {
+                                                    if (event.key == Key.DirectionUp) {
+                                                        try { cardFocus.requestFocus() } catch(e: Exception) {}
+                                                        return@onPreviewKeyEvent true
+                                                    }
+                                                    if (event.key == Key.DirectionDown && switchDevices.isEmpty()) {
+                                                        try { GlobalCartState.smartHomeFooterFocusRequester.requestFocus() } catch(e: Exception) {}
+                                                        return@onPreviewKeyEvent true
+                                                    }
+                                                }
+                                                false
+                                            },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                    androidx.compose.foundation.Image(
-                                        painter = androidx.compose.ui.res.painterResource(id = R.drawable.curtain_wallpaper),
-                                        contentDescription = null,
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
                                     Row(
                                         modifier = Modifier.fillMaxSize().padding(16.dp),
                                         verticalAlignment = Alignment.CenterVertically
@@ -586,7 +660,7 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     isFocused = focusedItem == "curtain_open",
                                                     onFocus = { focusedItem = "curtain_open" },
                                                     onClickAction = { sendTuyaCommand(curtainDevice.deviceId, "control", "open") },
-                                                    modifier = Modifier.size(40.dp),
+                                                    modifier = Modifier.size(40.dp).focusRequester(innerFocus),
                                                     containerColorOverride = Color.White.copy(alpha = 0.3f)
                                                 )
                                                 
@@ -610,39 +684,6 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                                     containerColorOverride = Color.White.copy(alpha = 0.3f)
                                                 )
                                             } // end of Row
-                                            
-                                            if (curtainDevices.size > 1) {
-                                                Spacer(modifier = Modifier.height(12.dp))
-                                                Row(
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.Start),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    curtainDevices.forEachIndexed { index, device ->
-                                                        val isSelected = index == currentCurtainPage
-                                                        val tabFocus = remember { androidx.compose.ui.focus.FocusRequester() }
-                                                        
-                                                        LaunchedEffect(page) {
-                                                            if (focusedItem == "curtain_tab_$index") {
-                                                                kotlinx.coroutines.delay(100)
-                                                                try { tabFocus.requestFocus() } catch(e: Exception) {}
-                                                            }
-                                                        }
-                                                        
-                                                        SmartActionBtn(
-                                                            text = device.deviceName ?: "Curtain ${index + 1}",
-                                                            iconRes = null,
-                                                            isFocused = focusedItem == "curtain_tab_$index",
-                                                            onFocus = { focusedItem = "curtain_tab_$index" },
-                                                            onClickAction = { 
-                                                                currentCurtainPage = index 
-                                                            },
-                                                            modifier = Modifier.height(32.dp).padding(horizontal = 12.dp).focusRequester(tabFocus),
-                                                            fontSize = 12.sp,
-                                                            containerColorOverride = if (isSelected) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f)
-                                                        )
-                                                    }
-                                                }
-                                            }
                                             } // end of Column
                                         } // end of Box (left area)
                                         val leftCurtainFocus = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -781,9 +822,60 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                             }
                                         }
                                     }
+                                    }
+                                }
+                        }
+                    }
+                    
+                    if (isCurtainCardFocused) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(24.dp))
+                                .padding(bottom = 16.dp),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Press OK to control",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 8f))
+                                )
+                                Text(
+                                    text = "Use Left / Right to switch curtains",
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                    style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 8f))
+                                )
                             }
                         }
                     }
+
+                    // Carousel Dot Indicator
+                    if (curtainDevices.size > 1) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(bottom = 16.dp, end = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            curtainDevices.indices.forEach { index ->
+                                val isSelected = index == GlobalCartState.smartHomeCurrentCurtainPage
+                                val width by androidx.compose.animation.core.animateDpAsState(targetValue = if (isSelected) 24.dp else 8.dp, label = "dotWidth")
+                                Box(
+                                    modifier = Modifier
+                                        .size(width = width, height = 8.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.4f))
+                                )
+                            }
+                        }
+                    }
+
                     }
                     }
                         // BARIS 2: Cards untuk Switch (Dinamis sesuai jumlah device)
@@ -836,6 +928,10 @@ fun SmartHomeScreen(navController: androidx.navigation.NavHostController? = null
                                         .fillMaxSize()
                                         .onPreviewKeyEvent { event ->
                                             if (event.type == KeyEventType.KeyDown) {
+                                                if (event.key == Key.DirectionDown) {
+                                                    try { GlobalCartState.smartHomeFooterFocusRequester.requestFocus() } catch(e: Exception) {}
+                                                    return@onPreviewKeyEvent true
+                                                }
                                                 if (event.key == Key.DirectionRight && focusedItem == lastSwitchId && currentPage < pages.lastIndex) {
                                                     focusDirection = 1
                                                     focusOnPageLoad = true
@@ -1571,5 +1667,4 @@ fun CurtainVisualizer(
         }
     }
 }
-
 

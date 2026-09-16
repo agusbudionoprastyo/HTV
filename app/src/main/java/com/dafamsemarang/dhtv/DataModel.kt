@@ -2,6 +2,8 @@ package com.dafamsemarang.dhtv
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @Serializable
 data class ApiRequest(
@@ -114,6 +116,7 @@ object GlobalCartState {
     val animateTrigger = androidx.compose.runtime.mutableStateOf(0)
     val animStartOffset = androidx.compose.runtime.mutableStateOf(androidx.compose.ui.geometry.Offset.Zero)
     val cartBoundsInRoot = androidx.compose.runtime.mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
+    var smartHomeCurrentCurtainPage by androidx.compose.runtime.mutableIntStateOf(0)
 }
 
 data class OrderItem(
